@@ -97,3 +97,12 @@ def test_a_very_long_read_is_cut_and_says_where_to_continue(tmp_path: Path) -> N
     (box.root / "long.txt").write_text("\n".join("y" * 200 for _ in range(1000)))
     out = box.read_file("long.txt", limit=1000)
     assert "read more with offset=" in out
+
+
+def test_a_grep_hit_counts_the_whole_file_as_seen_by_the_worker(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "big.log").write_text("\n".join(["noise"] * 999 + ["needle"]))
+    (box.root / "other.log").write_text("nothing here\n" * 50)
+    assert box.chars_read == 0
+    box.grep("needle")
+    assert box.chars_read >= 999 * 6

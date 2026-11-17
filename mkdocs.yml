@@ -1,0 +1,55 @@
+site_name: deputy
+site_description: A frontier model orchestrates; any other model does the legwork, through MCP.
+site_url: https://tommasomarchionni.github.io/deputy/
+repo_url: https://github.com/tommasomarchionni/deputy
+repo_name: tommasomarchionni/deputy
+edit_uri: edit/main/docs/
+strict: true
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Get started:
+      - Install and connect an agent: install.md
+      - Configuration: configuration.md
+  - Reference:
+      - Tools: tools.md
+      - Security model: security.md
+  - Design:
+      - Architecture: architecture.md
+      - Memory: memory.md
+      - Self-improvement: self-improvement.md
+      - Local serving: local-serving.md
+      - Roadmap: roadmap.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+extra:
+  generator: false
