@@ -9,7 +9,7 @@ from typing import Any, Literal, cast
 from pydantic import BaseModel, Field
 
 from deputy import runs
-from deputy.backends import BackendError, ChatClient
+from deputy.backends import BackendError, ChatClient, Reply
 from deputy.checks import Check, CheckResult, failures_message, run_checks
 from deputy.config import Policy
 from deputy.profiles import Profile
@@ -112,6 +112,131 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
     return f"ERROR: unknown tool '{name}'; use read_file, write_file or grep"
 
 
+class AgentRun:
+    """One delegated task: converse with the worker, run its tools, verify, correct, report."""
+
+    def __init__(  # noqa: PLR0913
+        self,
+        *,
+        client: ChatClient,
+        profile: Profile,
+        task: str,
+        sandbox: Sandbox,
+        checks: list[Check],
+        policy: Policy,
+        max_turns: int,
+        max_retries: int,
+    ) -> None:
+        self._client = client
+        self._profile = profile
+        self._task = task
+        self._sandbox = sandbox
+        self._checks = checks
+        self._policy = policy
+        self._max_turns = max_turns
+        self._max_retries = max_retries
+        self._messages: list[dict[str, Any]] = [
+            {"role": "system", "content": profile.body},
+            {"role": "user", "content": task},
+        ]
+        self._metrics = Metrics(model=client.backend.model)
+        self._answer = ""
+        self._check_results: list[CheckResult] = []
+        self._flags: list[str] = []
+        self._status: Status = "turn_limit"
+
+    async def execute(self) -> Result:
+        run_id = runs.new_run_id()
+        started = time.monotonic()
+        try:
+            await self._converse()
+        except BackendError as exc:
+            self._status = "error"
+            self._answer = str(exc)
+            self._flags.append("backend_error")
+        self._metrics.elapsed_s = round(time.monotonic() - started, 1)
+        result = self._build_result(run_id)
+        self._record(result)
+        return result
+
+    async def _converse(self) -> None:
+        while self._metrics.turns < self._max_turns:
+            self._metrics.turns += 1
+            reply = await self._client.chat(self._messages, TOOLS)
+            self._count_usage(reply)
+            if reply.tool_calls:
+                self._run_tool_calls(reply)
+            elif await self._verify(reply.content.strip()):
+                return
+        self._flags.append("turn_limit")
+
+    def _count_usage(self, reply: Reply) -> None:
+        self._metrics.tokens_in += reply.tokens_in
+        self._metrics.tokens_out += reply.tokens_out
+        self._metrics.model = reply.model
+
+    def _run_tool_calls(self, reply: Reply) -> None:
+        self._messages.append(
+            {"role": "assistant", "content": reply.content, "tool_calls": reply.tool_calls}
+        )
+        for call in reply.tool_calls:
+            self._metrics.tool_calls += 1
+            function: dict[str, Any] = call.get("function") or {}
+            output = _execute(
+                self._sandbox, str(function.get("name", "")), str(function.get("arguments", ""))
+            )
+            self._messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call.get("id", ""),
+                    "content": output[:TOOL_RESULT_LIMIT],
+                }
+            )
+
+    async def _verify(self, answer: str) -> bool:
+        """Run the checks on a final answer. True when the conversation is over."""
+        self._answer = answer
+        self._check_results = await run_checks(self._checks, answer, self._sandbox, self._policy)
+        if all(r.passed for r in self._check_results):
+            self._status = "ok"
+            return True
+        if self._metrics.retries >= self._max_retries:
+            self._status = "checks_failed"
+            self._flags.append("needs_frontier")
+            return True
+        self._metrics.retries += 1
+        self._messages.append({"role": "assistant", "content": answer})
+        self._messages.append({"role": "user", "content": failures_message(self._check_results)})
+        return False
+
+    def _build_result(self, run_id: str) -> Result:
+        read_tokens = self._sandbox.chars_read // 4
+        cost_tokens = (len(self._answer) + len(self._task)) // 4
+        return Result(
+            run_id=run_id,
+            status=self._status,
+            answer=self._answer,
+            files_written=list(self._sandbox.files_written),
+            checks=self._check_results,
+            flags=self._flags,
+            metrics=self._metrics,
+            orchestrator_tokens_saved_est=max(0, read_tokens - cost_tokens),
+        )
+
+    def _record(self, result: Result) -> None:
+        runs.record(
+            {
+                "event": "run",
+                "run_id": result.run_id,
+                "profile": self._profile.name,
+                "status": result.status,
+                "metrics": result.metrics.model_dump(),
+                "checks": [{"name": c.name, "passed": c.passed} for c in result.checks],
+                "saved_est": result.orchestrator_tokens_saved_est,
+            }
+        )
+
+
 async def run_task(  # noqa: PLR0913
     *,
     client: ChatClient,
@@ -123,83 +248,14 @@ async def run_task(  # noqa: PLR0913
     max_turns: int = 8,
     max_retries: int = 1,
 ) -> Result:
-    run_id = runs.new_run_id()
-    started = time.monotonic()
-    metrics = Metrics(model=client.backend.model)
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": profile.body},
-        {"role": "user", "content": task},
-    ]
-    answer = ""
-    results: list[CheckResult] = []
-    status: Status = "turn_limit"
-    flags: list[str] = []
-
-    try:
-        while metrics.turns < max_turns:
-            metrics.turns += 1
-            reply = await client.chat(messages, TOOLS)
-            metrics.tokens_in += reply.tokens_in
-            metrics.tokens_out += reply.tokens_out
-            metrics.model = reply.model
-            if reply.tool_calls:
-                messages.append(
-                    {"role": "assistant", "content": reply.content, "tool_calls": reply.tool_calls}
-                )
-                for call in reply.tool_calls:
-                    metrics.tool_calls += 1
-                    function: dict[str, Any] = call.get("function") or {}
-                    output = _execute(
-                        sandbox, str(function.get("name", "")), str(function.get("arguments", ""))
-                    )
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": call.get("id", ""),
-                            "content": output[:TOOL_RESULT_LIMIT],
-                        }
-                    )
-                continue
-            answer = reply.content.strip()
-            results = await run_checks(checks, answer, sandbox, policy)
-            if all(r.passed for r in results):
-                status = "ok"
-                break
-            if metrics.retries >= max_retries:
-                status = "checks_failed"
-                flags.append("needs_frontier")
-                break
-            metrics.retries += 1
-            messages.append({"role": "assistant", "content": answer})
-            messages.append({"role": "user", "content": failures_message(results)})
-        else:
-            flags.append("turn_limit")
-    except BackendError as exc:
-        status = "error"
-        answer = str(exc)
-        flags.append("backend_error")
-
-    metrics.elapsed_s = round(time.monotonic() - started, 1)
-    saved = max(0, sandbox.chars_read // 4 - (len(answer) + len(task)) // 4)
-    result = Result(
-        run_id=run_id,
-        status=status,
-        answer=answer,
-        files_written=list(sandbox.files_written),
-        checks=results,
-        flags=flags,
-        metrics=metrics,
-        orchestrator_tokens_saved_est=saved,
-    )
-    runs.record(
-        {
-            "event": "run",
-            "run_id": run_id,
-            "profile": profile.name,
-            "status": status,
-            "metrics": metrics.model_dump(),
-            "checks": [{"name": c.name, "passed": c.passed} for c in results],
-            "saved_est": saved,
-        }
-    )
-    return result
+    """Delegate `task` to the worker behind `client` and return the verified result."""
+    return await AgentRun(
+        client=client,
+        profile=profile,
+        task=task,
+        sandbox=sandbox,
+        checks=checks,
+        policy=policy,
+        max_turns=max_turns,
+        max_retries=max_retries,
+    ).execute()

@@ -8,6 +8,7 @@
 ```toml
 default_backend = "local"
 auto_tune = "propose"                # off | propose | apply, see "Tuning" below
+auto_update = "notify"               # off | notify | apply, see "Updates" below
 
 [[backends]]
 name = "local"
@@ -77,3 +78,18 @@ dominates the time, `tune` prints the flag to try instead of changing anything. 
 
 Everything deputy ships (code, documentation, messages and the bundled profile) is in English, and
 the bundled `helper` profile makes the worker answer in English. A custom profile can say otherwise.
+
+## Updates
+
+deputy never phones home with your data. The only request it makes is a GET of the public "latest
+release" of this repository, at most once a day (cached; one hour after a failure).
+
+- `auto_update = "notify"` (default): `deputy doctor` and the `status` tool say when a newer release
+  exists. Nothing is installed.
+- `auto_update = "off"`: no request at all.
+- `auto_update = "apply"`: at server start, a newer **compatible** release is installed (same major
+  version; while the major is 0, the same minor too, because a new 0.x minor may break things).
+  A new major version is never installed without you. The new version runs from the next start.
+
+`deputy update --check` only looks; `deputy update` upgrades now (it reinstalls the release tag
+with `uv tool install`, so you can always go back with `DEPUTY_REF=<tag> sh install.sh`).

@@ -16,6 +16,26 @@ evidence** (a failing case, a measurement) and **review of the design** in `docs
   something pass.
 - No secrets, tokens, private code or personal data in issues, tests or the benchmark.
 
+## Development setup
+
+```sh
+git clone https://github.com/tommasomarchionni/deputy && cd deputy
+uv sync                                   # creates .venv with the dev tools
+uv run ruff check . && uv run ruff format --check .
+uv run pyright                            # strict on src/
+uv run pytest --cov                       # unit and property tests; coverage gate 85%
+uv run mkdocs serve                       # the documentation site, live
+```
+
+Optional: `uvx pre-commit install` runs ruff and basic hygiene checks before each commit.
+
+Tests against a real model are skipped by default; to run them:
+`DEPUTY_LIVE_URL=http://127.0.0.1:8080 uv run pytest tests/live`.
+
+Style: small functions with one job, intention-revealing names, no flag arguments that switch
+behaviour, polymorphism instead of long `if` chains, no comments that restate the code. Everything
+(code, comments, documentation, messages, tests) is written in English.
+
 ## Pull requests
 
 1. Fork, branch from `main`, make the change.

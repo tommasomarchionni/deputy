@@ -3,13 +3,14 @@ are kept short on purpose."""
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Literal
 
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import runs
+from deputy import runs, updates
 from deputy.agent import Result, run_task
 from deputy.backends import ChatClient
 from deputy.checks import CheckSpec, to_check
@@ -81,6 +82,10 @@ def build_server() -> MCPServer:
             finally:
                 await client.aclose()
             out[backend.name] = ("up: " if ok else "down: ") + detail
+        if config.auto_update != "off":
+            info = await asyncio.to_thread(updates.check)
+            if info.available:
+                out["update"] = f"{info.latest} available (installed {info.current}): deputy update"
         return out
 
     @server.tool()

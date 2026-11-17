@@ -71,6 +71,7 @@ class Config(BaseModel):
     default_backend: str
     backends: list[Backend]
     auto_tune: Literal["off", "propose", "apply"] = "propose"
+    auto_update: Literal["off", "notify", "apply"] = "notify"
     policy: Policy = Field(default_factory=Policy)
 
     def backend(self, name: str | None = None) -> Backend:
