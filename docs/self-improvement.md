@@ -43,21 +43,17 @@ an audit trail; limits on recursion and budget; no private data in the benchmark
 ## Tuning the chosen model (`deputy bench`, `deputy tune`)
 
 Every model behaves differently: a reasoning model needs its thinking capped, a small one needs a
-shorter task, a fast one can take more turns. deputy measures the model **you** picked.
+shorter task. deputy measures the model **you** picked. The commands exist (see
+[configuration](configuration.md#tuning)); this is what they do and why.
 
-- `deputy bench` runs a built-in suite (cited extraction, required facts, a long file read by
-  paging, a file write, a refused path) on a synthetic project, several times, and reports pass
-  rate, citation accuracy, turns, tokens, seconds and tokens per second. It writes a measured
-  **model profile** to the state directory.
-- `deputy tune` runs the suite for a few candidate settings (request-level options such as a
-  thinking switch or a lower `max_tokens`, turn limits) and recommends the best one that does not
-  lose accuracy. Server flags it cannot change (context size, reasoning budget, cache) are printed
-  as a proposed command, never executed.
-- **Who decides** is a setting, `auto_tune`, in the config:
-  - `off`: never changes anything;
-  - `propose` (default): prints the recommendation and the numbers; you apply it;
-  - `apply`: writes the winning request-level settings to a separate `tuned.toml` (never to your
-    config), keeps the previous version for `deputy tune --revert`, and only when the candidate
-    beats the baseline by a margin larger than the measured spread.
-- It re-runs when the model or the server changes (it notices from the model name), and the result
-  feeds the router (`architecture.md`) and the model profiles (`memory.md`).
+- `deputy bench` runs a built-in suite on a synthetic project that is identical every time: cited
+  extraction, a needle in a 600-line log (paging), a file write, a secret it must refuse, a short
+  summary. Graders are code. It reports pass rate, citation accuracy, turns, output tokens,
+  seconds (with spread) and tokens per second, and saves a **model profile**.
+- `deputy tune` runs the suite for the configured settings and for candidates (thinking off,
+  shorter output, cooler sampling), then recommends one only if it loses nothing and is clearly
+  cheaper than the spread.
+- **Who decides** is the `auto_tune` setting: `off`, `propose` (default) or `apply`. Applied
+  changes go to a separate `tuned.toml`, with the previous one kept for `deputy tune --revert`.
+- **Not yet done:** re-running automatically when the model changes, and feeding the profile into
+  routing. Both are planned (M4/M5); today you run `deputy tune` after changing model or server.
