@@ -9,3 +9,12 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build"
+    groups:
+      python:
+        patterns: ["*"]
