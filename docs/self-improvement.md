@@ -39,3 +39,25 @@ Nothing rewrites its own code or prompts unattended in production.
 
 Human gate on promotion; shadow mode before a change goes live; one-command rollback; a kill switch;
 an audit trail; limits on recursion and budget; no private data in the benchmark.
+
+## Tuning the chosen model (`deputy bench`, `deputy tune`)
+
+Every model behaves differently: a reasoning model needs its thinking capped, a small one needs a
+shorter task, a fast one can take more turns. deputy measures the model **you** picked.
+
+- `deputy bench` runs a built-in suite (cited extraction, required facts, a long file read by
+  paging, a file write, a refused path) on a synthetic project, several times, and reports pass
+  rate, citation accuracy, turns, tokens, seconds and tokens per second. It writes a measured
+  **model profile** to the state directory.
+- `deputy tune` runs the suite for a few candidate settings (request-level options such as a
+  thinking switch or a lower `max_tokens`, turn limits) and recommends the best one that does not
+  lose accuracy. Server flags it cannot change (context size, reasoning budget, cache) are printed
+  as a proposed command, never executed.
+- **Who decides** is a setting, `auto_tune`, in the config:
+  - `off`: never changes anything;
+  - `propose` (default): prints the recommendation and the numbers; you apply it;
+  - `apply`: writes the winning request-level settings to a separate `tuned.toml` (never to your
+    config), keeps the previous version for `deputy tune --revert`, and only when the candidate
+    beats the baseline by a margin larger than the measured spread.
+- It re-runs when the model or the server changes (it notices from the model name), and the result
+  feeds the router (`architecture.md`) and the model profiles (`memory.md`).

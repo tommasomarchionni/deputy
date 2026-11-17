@@ -7,3 +7,7 @@ __pycache__/
 sandboxes/
 .deputy/
 node_modules/
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/

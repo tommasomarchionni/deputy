@@ -1,0 +1,68 @@
+[project]
+name = "deputy"
+version = "0.1.0"
+description = "MCP server: a frontier model orchestrates, any other model does the legwork."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11"
+authors = [{ name = "Tommaso Marchionni" }]
+keywords = ["mcp", "llm", "agents", "delegation", "llama.cpp"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development",
+]
+dependencies = [
+  "mcp>=2.3,<3",
+  "httpx>=0.28,<1",
+  "pydantic>=2.11,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/tommasomarchionni/deputy"
+Issues = "https://github.com/tommasomarchionni/deputy/issues"
+
+[project.scripts]
+deputy = "deputy.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=9", "pytest-cov>=6", "ruff>=0.17", "pyright>=1.1.400"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/deputy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PT", "C4", "PL"]
+ignore = ["PLR2004", "S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["deputy"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.11"

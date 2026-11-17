@@ -6,8 +6,20 @@
 [![CI](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml/badge.svg)](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Status:** early design (M0). There is no server yet; this repository holds the design, agent
-profiles and a sandbox script. Nothing here is usable as a product.
+**Status:** alpha (M1). The server, installer and checks work; the benchmark and the tuning loop
+(M2) are next. Expect breaking changes.
+
+## Quick start
+
+```sh
+curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh
+deputy init                      # your model server: llama.cpp, Ollama, LM Studio, vLLM, ...
+deputy doctor                    # check it answers
+deputy install claude-code --apply   # or: vscode (Copilot), cursor, codex, generic
+deputy instructions --write CLAUDE.md   # teach the agent when to delegate (saves tokens)
+```
+
+Full guide: [docs/install.md](docs/install.md).
 
 ## What it is
 
@@ -34,14 +46,17 @@ benchmark in `docs/self-improvement.md`):
 
 ## Documents
 
+- `docs/install.md` — install and connect Claude Code, Copilot, Cursor, Codex.
+- `docs/configuration.md`, `docs/tools.md`, `docs/security.md` — reference.
 - `docs/architecture.md` — roles, tools, execution loop, routing, security, stack.
 - `docs/memory.md` — what is remembered (model profiles, lessons, project memory) and why.
 - `docs/self-improvement.md` — the improvement loop, the benchmark, the guardrails.
 - `docs/roadmap.md` — milestones and what is proven at each.
 
-## Already here
+## In the repository
 
-- `agents/local-helper.md` — a read-only helper profile, tuned against measured runs.
+- `src/deputy/` — the server (`delegate`, `status`, `profiles`, `feedback`), sandbox, checks.
+- `src/deputy/profiles/helper.md` — the bundled read-only helper profile.
 - `examples/project-dev.md` — a template for a project-specific developer profile.
 - `docs/local-serving.md` — measured speed of a local model under different server settings.
 - `tools/sandbox.sh` — an isolated working copy, so a worker never writes in the real repo.
