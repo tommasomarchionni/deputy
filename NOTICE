@@ -1,0 +1,8 @@
+deputy
+Copyright 2026 Tommaso Marchionni
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+deputy starts from lessons learned while using claude-code-delegate-local
+(https://github.com/fegone/claude-code-delegate-local, MIT, (c) 2026 Felix Gonzalez).
+No code from it is included yet. Any code copied from it later keeps its MIT notice.

@@ -1,0 +1,12 @@
+config:
+  default: true
+  MD013: false   # long lines are fine in prose and tables
+  MD033: false   # inline HTML allowed
+  MD041: false   # agent profiles start with front matter, templates with a section
+  MD024:
+    siblings_only: true
+globs:
+  - "**/*.md"
+ignores:
+  - "node_modules/**"
+  - "sandboxes/**"

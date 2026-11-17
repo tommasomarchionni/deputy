@@ -1,0 +1,22 @@
+name: Idea or feature
+description: Propose a change, with the problem it solves
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is hard or wrong today, ideally with a measured example.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposal
+    validations:
+      required: true
+  - type: textarea
+    id: measure
+    attributes:
+      label: How we would know it works
+      description: The benchmark task or metric that would show the improvement.
