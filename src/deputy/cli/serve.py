@@ -1,0 +1,23 @@
+"""`deputy mcp`: run the MCP server on stdio."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from deputy.cli import update
+from deputy.cli._common import Subparsers
+
+
+def run(_: argparse.Namespace) -> int:
+    from deputy.server import build_server  # noqa: PLC0415  (slow import, needed only here)
+
+    report = update.apply_if_opted_in()
+    if report:
+        print(f"deputy: {report}", file=sys.stderr)  # stdout belongs to the MCP protocol
+    build_server().run("stdio")
+    return 0
+
+
+def register(sub: Subparsers) -> None:
+    sub.add_parser("mcp", help="run the MCP server on stdio").set_defaults(func=run)

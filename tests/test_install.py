@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from deputy import cli, install
+from deputy.config import config_path
 
 
 def test_every_agent_has_a_snippet() -> None:
@@ -66,7 +67,7 @@ def test_init_writes_a_private_config_and_refuses_to_overwrite(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"]) == 0
-    target = cli.config_path()
+    target = config_path()
     assert oct(target.stat().st_mode & 0o777) == "0o600"
     assert 'base_url = "http://h:1"' in target.read_text()
     assert cli.main(["init", "--yes"]) == 1

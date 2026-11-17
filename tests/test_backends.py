@@ -70,7 +70,7 @@ def test_doctor_reports_a_healthy_backend(
 ) -> None:
     cli.main(["init", "--yes", "--url", "http://srv", "--model", "m"])
     healthy = lambda b: client_for(lambda _: httpx.Response(200, json={"data": []}))  # noqa: E731
-    monkeypatch.setattr(cli, "ChatClient", healthy)
+    monkeypatch.setattr("deputy.cli.setup.ChatClient", healthy)
     assert cli.main(["doctor"]) == 0
     out = capsys.readouterr().out
     assert "backend local: ok" in out
@@ -82,6 +82,6 @@ def test_doctor_fails_when_the_backend_is_down(
 ) -> None:
     cli.main(["init", "--yes", "--url", "http://srv", "--model", "m"])
     down = lambda b: client_for(lambda _: httpx.Response(503))  # noqa: E731
-    monkeypatch.setattr(cli, "ChatClient", down)
+    monkeypatch.setattr("deputy.cli.setup.ChatClient", down)
     assert cli.main(["doctor"]) == 1
     assert "FAIL" in capsys.readouterr().out
