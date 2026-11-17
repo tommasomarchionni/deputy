@@ -8,7 +8,8 @@
   the server, only when the argv matches `policy.allowed_commands`, without a shell, with a stripped
   environment and a timeout.
 - **The orchestrator is trusted** to choose `workdir` and checks: it is the user's own agent. Point
-  it at a copy (see `tools/sandbox.sh`) when the worker should not touch the real repository.
+  it at a copy (`deputy workspace create NAME PATH...`, then `deputy workspace diff NAME`) when the
+  worker should not touch the real repository.
 - **Worker output is a draft.** Review it before it reaches the real repository.
 - **Secrets:** keys come from a mode-600 file or an environment variable, are never written to the
   config, the traces or the model prompt.

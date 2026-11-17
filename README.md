@@ -6,8 +6,8 @@
 [![CI](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml/badge.svg)](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Status:** alpha (M1). The server, installer and checks work; the benchmark and the tuning loop
-(M2) are next. Expect breaking changes.
+**Status:** alpha (M1). The server, installer, checks, benchmark and tuning commands work; routing,
+memory and async tasks are next. Expect breaking changes.
 
 ## Quick start
 
@@ -17,6 +17,7 @@ deputy init                      # your model server: llama.cpp, Ollama, LM Stud
 deputy doctor                    # check it answers
 deputy install claude-code --apply   # or: vscode (Copilot), cursor, codex, generic
 deputy instructions --write CLAUDE.md   # teach the agent when to delegate (saves tokens)
+deputy tune                      # measure your model and get better settings (optional)
 ```
 
 Full guide: [docs/install.md](docs/install.md).
@@ -59,7 +60,7 @@ benchmark in `docs/self-improvement.md`):
 - `src/deputy/profiles/helper.md` — the bundled read-only helper profile.
 - `examples/project-dev.md` — a template for a project-specific developer profile.
 - `docs/local-serving.md` — measured speed of a local model under different server settings.
-- `tools/sandbox.sh` — an isolated working copy, so a worker never writes in the real repo.
+- `deputy workspace` — disposable copies of a repository, so a worker never writes in the real one.
 
 ## Contributing
 

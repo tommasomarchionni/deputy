@@ -9,7 +9,7 @@ from deputy import cli, server
 from deputy.config import state_dir
 from deputy.server import build_server
 
-SCHEMA_BUDGET_CHARS = 6_000  # about 1,500 tokens: what the orchestrator carries on every turn
+SCHEMA_BUDGET_CHARS = 5_000  # about 1,250 tokens: what the orchestrator carries on every turn
 
 
 def structured(result: Any) -> dict[str, Any]:
@@ -76,3 +76,16 @@ def test_profiles_and_status_tools() -> None:
     assert "helper" in structured(profiles)
     status = asyncio.run(build_server().call_tool("status", {}))
     assert "deputy init" in structured(status)["error"]
+
+
+def test_an_invalid_check_is_reported_before_any_work_starts(tmp_path: Path) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    out = asyncio.run(
+        build_server().call_tool(
+            "delegate",
+            {"task": "x", "workdir": str(tmp_path), "checks": [{"type": "cites_lines"}]},
+        )
+    )
+    data = structured(out)
+    assert data["status"] == "error"
+    assert "invalid check" in data["answer"]

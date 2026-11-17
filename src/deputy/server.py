@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Literal
 
 from mcp.server.mcpserver import MCPServer
+from pydantic import ValidationError
 
 from deputy import runs
 from deputy.agent import Result, run_task
 from deputy.backends import ChatClient
-from deputy.checks import Check
+from deputy.checks import CheckSpec, to_check
 from deputy.config import ConfigError, load_config
 from deputy.profiles import load_profiles
 from deputy.sandbox import Sandbox, SandboxError
@@ -27,7 +28,7 @@ def build_server() -> MCPServer:
         task: str,
         workdir: str,
         profile: str = "helper",
-        checks: list[Check] | None = None,
+        checks: list[CheckSpec] | None = None,
         backend: str | None = None,
         max_turns: int = 8,
     ) -> Result:
@@ -41,6 +42,15 @@ def build_server() -> MCPServer:
                 raise ConfigError(f"unknown profile '{profile}'; known: {', '.join(profiles)}")
             sandbox = Sandbox(Path(workdir))
             client = ChatClient(config.backend(backend))
+            strict_checks = [to_check(c) for c in checks or []]
+        except ValidationError as exc:
+            detail = "; ".join(str(e["msg"]) for e in exc.errors())
+            return Result(
+                run_id=run_id,
+                status="error",
+                answer=f"invalid check: {detail}",
+                flags=["setup_error"],
+            )
         except (ConfigError, SandboxError) as exc:
             return Result(run_id=run_id, status="error", answer=str(exc), flags=["setup_error"])
         try:
@@ -49,7 +59,7 @@ def build_server() -> MCPServer:
                 profile=chosen,
                 task=task,
                 sandbox=sandbox,
-                checks=checks or [],
+                checks=strict_checks,
                 policy=config.policy,
                 max_turns=max_turns,
             )

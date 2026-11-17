@@ -3,7 +3,19 @@ import asyncio
 import sys
 from pathlib import Path
 
-from deputy.checks import CitesLines, Command, Contains, FileWritten, MaxChars, run_checks
+import pytest
+
+from deputy.checks import (
+    CitesLines,
+    Command,
+    Contains,
+    Excludes,
+    FileContains,
+    FileWritten,
+    MaxChars,
+    _cited_numbers,
+    run_checks,
+)
 from deputy.config import Policy
 from deputy.sandbox import Sandbox
 
@@ -72,3 +84,36 @@ def test_command_failure_and_timeout_are_reported(tmp_path: Path) -> None:
     )[0]
     assert not failing.passed
     assert slow.detail == "timed out"
+
+
+def test_excludes_fails_when_forbidden_text_appears(tmp_path: Path) -> None:
+    box = Sandbox(tmp_path)
+    assert run([Excludes(values=["SECRET"])], "all fine", box)[0].passed
+    leaked = run([Excludes(values=["secret"])], "the token is SECRET-1", box)[0]
+    assert not leaked.passed
+    assert "SECRET-1" not in leaked.detail  # the report must not repeat the leak
+
+
+def test_file_contains_reads_the_file_inside_the_sandbox(tmp_path: Path) -> None:
+    box = Sandbox(tmp_path)
+    (tmp_path / "out.txt").write_text("hello deputy")
+    assert run([FileContains(path="out.txt", values=["hello"])], "", box)[0].passed
+    assert not run([FileContains(path="out.txt", values=["bye"])], "", box)[0].passed
+    assert not run([FileContains(path="../x", values=["a"])], "", box)[0].passed
+    assert not run([FileContains(path="missing.txt", values=["a"])], "", box)[0].passed
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        ("`long.log:540` has it", [540]),
+        ("see src/deputy/a.py:12-14 and b.md:3", [12, 14, 3]),
+        ("at 12:09:00 the worker failed", []),
+        ("open http://localhost:8080/x or https://example.com:443/y", []),
+        ("lines 3, 5 and file.txt:7", [3, 5, 7]),
+    ],
+)
+def test_citation_forms_are_recognised_without_false_positives(
+    answer: str, expected: list[int]
+) -> None:
+    assert sorted(_cited_numbers(answer)) == sorted(expected)

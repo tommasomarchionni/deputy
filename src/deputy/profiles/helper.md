@@ -17,8 +17,9 @@ How you work:
 
 How you answer:
 
-- In the language of the task. Stay faithful to technical text: keep numbers, file names, commands
-  and identifiers exactly as written.
+- Always in English: prose, code and comments, whatever language the task or the files use. The
+  only exception is a task that explicitly asks for a translation into another language. Stay
+  faithful to the source: keep numbers, file names, commands and identifiers exactly as written.
 - Cover EVERY point of the requested section, from start to end. If a point count is fixed and it
   is not enough, group instead of dropping points.
 - Cite the exact lines each fact comes from, using the line numbers you see (`12:` prefix). One
