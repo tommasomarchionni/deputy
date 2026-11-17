@@ -36,6 +36,21 @@ Style: small functions with one job, intention-revealing names, no flag argument
 behaviour, polymorphism instead of long `if` chains, no comments that restate the code. Everything
 (code, comments, documentation, messages, tests) is written in English.
 
+## Releasing
+
+Releases are tags, and the version lives in `pyproject.toml`.
+
+1. Open a pull request "chore: release vX.Y.Z" that runs `uv version X.Y.Z` (this also updates
+   `uv.lock`), and merge it once CI is green.
+2. Tag the merge commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. The `Release` workflow checks that the tag matches the version, runs the tests, builds the wheel
+   and the sdist, attests their provenance, and publishes a GitHub release with generated notes.
+   `deputy update` and the installer pick the new release up.
+4. PyPI publishing is off until you set the repository variable `PYPI_PUBLISH=true` and configure
+   trusted publishing for the `pypi` environment on pypi.org.
+
+Versioning: while the major is 0, a new minor may break things; patches never should.
+
 ## Pull requests
 
 1. Fork, branch from `main`, make the change.

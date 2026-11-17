@@ -11,7 +11,7 @@ One line, no `sudo`, everything stays in your home directory:
 curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh
 ```
 
-The script is short; [read it](../install.sh) first if you like. It needs [uv](https://docs.astral.sh/uv/);
+The script is short; [read it](https://github.com/tommasomarchionni/deputy/blob/main/install.sh) first if you like. It needs [uv](https://docs.astral.sh/uv/);
 add `-s -- --install-uv` to let it install uv too:
 
 ```sh

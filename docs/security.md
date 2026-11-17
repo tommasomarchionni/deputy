@@ -17,4 +17,4 @@
   only for data you may share.
 - **Traces** (`runs.jsonl`) hold run metadata and check results, not file contents or answers.
 
-Report vulnerabilities privately: see [SECURITY.md](../SECURITY.md).
+Report vulnerabilities privately: see [SECURITY.md](https://github.com/tommasomarchionni/deputy/blob/main/SECURITY.md).
