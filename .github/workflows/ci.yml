@@ -85,7 +85,8 @@ jobs:
           deputy init --yes --url http://127.0.0.1:1
           deputy install vscode | grep -q '"deputy"'
           sh install.sh --uninstall
-          if command -v deputy; then ls -l "$(command -v deputy)"; uv tool list; exit 1; fi
+          hash -r  # the shell remembers where deputy was; forget it before checking
+          if command -v deputy; then exit 1; fi
 
   required:
     name: Required
