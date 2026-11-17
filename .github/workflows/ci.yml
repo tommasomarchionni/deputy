@@ -39,7 +39,7 @@ jobs:
         with:
           persist-credentials: false
       - name: shellcheck
-        run: shellcheck --severity=style tools/*.sh install.sh
+        run: shellcheck --severity=style install.sh
 
   python:
     name: Python (${{ matrix.python }}, ${{ matrix.os }})

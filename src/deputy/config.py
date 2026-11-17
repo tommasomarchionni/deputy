@@ -70,6 +70,7 @@ class Policy(BaseModel):
 class Config(BaseModel):
     default_backend: str
     backends: list[Backend]
+    auto_tune: Literal["off", "propose", "apply"] = "propose"
     policy: Policy = Field(default_factory=Policy)
 
     def backend(self, name: str | None = None) -> Backend:
@@ -91,6 +92,11 @@ def load_config(path: Path | None = None) -> Config:
         raise ConfigError(f"no configuration at {target}; run: deputy init")
     try:
         data = tomllib.loads(target.read_text(encoding="utf-8"))
-        return Config.model_validate(data)
+        config = Config.model_validate(data)
     except (tomllib.TOMLDecodeError, ValueError) as exc:
         raise ConfigError(f"invalid configuration {target}: {exc}") from exc
+    from deputy.tune import merge_tuned, read_tuned  # noqa: PLC0415  (tune imports this module)
+
+    tuned = read_tuned()
+    config.backends = [merge_tuned(b, tuned) for b in config.backends]
+    return config

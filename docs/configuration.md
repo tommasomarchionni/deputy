@@ -7,6 +7,7 @@
 
 ```toml
 default_backend = "local"
+auto_tune = "propose"                # off | propose | apply, see "Tuning" below
 
 [[backends]]
 name = "local"
@@ -48,3 +49,31 @@ Bundled: `helper`. Add your own in `~/.config/deputy/profiles/` (yours) or `.dep
 
 The orchestrator may declare `command` checks, but they only run if the argv starts with an entry
 of `allowed_commands`. The worker model never runs anything.
+
+## Tuning
+
+`deputy bench` measures the model you configured; `deputy tune` also tries a few request-level
+settings and recommends the best one that loses no accuracy.
+
+```sh
+deputy bench                 # one pass of the built-in suite, prints a table, saves a model profile
+deputy bench --runs 3        # repeat: you get the spread too, and a fairer comparison
+deputy tune                  # baseline + candidates; recommends, or applies per `auto_tune`
+deputy tune --apply          # write the winner to tuned.toml now
+deputy tune --revert         # undo the last applied tuning
+```
+
+`auto_tune` decides what `deputy tune` may do alone: `off` changes nothing, `propose` (default)
+prints the recommendation, `apply` writes it. Applied settings go to `tuned.toml` next to your
+config, never into your config; they overlay the backend's `extra_body` and `max_tokens`, and
+deleting the file undoes them. A candidate is chosen only if it keeps pass rate and citation
+accuracy and is faster than the measured spread or uses at least 15% fewer output tokens.
+
+Server flags (context size, thinking budget, cache) are outside deputy's reach: when thinking
+dominates the time, `tune` prints the flag to try instead of changing anything. Custom candidates:
+`deputy bench --variant 'name={"extra_body":{"temperature":0.1},"max_tokens":512}'`.
+
+## Language
+
+Everything deputy ships (code, documentation, messages and the bundled profile) is in English, and
+the bundled `helper` profile makes the worker answer in English. A custom profile can say otherwise.

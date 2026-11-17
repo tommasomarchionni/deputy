@@ -20,12 +20,15 @@ Returns: `status` (`ok`, `checks_failed`, `turn_limit`, `error`), `answer`, `fil
 `checks` (pass or fail each), `flags` (`needs_frontier`, `turn_limit`, `backend_error`,
 `setup_error`), `metrics` (turns, tokens, seconds, model), `run_id`, and
 `orchestrator_tokens_saved_est` (a rough chars/4 estimate of what you did not have to read).
+The worker always answers in English (the bundled profile says so), unless asked to translate.
 
 ### Checks
 
 | `type` | Passes when |
 | --- | --- |
 | `contains` | every string in `values` appears in the answer (case-insensitive) |
+| `excludes` | none of the strings in `values` appears in the answer (for example a secret) |
+| `file_contains` | the file `path` in `workdir` contains every string in `values` |
 | `cites_lines` | every cited line number (`line 12`, `lines 12-14`, `righe 12`, `l. 12`) is within `min`..`max`, and at least one is cited |
 | `max_chars` | the answer is at most `limit` characters |
 | `file_written` | the worker wrote `path` |

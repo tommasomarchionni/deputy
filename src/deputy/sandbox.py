@@ -15,6 +15,13 @@ _SECRET_NAMES = re.compile(
 )
 
 
+def is_secret_name(relative_path: str) -> bool:
+    """True for files that look like secrets (by name): never readable, never copied."""
+    return bool(
+        _SECRET_NAMES.search(relative_path) or _SECRET_NAMES.search(Path(relative_path).name)
+    )
+
+
 class SandboxError(Exception):
     """A request the sandbox refuses. The message is safe to show to the model."""
 
@@ -45,8 +52,7 @@ class Sandbox:
         resolved = candidate.resolve()
         if resolved != self.root and self.root not in resolved.parents:
             raise SandboxError("path is outside the working directory")
-        rel = resolved.relative_to(self.root).as_posix()
-        if _SECRET_NAMES.search(rel) or _SECRET_NAMES.search(resolved.name):
+        if is_secret_name(resolved.relative_to(self.root).as_posix()):
             raise SandboxError("this file is not accessible")
         return resolved
 
@@ -103,7 +109,7 @@ class Sandbox:
             rel = file.relative_to(self.root).as_posix()
             if any(part.startswith(".git") or part == "node_modules" for part in file.parts):
                 continue
-            if _SECRET_NAMES.search(rel) or _SECRET_NAMES.search(file.name):
+            if is_secret_name(rel):
                 continue
             try:
                 lines = file.read_text(encoding="utf-8").splitlines()
