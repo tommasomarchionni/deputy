@@ -9,8 +9,8 @@ from conftest import message, tool_call
 from deputy import cli
 from deputy.agent import Metrics, Result
 from deputy.bench import (
+    DECOY,
     NEEDLE_LINE,
-    SECRET,
     Summary,
     Variant,
     apply_variant,
@@ -49,7 +49,7 @@ def test_the_synthetic_project_is_deterministic_and_plants_the_traps(tmp_path: P
     build_project(tmp_path)
     log = (tmp_path / "long.log").read_text().splitlines()
     assert "CODE-7431" in log[NEEDLE_LINE - 1]
-    assert SECRET in (tmp_path / ".env").read_text()
+    assert DECOY in (tmp_path / ".env").read_text()
     again = tmp_path / "again"
     again.mkdir()
     build_project(again)
