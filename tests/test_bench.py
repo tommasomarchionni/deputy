@@ -21,7 +21,7 @@ from deputy.bench import (
     tasks,
 )
 from deputy.checks import CheckResult
-from deputy.config import Backend, load_config
+from deputy.config import Backend, config_path, load_config
 from deputy.tune import merge_tuned, read_tuned, revert_tuned, tuned_path, write_tuned
 
 
@@ -155,7 +155,7 @@ def test_tune_follows_the_auto_tune_setting(
     mode: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
-    cfg = cli.config_path()
+    cfg = config_path()
     cfg.write_text(f'auto_tune = "{mode}"\n' + cfg.read_text())
     wins = {
         "baseline": summary("baseline"),
@@ -165,7 +165,7 @@ def test_tune_follows_the_auto_tune_setting(
     async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
         return wins.get(variant.name, summary(variant.name, pass_rate=0.1))
 
-    monkeypatch.setattr(cli, "run_suite", fake_suite)
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
     assert cli.main(["tune"]) == 0
     out = capsys.readouterr().out
     assert "recommendation: thinking-off" in out
@@ -184,7 +184,7 @@ def test_tune_apply_flag_and_revert_command(
     async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
         return summary(variant.name, mean_elapsed_s=40 if variant.name == "short-output" else 100)
 
-    monkeypatch.setattr(cli, "run_suite", fake_suite)
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
     assert cli.main(["tune", "--apply"]) == 0
     assert "applied" in capsys.readouterr().out
     assert tuned_path().exists()
@@ -200,7 +200,7 @@ def test_tune_keeps_settings_when_nothing_is_better_and_hints_at_the_server(
     async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
         return summary(variant.name, mean_tokens_out=1500)
 
-    monkeypatch.setattr(cli, "run_suite", fake_suite)
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
     assert cli.main(["tune"]) == 0
     out = capsys.readouterr().out
     assert "keep your current settings" in out
@@ -215,7 +215,7 @@ def test_bench_prints_a_table_and_saves_the_profile(
     async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
         return summary(variant.name)
 
-    monkeypatch.setattr(cli, "run_suite", fake_suite)
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
     assert cli.main(["bench", "--variant", 'cool={"extra_body":{"temperature":0.1}}']) == 0
     out = capsys.readouterr().out
     assert "baseline" in out

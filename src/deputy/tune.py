@@ -53,11 +53,17 @@ def _toml(value: Any) -> str:
         return "{ " + items + " }"
     if isinstance(value, list):
         return "[" + ", ".join(_toml(v) for v in cast("list[Any]", value)) + "]"
-    return json.dumps(str(value))
+    return _toml_string(str(value))
+
+
+def _toml_string(text: str) -> str:
+    """A TOML basic string. JSON's escapes are valid TOML, except that JSON leaves DEL raw and
+    (with ensure_ascii) writes non-BMP characters as surrogate pairs, which TOML rejects."""
+    return json.dumps(text, ensure_ascii=False).replace("\x7f", "\\u007f")
 
 
 def _key(key: str) -> str:
-    return key if re.fullmatch(r"[A-Za-z0-9_-]+", key) else json.dumps(key)
+    return key if re.fullmatch(r"[A-Za-z0-9_-]+", key) else _toml_string(key)
 
 
 def write_tuned(backend: str, variant: Variant) -> Path:

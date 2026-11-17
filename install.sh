@@ -10,16 +10,21 @@
 #   --uninstall     remove deputy
 #   --install-uv    also install uv if it is missing (runs the official astral.sh installer)
 # Environment:
-#   DEPUTY_REF      git branch, tag or commit to install (default: main)
+#   DEPUTY_REF      git branch, tag or commit to install (default: the latest release, else main)
 #   DEPUTY_SOURCE   install from this local path or URL instead of GitHub (used by CI)
 set -eu
 
 REPO_URL="https://github.com/tommasomarchionni/deputy"
-REF="${DEPUTY_REF:-main}"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+latest_release() {
+  have curl || return 1
+  curl -fsSL --max-time 5 "https://api.github.com/repos/tommasomarchionni/deputy/releases/latest" 2>/dev/null |
+    sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
+}
 
 ensure_uv() {
   have uv && return 0
@@ -56,6 +61,9 @@ main() {
     exit 0
   fi
 
+  REF="${DEPUTY_REF:-}"
+  [ -n "$REF" ] || REF="$(latest_release || true)"
+  REF="${REF:-main}"
   SOURCE="${DEPUTY_SOURCE:-git+${REPO_URL}@${REF}}"
   say "installing deputy from ${SOURCE} ..."
   uv tool install --force "$SOURCE"

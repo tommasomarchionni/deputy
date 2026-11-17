@@ -29,7 +29,13 @@ Issues = "https://github.com/tommasomarchionni/deputy/issues"
 deputy = "deputy.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=9", "pytest-cov>=6", "ruff>=0.17", "pyright>=1.1.400"]
+dev = [
+    "pytest>=9",
+    "pytest-cov>=6",
+    "ruff>=0.17",
+    "pyright>=1.1.400",
+    "hypothesis>=6.170.15",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -53,6 +59,7 @@ ignore = ["PLR2004", "S101"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
+markers = ["live: needs a real model server (set DEPUTY_LIVE_URL)"]
 
 [tool.coverage.run]
 source = ["deputy"]

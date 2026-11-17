@@ -13,7 +13,7 @@ from deputy.checks import (
     FileContains,
     FileWritten,
     MaxChars,
-    _cited_numbers,
+    cited_numbers,
     run_checks,
 )
 from deputy.config import Policy
@@ -116,4 +116,4 @@ def test_file_contains_reads_the_file_inside_the_sandbox(tmp_path: Path) -> None
 def test_citation_forms_are_recognised_without_false_positives(
     answer: str, expected: list[int]
 ) -> None:
-    assert sorted(_cited_numbers(answer)) == sorted(expected)
+    assert sorted(cited_numbers(answer)) == sorted(expected)
