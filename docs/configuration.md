@@ -44,7 +44,7 @@ Several backends can be listed; pick one per call with the `backend` argument.
 
 A profile is a markdown file with a short front matter and the instructions the worker follows.
 Bundled: `helper`. Add your own in `~/.config/deputy/profiles/` (yours) or `.deputy/profiles/`
-(per project; the project wins). See `examples/project-dev.md` for a template.
+(per project; the project wins). See [`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md) for a template.
 
 ## Policy
 

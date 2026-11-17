@@ -36,6 +36,10 @@ dev = [
     "pyright>=1.1.400",
     "hypothesis>=6.170.15",
 ]
+docs = [
+    "mkdocs>=1.6.1,<2",
+    "mkdocs-material>=9.8.1",
+]
 
 [build-system]
 requires = ["hatchling"]

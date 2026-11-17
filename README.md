@@ -4,6 +4,7 @@
 > better at it every week.
 
 [![CI](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml/badge.svg)](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://tommasomarchionni.github.io/deputy/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 **Status:** alpha (M1). The server, installer, checks, benchmark and tuning commands work; routing,
@@ -20,7 +21,7 @@ deputy instructions --write CLAUDE.md   # teach the agent when to delegate (save
 deputy tune                      # measure your model and get better settings (optional)
 ```
 
-Full guide: [docs/install.md](docs/install.md).
+Full documentation: **<https://tommasomarchionni.github.io/deputy/>** (source in `docs/`).
 
 ## What it is
 

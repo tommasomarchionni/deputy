@@ -27,8 +27,15 @@ jobs:
           globs: "**/*.md"
       - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
-          args: --no-progress --max-retries 3 --accept 200,429 --exclude '^https://github.com/tommasomarchionni/deputy' '**/*.md'
+          args: --no-progress --max-retries 3 --accept 200,429 --exclude '^https://github.com/tommasomarchionni/deputy' --exclude '^https://tommasomarchionni.github.io/deputy' '**/*.md'
           fail: true
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+      - name: the documentation site must build without warnings
+        run: |
+          uv sync --locked --only-group docs
+          uv run --only-group docs mkdocs build --strict
 
   shell:
     name: Shell

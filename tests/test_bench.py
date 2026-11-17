@@ -21,6 +21,7 @@ from deputy.bench import (
     tasks,
 )
 from deputy.checks import CheckResult
+from deputy.cli.tuning import format_table
 from deputy.config import Backend, config_path, load_config
 from deputy.tune import merge_tuned, read_tuned, revert_tuned, tuned_path, write_tuned
 
@@ -222,3 +223,13 @@ def test_bench_prints_a_table_and_saves_the_profile(
     assert "cool" in out
     assert "profile saved" in out
     assert cli.main(["bench", "--variant", "oops"]) == 1
+
+
+def test_the_saving_for_the_orchestrator_is_summarised_and_shown() -> None:
+    cheap = result()
+    cheap.orchestrator_tokens_saved_est = 300
+    big = result()
+    big.orchestrator_tokens_saved_est = 900
+    s = summarise("v", [("a", cheap), ("b", big)])
+    assert s.mean_saved_tokens_est == 600
+    assert "saved*" in format_table([s])

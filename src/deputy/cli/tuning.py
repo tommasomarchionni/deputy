@@ -28,6 +28,7 @@ _COLUMNS: tuple[tuple[str, int, Callable[[Summary], str]], ...] = (
     ("sec", 8, lambda r: f"{r.mean_elapsed_s:.1f}"),
     ("+-", 6, lambda r: f"{r.stdev_elapsed_s:.1f}"),
     ("tok/s", 7, lambda r: f"{r.tokens_per_s:.1f}"),
+    ("saved*", 8, lambda r: f"{r.mean_saved_tokens_est:.0f}"),
 )
 
 
@@ -39,7 +40,8 @@ def _cell(text: str, width: int) -> str:
 def format_table(rows: list[Summary]) -> str:
     head = "".join(_cell(name, width) for name, width, _ in _COLUMNS)
     body = ("".join(_cell(get(row), width) for _, width, get in _COLUMNS) for row in rows)
-    return "\n".join([head, *body])
+    note = "* saved: estimated tokens the orchestrator did not have to read (chars / 4)"
+    return "\n".join([head, *body, note])
 
 
 def _progress(name: str, result: Result) -> None:

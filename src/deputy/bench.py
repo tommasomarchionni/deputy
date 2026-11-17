@@ -117,6 +117,7 @@ class Summary(BaseModel):
     mean_elapsed_s: float
     stdev_elapsed_s: float
     tokens_per_s: float
+    mean_saved_tokens_est: float = 0.0
     failures: dict[str, int] = {}
 
 
@@ -155,6 +156,9 @@ def summarise(variant: str, results: list[tuple[str, Result]]) -> Summary:
         mean_elapsed_s=round(statistics.fmean(elapsed), 1),
         stdev_elapsed_s=round(statistics.pstdev(elapsed), 1),
         tokens_per_s=round(sum(out) / total_time, 1) if total_time else 0.0,
+        mean_saved_tokens_est=round(
+            statistics.fmean(r.orchestrator_tokens_saved_est for _, r in results), 1
+        ),
         failures=failures,
     )
 

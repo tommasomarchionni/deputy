@@ -115,8 +115,12 @@ class Sandbox:
                 lines = file.read_text(encoding="utf-8").splitlines()
             except (UnicodeDecodeError, OSError):
                 continue
+            counted = False
             for number, line in enumerate(lines, start=1):
                 if regex.search(line):
+                    if not counted:  # the orchestrator would have had to read this file
+                        self.chars_read += sum(len(row) + 1 for row in lines)
+                        counted = True
                     hits.append(f"{rel}:{number}: {line[:200]}")
                     if len(hits) >= MAX_GREP_HITS:
                         return "\n".join([*hits, f"[stopped at {MAX_GREP_HITS} hits]"])
