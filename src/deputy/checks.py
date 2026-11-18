@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
 import jsonschema
-from pydantic import BaseModel, Field, TypeAdapter, field_validator
+from pydantic import BaseModel, Field, TypeAdapter, field_validator, model_validator
 from referencing import Registry
 from referencing.exceptions import Unresolvable
 
@@ -108,20 +108,38 @@ def cited_numbers(answer: str) -> list[int]:
 
 
 class CitesLines(BaseModel):
-    """Cited line numbers (at least one) all lie in min..max."""
+    """Cited line numbers (at least one) all lie in min..max. With `path` and no `max`, max is the
+    file's current number of lines, so the check does not go stale when the file grows."""
 
     type: Literal["cites_lines"] = "cites_lines"
     min: int = 1
-    max: int
+    max: int | None = None
+    path: str | None = None
+
+    @model_validator(mode="after")
+    def _has_an_upper_bound(self) -> CitesLines:
+        if self.max is None and not self.path:
+            raise ValueError("cites_lines needs `max` or the `path` of the file cited")
+        return self
+
+    def _upper(self, ctx: CheckContext) -> int | str:
+        """The upper bound, or a reason it cannot be known."""
+        if self.max is not None:
+            return self.max
+        try:
+            return ctx.sandbox.line_count(str(self.path))
+        except SandboxError as exc:
+            return f"cannot read {self.path}: {exc}"
 
     async def evaluate(self, ctx: CheckContext) -> CheckResult:
         cited = cited_numbers(ctx.answer)
         if not cited:
             return _result("cites_lines", "no citation")
-        outside = sorted({n for n in cited if not self.min <= n <= self.max})
-        return _result(
-            "cites_lines", f"outside {self.min}-{self.max}: {outside}" if outside else ""
-        )
+        upper = self._upper(ctx)
+        if isinstance(upper, str):
+            return _result("cites_lines", upper)
+        outside = sorted({n for n in cited if not self.min <= n <= upper})
+        return _result("cites_lines", f"outside {self.min}-{upper}: {outside}" if outside else "")
 
 
 _QUOTE = re.compile(

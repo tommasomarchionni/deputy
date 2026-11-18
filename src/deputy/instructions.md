@@ -14,7 +14,7 @@ How:
 
 1. Call `delegate` with an absolute `workdir`, and a task that names the files (never paste them).
    The worker has none of your context: say what to cover, in what form, and how long. Add `checks`
-   that prove the answer: `cites_lines` (cited lines in range), `contains` (facts you can predict),
+   that prove the answer: `cites_lines` with `path` (cited lines exist in that file), `contains` (facts you can predict),
    `excludes`, `max_chars`, `file_written` and `file_contains` (when it writes), `command` (only
    allow-listed tests).
 2. `status: ok`: trust the checks and do not reread the sources. Before acting on one fact, you may
