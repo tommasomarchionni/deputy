@@ -52,10 +52,12 @@ jobs:
           FORCE: ${{ inputs.force }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: python3 tools/ci/release_plan.py | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python3 tools/ci/release_plan.py | tee -a "$GITHUB_STEP_SUMMARY"
 
   release:
-    name: Release ${{ needs.plan.outputs.version }}
+    name: Release
     needs: plan
     if: needs.plan.outputs.release == 'true'
     runs-on: ubuntu-latest
