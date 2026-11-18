@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import stat
+import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -170,7 +172,7 @@ class Sandbox:
             raise SandboxError(f"invalid pattern: {exc}") from exc
         deadline = time.monotonic() + GREP_BUDGET_S
         base = self.resolve(path)
-        files = [base] if base.is_file() else sorted(p for p in base.rglob("*") if p.is_file())
+        files = [base] if base.is_file() else self._searchable(base)
         hits: list[str] = []
         for candidate in files:
             file = self._contained(candidate)
@@ -189,6 +191,38 @@ class Sandbox:
                     if len(hits) >= MAX_GREP_HITS:
                         return self._seen([*hits, f"[stopped at {MAX_GREP_HITS} hits]"])
         return self._seen(hits or ["no matches"])
+
+    def _searchable(self, base: Path) -> list[Path]:
+        """The files to search under `base`: what git tracks or does not ignore, else every file.
+
+        This only removes files from a search (generated folders, mirrored worktrees); the
+        containment and secret checks still run on each one."""
+        git = shutil.which("git")
+        if git and (self.root / ".git").exists():
+            try:
+                done = subprocess.run(  # noqa: S603  (fixed argv, no shell)
+                    [
+                        git,
+                        "-C",
+                        str(self.root),
+                        "ls-files",
+                        "-z",
+                        "--cached",
+                        "--others",
+                        "--exclude-standard",
+                        "--",
+                        str(base),
+                    ],
+                    capture_output=True,
+                    check=True,
+                    timeout=10,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+            else:
+                names = done.stdout.decode("utf-8", "replace").split("\0")
+                return sorted(p for n in names if n and (p := self.root / n).is_file())
+        return sorted(p for p in base.rglob("*") if p.is_file())
 
     def _seen(self, rows: list[str]) -> str:
         """What a search shows: the orchestrator doing it itself would read these rows, no more."""
