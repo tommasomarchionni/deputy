@@ -247,7 +247,7 @@
       }
     },
     "delegate": {
-      "description": "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`.\nWith wait=False it returns at once; get the result with `collect`.",
+      "description": "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`. With wait=False it returns at once; get the result with `collect`.",
       "input": {
         "$defs": {
           "CheckSpec": {

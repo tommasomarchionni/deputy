@@ -143,7 +143,12 @@ def build_server() -> MCPServer:
     server = MCPServer("deputy", instructions=INSTRUCTIONS)
     pending = background.Jobs()
 
-    @server.tool()
+    @server.tool(
+        description=(
+            "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`. "
+            "With wait=False it returns at once; get the result with `collect`."
+        )
+    )
     async def delegate(  # noqa: PLR0913, PLR0917
         task: str,
         workdir: str,
@@ -153,8 +158,6 @@ def build_server() -> MCPServer:
         max_turns: int | None = None,
         wait: bool = True,
     ) -> Result:
-        """Run a task on a worker model in `workdir` (absolute path). Verified by `checks`.
-        With wait=False it returns at once; get the result with `collect`."""
         run_id = runs.new_run_id()
         try:
             prepared = _prepare(workdir, profile, checks, backend)
