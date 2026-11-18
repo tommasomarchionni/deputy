@@ -12,6 +12,7 @@ from hypothesis import strategies as st
 from deputy.checks import (
     CheckContext,
     CheckSpec,
+    CitesFiles,
     CitesLines,
     CitesText,
     Command,
@@ -374,3 +375,61 @@ def test_cites_lines_on_a_file_it_cannot_read_fails_clearly(tmp_path, path: str)
 def test_cites_lines_needs_a_max_or_a_path() -> None:
     with pytest.raises(ValueError, match="needs `max` or the `path`"):
         to_check(CheckSpec(type="cites_lines"))
+
+
+TEXT = "alpha line one\nbeta is the second letter\ngamma closes the file\n"
+
+
+def _files_check(tmp_path: Path, answer: str, paths: tuple[str, ...] = ("docs/a.md",)) -> str:
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "a.md").write_text(TEXT)
+    (tmp_path / "docs" / "b.md").write_text(TEXT)
+    (tmp_path / "other").mkdir(exist_ok=True)
+    (tmp_path / "other" / "a.md").write_text(TEXT)
+    context = CheckContext(answer=answer, sandbox=Sandbox(tmp_path), policy=Policy())
+    result = asyncio.run(CitesFiles(paths=list(paths)).evaluate(context))
+    assert result.passed is (result.detail == "")
+    return result.detail
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        '- beta is second (docs/a.md:2 "beta is the second letter")',
+        '- beta is second (a.md:2 "BETA is  the second")',
+        '- beta (docs/a.md:2) "the second letter"',
+        '"the second letter" docs/a.md:2',
+        '- one (docs/a.md:1 "alpha line one")\n\n- two (docs/a.md:3 "gamma closes the file")',
+    ],
+)
+def test_cites_files_accepts_quotes_found_on_the_cited_line(tmp_path: Path, answer: str) -> None:
+    assert _files_check(tmp_path, answer) == ""
+
+
+@pytest.mark.parametrize(
+    ("answer", "problem"),
+    [
+        ("beta is the second letter", "no citation"),
+        ("not found", "no citation"),
+        ("", "no citation"),
+        ('- x (docs/a.md:1 "beta is the second letter")', "does not contain"),
+        ('- x (docs/a.md:9 "beta is the second letter")', "outside the file"),
+        ('- x (docs/a.md:0 "beta is the second letter")', "outside the file"),
+        ('- x (docs/c.md:2 "beta is the second letter")', "not one of the files"),
+        ("- x (docs/a.md:2)", "no quoted words"),
+        ('Summary\n- x (docs/a.md:2 "the second letter")', "no source for"),
+        ('- x (docs/a.md:2 "the second letter")\n- and an invented claim', "no source for"),
+    ],
+)
+def test_cites_files_refuses_what_it_cannot_prove(
+    tmp_path: Path, answer: str, problem: str
+) -> None:
+    assert problem in _files_check(tmp_path, answer)
+
+
+def test_cites_files_refuses_a_name_that_could_be_two_files(tmp_path: Path) -> None:
+    answer = '- x (a.md:2 "the second letter")'
+    paths = ("docs/a.md", "other/a.md")
+    assert "ambiguous" in _files_check(tmp_path, answer, paths)
+    exact = '- x (other/a.md:2 "the second letter")'
+    assert _files_check(tmp_path, exact, paths) == ""

@@ -1,4 +1,4 @@
-"""The MCP server: five small tools. Schemas are paid by the orchestrator on every turn, so they
+"""The MCP server: six small tools. Schemas are paid by the orchestrator on every turn, so they
 are kept short on purpose."""
 
 from __future__ import annotations
@@ -11,6 +11,9 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
+from deputy import (
+    digest as digests,
+)
 from deputy import (
     jobs as background,
 )
@@ -34,7 +37,14 @@ from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
 
 DEFAULT_RETRIES = 1  # one correction round with the exact failure
-INSTRUCTIONS = "Delegate small, checkable, read-heavy tasks to another model. Use `delegate`."
+INSTRUCTIONS = (
+    "Saves your context: a cheaper model reads files for you and deputy proves every citation. "
+    "Before you read a file over about 8 KB, or several files, to answer a question, summarise, "
+    "compare or find facts, call `digest` with the files and the question instead of reading "
+    "them. If its status is ok, use the answer and do not read the files. If not, read them "
+    "yourself. Read directly a file you are about to edit, a short file, or what one search "
+    "answers. For other work with your own checks, use `delegate`."
+)
 
 
 @dataclass(frozen=True)
@@ -50,7 +60,11 @@ class _Delegation:
 
 
 def _prepare(
-    workdir: str, profile: str, checks: list[CheckSpec] | None, backend: str | None
+    workdir: str,
+    profile: str,
+    checks: list[CheckSpec] | None,
+    backend: str | None,
+    ready_checks: list[Check] | None = None,
 ) -> _Delegation:
     """Raises ConfigError, SandboxError or ValidationError with a message fit for the caller."""
     config = load_config()
@@ -63,7 +77,7 @@ def _prepare(
         profile=chosen,
         sandbox=Sandbox(Path(workdir)),
         routes=_routes(config, backend),
-        checks=[to_check(c) for c in checks or []],
+        checks=[*(ready_checks or []), *(to_check(c) for c in checks or [])],
         notes=project_memory.prompt_notes(
             project_memory.load(project_memory.repo_root(Path(workdir)))
         ),
@@ -199,10 +213,20 @@ def build_server() -> MCPServer:
     server = MCPServer("deputy", instructions=INSTRUCTIONS)
     pending = background.Jobs()
 
+    async def launch(prepared: _Delegation, request: _Request, wait: bool) -> Outcome:
+        work = _delegate(prepared, request)
+        if wait:
+            return outcome_of(await work)
+        if not pending.has_room():
+            work.close()
+            message = f"{background.MAX_ACTIVE} jobs are already running"
+            return outcome_of(_setup_error(request.run_id, message))
+        return outcome_of(pending.submit(request.run_id, prepared.sandbox, work))
+
     @server.tool(
         description=(
-            "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`. "
-            "With wait=False it returns at once; get the result with `collect`."
+            "Run a task on a worker in the absolute `workdir`, verified by `checks`. "
+            "wait=False returns at once; then use `collect`."
         )
     )
     async def delegate(  # noqa: PLR0913, PLR0917
@@ -230,17 +254,25 @@ def build_server() -> MCPServer:
             "max_turns": max_turns,
             "checks": [c.model_dump(exclude_none=True) for c in checks or []],
         }
-        work = _delegate(
-            prepared, _Request(task, max_turns, tokens.estimate_value(request), run_id)
-        )
-        if wait:
-            return outcome_of(await work)
-        if not pending.has_room():
-            work.close()
-            return outcome_of(
-                _setup_error(run_id, f"{background.MAX_ACTIVE} jobs are already running")
-            )
-        return outcome_of(pending.submit(run_id, prepared.sandbox, work))
+        args = _Request(task, max_turns, tokens.estimate_value(request), run_id)
+        return await launch(prepared, args, wait)
+
+    @server.tool(  # the result shape is already described by `delegate`
+        structured_output=False,
+        description=(
+            "Ask about files in the absolute `workdir` instead of reading them: a short answer, "
+            "every line citing a proven file line."
+        ),
+    )
+    async def digest(files: list[str], question: str, workdir: str) -> Outcome:
+        run_id = runs.new_run_id()
+        try:
+            plan = digests.plan(files, question, Sandbox(Path(workdir)))
+            prepared = _prepare(workdir, "helper", None, None, plan.checks)
+        except (ConfigError, SandboxError) as exc:
+            return outcome_of(_setup_error(run_id, str(exc)))
+        cost = tokens.estimate_value({"files": files, "question": question, "workdir": workdir})
+        return await launch(prepared, _Request(plan.task, None, cost, run_id), wait=True)
 
     @server.tool(structured_output=False)  # the result shape is already described by `delegate`
     async def collect(run_id: str, cancel: bool = False) -> Outcome:
@@ -249,7 +281,7 @@ def build_server() -> MCPServer:
 
     @server.tool()
     async def status() -> dict[str, str]:
-        """Configured backends and whether they answer."""
+        """Backends and whether they answer."""
         try:
             return await _backend_status(load_config())
         except ConfigError as exc:
@@ -261,9 +293,9 @@ def build_server() -> MCPServer:
         found = load_profiles(Path(workdir) if workdir else None)
         return {name: p.description for name, p in found.items()}
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def feedback(run_id: str, verdict: Literal["accepted", "rejected"], reason: str = "") -> str:
-        """Tell deputy whether a result was good. Improves routing and profiles."""
+        """Report whether a result was good."""
         runs.record(
             {"event": "feedback", "run_id": run_id, "verdict": verdict, "reason": reason[:500]}
         )

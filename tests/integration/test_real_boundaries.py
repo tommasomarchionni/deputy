@@ -12,6 +12,7 @@ from pathlib import Path
 from fake_model import FakeModel
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import TextContent
 
 from deputy import lessons, runs
 from deputy.agent import run_task
@@ -122,7 +123,7 @@ def test_the_mcp_server_speaks_the_protocol_end_to_end(
         async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             names = sorted(t.name for t in (await session.list_tools()).tools)
-            assert names == ["collect", "delegate", "feedback", "profiles", "status"]
+            assert names == ["collect", "delegate", "digest", "feedback", "profiles", "status"]
             status = await session.call_tool("status", {})
             assert status.structured_content["fake"].startswith("up")
             reply = await session.call_tool(
@@ -146,6 +147,35 @@ def test_the_mcp_server_speaks_the_protocol_end_to_end(
     events = [json.loads(line) for line in (state_dir() / "runs.jsonl").read_text().splitlines()]
     assert [e["event"] for e in events] == ["run", "feedback"]
     assert load_config().backend().name == "fake"
+
+
+def test_digest_proves_its_citations_over_the_real_protocol(
+    configured: FakeModel, tmp_path: Path
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "notes.md").write_text("one\nthe second line is here\nthree\n")
+    configured.queue(
+        message(tool_calls=[tool_call("read_file", {"path": "notes.md"})]),
+        message('- it is the second line (notes.md:2 "the second line is here")'),
+    )
+
+    async def go() -> dict:
+        params = StdioServerParameters(
+            command=sys.executable, args=["-m", "deputy", "mcp"], env=dict(os.environ)
+        )
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            arguments = {"files": ["notes.md"], "question": "What is here?", "workdir": str(work)}
+            reply = await session.call_tool("digest", arguments)
+            content = reply.content[0]
+            assert isinstance(content, TextContent)
+            return json.loads(content.text)
+
+    data = asyncio.run(go())
+    assert data["status"] == "ok"
+    assert data["checks"] == "2/2 passed"
+    assert "notes.md" in configured.requests[0]["messages"][-1]["content"]
 
 
 def test_the_status_tool_shows_the_usage_line_over_the_real_protocol(configured: FakeModel) -> None:

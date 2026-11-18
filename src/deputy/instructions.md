@@ -1,7 +1,6 @@
 # Delegating to deputy
 
-deputy hands reading to a cheaper model and proves the answer with checks. Use it to save your own
-tokens, never to decide anything.
+deputy hands reading to a cheaper model and proves the answer. Use it to save tokens, never to decide.
 
 **Delegate** when the task needs reading more than about 4 KB (a long file, several files, a big
 log, git history) and the answer is short: summaries, inventories, cross-references, extracting
@@ -12,7 +11,9 @@ would see the same lines), a file you are about to edit, decisions, anything inv
 
 How:
 
-1. Call `delegate` with an absolute `workdir`, and a task that names the files (never paste them).
+1. For a question about files, call `digest` with the `files`, the `question` and an absolute
+   `workdir`: deputy adds the checks. For other work, call `delegate` with an absolute `workdir`,
+   and a task that names the files (never paste them).
    The worker has none of your context: say what to cover, in what form, and how long. Add `checks`
    that prove the answer: `cites_lines` with `path` (cited lines exist in that file), `contains` (facts you can predict),
    `excludes`, `max_chars`, `file_written` and `file_contains` (when it writes), `command` (only
@@ -25,6 +26,6 @@ How:
 4. The worker's output is a draft: review it before it reaches the repository. For edits, work in a
    copy (`deputy workspace create NAME PATH...`).
 5. For every result you used, call `feedback` with the `run_id`: `accepted` or `rejected`, and
-   why. deputy learns only from these verdicts.
+   why.
 
 The worker answers in English.
