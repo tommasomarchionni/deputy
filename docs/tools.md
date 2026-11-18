@@ -48,7 +48,9 @@ Jobs live in the memory of the running server: if the server exits, they are gon
 | `command` | an allow-listed `argv` exits 0 in `workdir` (see [configuration](configuration.md)) |
 
 A failing check gets one correction round with the exact failure. If it still fails, the status is
-`checks_failed` with `needs_frontier`: do the task yourself.
+`checks_failed` with `needs_frontier`: do the task yourself. The `answer` of a failed run is cut to
+its first 300 characters (with a note), because you will redo the work and should not pay to read a
+wrong answer; the failing `checks` keep their full detail.
 
 ## `status`
 
