@@ -137,7 +137,11 @@ def doctor(_: argparse.Namespace) -> int:
         return 1
     print(f"config: ok ({config_path()})")
     failed = asyncio.run(_check_backends())
-    print(f"profiles: {', '.join(load_profiles(Path.cwd()))}")
+    profiles = load_profiles(Path.cwd())
+    print(f"profiles: {', '.join(profiles)}")
+    for profile in profiles.values():
+        for problem in profile.problems:
+            print(f"profile {profile.name}: {problem}")
     failed += _check_state()
     line, broken = _confinement_line(load_config().policy)
     print(line)
