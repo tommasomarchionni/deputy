@@ -5,7 +5,8 @@ evidence** (a failing case, a measurement) and **review of the design** in `docs
 
 ## How the project is run
 
-- **Issue first.** Work starts from an issue, from a form (bug, idea or task). A direct request
+- **Issue first.** Work starts from an issue, from a form (bug, idea or task); each form asks for
+  the area and the priority. A direct request
   gets an issue too, written before the code. Urgent fixes to a broken `main` get theirs right after.
 - **Labels** (`.github/labels.json`, applied by a workflow): `type:` (feature, bug, task, docs,
   security, decision, verification), `area:` (server, sandbox, checks, bench, cli, installer, memory,

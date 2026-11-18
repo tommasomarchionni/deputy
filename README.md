@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml/badge.svg)](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://tommasomarchionni.github.io/deputy/)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/tommasomarchionni/deputy/badge)](https://scorecard.dev/viewer/?uri=github.com/tommasomarchionni/deputy)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 deputy is an MCP server. Your coding agent (Claude Code, or any MCP client) hands it a read-heavy
