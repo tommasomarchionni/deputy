@@ -36,6 +36,7 @@ nav:
   - Reference:
       - Tools: tools.md
       - Security model: security.md
+      - Evidence: evidence.md
   - Design:
       - Architecture: architecture.md
       - Memory: memory.md
