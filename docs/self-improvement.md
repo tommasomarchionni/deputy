@@ -34,7 +34,8 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Measured model profile written after every benchmark, and read back: the turn limit follows it, and `status` says how old it is and whether the model changed | **today** |
 | Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (the report reads it; lessons and routing do not yet) |
 | Advice that a kind of task does not pay off (`not_worth_delegating`), from the trace | **today** (a flag and a line in `status`; the orchestrator decides) |
-| Lessons learned from real use (`deputy learn`): short reminders in the worker prompt where a kind of check keeps failing, with evidence and expiry | **today** (derived from the trace; dropping one that does not help is [#16](https://github.com/tommasomarchionni/deputy/issues/16)) |
+| Lessons learned from real use (`deputy learn`): short reminders in the worker prompt where a kind of check keeps failing, with evidence and expiry | **today** (derived from the trace) |
+| Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
 | Profiles read by routing; choose model and settings per task | planned ([#13](https://github.com/tommasomarchionni/deputy/issues/13), [#18](https://github.com/tommasomarchionni/deputy/issues/18)) |
 | Offline optimiser that proposes profile and parameter changes | planned ([#21](https://github.com/tommasomarchionni/deputy/issues/21)) |
 | Nightly benchmark on a machine with a local model | planned, needs a decision ([#22](https://github.com/tommasomarchionni/deputy/issues/22)) |
