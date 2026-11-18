@@ -5,9 +5,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from deputy import cli, server
-from deputy.config import state_dir
+from deputy import cli, model_profiles, server
+from deputy.bench import Summary
+from deputy.config import Backend, state_dir
 from deputy.server import build_server
+from deputy.tune import save_model_profile
 from helpers import message, tool_call
 
 SCHEMA_BUDGET_CHARS = 5_000  # about 1,250 tokens: what the orchestrator carries on every turn
@@ -142,3 +144,37 @@ def test_a_delegation_is_not_flagged_when_that_kind_of_task_pays_off(
 ) -> None:
     data = _delegate_with_history(tmp_path, fake_client, monkeypatch, history_saved=900)
     assert "not_worth_delegating" not in data["flags"]
+
+
+def _looping_model(fake_client, monkeypatch, steps: int) -> None:  # type: ignore[no-untyped-def]
+    loop = [message(tool_calls=[tool_call("grep", {"pattern": "x"})]) for _ in range(steps)]
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client(list(loop)))
+
+
+def _turns_used(tmp_path: Path, **arguments: Any) -> int:
+    out = asyncio.run(
+        build_server().call_tool(
+            "delegate", {"task": "loop forever", "workdir": str(tmp_path), **arguments}
+        )
+    )
+    return structured(out)["metrics"]["turns"]
+
+
+def test_the_turn_limit_comes_from_the_measured_profile_unless_given(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    _looping_model(fake_client, monkeypatch, steps=20)
+    assert _turns_used(tmp_path) == model_profiles.DEFAULT_MAX_TURNS  # never measured
+
+    fast = Summary(
+        variant="baseline", runs=3, pass_rate=1.0, citation_rate=1.0, mean_turns=1.0,
+        mean_tokens_out=1, mean_elapsed_s=1, stdev_elapsed_s=0, tokens_per_s=1,
+    )  # fmt: skip
+    save_model_profile(Backend(name="local", base_url="http://x", model="m"), fast, [])
+    _looping_model(fake_client, monkeypatch, steps=20)
+    assert _turns_used(tmp_path) == model_profiles.MIN_MAX_TURNS  # a fast model gets a short leash
+    _looping_model(fake_client, monkeypatch, steps=20)
+    assert _turns_used(tmp_path, max_turns=6) == 6  # an explicit argument always wins

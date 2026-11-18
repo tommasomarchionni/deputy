@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import time
 import tomllib
 from pathlib import Path
 from typing import Any, cast
 
 from deputy.bench import Summary, Variant
-from deputy.config import Backend, config_dir, state_dir
+from deputy.config import Backend, config_dir
+from deputy.model_profiles import profile_path
 
 
 def tuned_path() -> Path:
@@ -104,14 +106,15 @@ def revert_tuned() -> str:
 
 def save_model_profile(backend: Backend, baseline: Summary, others: list[Summary]) -> Path:
     """The measured profile of this model on this server, for routing and for comparison."""
-    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", f"{backend.name}__{backend.model}")
-    path = state_dir() / "models" / f"{safe}.json"
+    path = profile_path(backend)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
             {
                 "backend": backend.name,
                 "model": backend.model,
+                "served_model": baseline.served_model,
+                "measured_at": time.time(),
                 "baseline": baseline.model_dump(),
                 "variants": [s.model_dump() for s in others],
             },
