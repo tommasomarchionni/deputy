@@ -7,8 +7,23 @@
 [![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://tommasomarchionni.github.io/deputy/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Status:** alpha (M1). The server, installer, checks, benchmark and tuning commands work; routing,
+**Status:** alpha (v0.1). The server, installer, checks, benchmark and tuning commands work; routing,
 memory and async tasks are next. Expect breaking changes.
+
+## Highlights
+
+- **Fewer tokens for the frontier model.** Four tiny tool schemas (about 1,200 tokens), results
+  by reference, checks instead of re-reading, and an estimate of the tokens saved on every run.
+- **Quality you can verify.** The worker has no shell and a confined sandbox; every claim is checked
+  by code (cited lines, required facts, forbidden leaks, files written, allow-listed commands).
+- **Improves itself, safely.** `deputy bench` measures your model, `deputy tune` recommends or, if
+  you allow it, applies better settings, and nothing changes without a measurement.
+- **Works with any agent and any model.** Claude Code, GitHub Copilot, Cursor, Codex; llama.cpp,
+  Ollama, LM Studio, vLLM or any OpenAI-compatible API.
+- **Easy to install and keep current.** One command, no `sudo`, releases with provenance
+  attestations, `deputy update`.
+- **Developed in the open.** Issues, milestones and a public roadmap board; CI, CodeQL and
+  property tests on every change.
 
 ## Quick start
 
@@ -46,14 +61,19 @@ benchmark in `docs/self-improvement.md`):
 - a change to prompts, profiles or parameters ships only if it beats the baseline on a held-out
   set, with variance accounted for.
 
-## Documents
+## Documentation
 
-- `docs/install.md` — install and connect Claude Code, Copilot, Cursor, Codex.
-- `docs/configuration.md`, `docs/tools.md`, `docs/security.md` — reference.
-- `docs/architecture.md` — roles, tools, execution loop, routing, security, stack.
-- `docs/memory.md` — what is remembered (model profiles, lessons, project memory) and why.
-- `docs/self-improvement.md` — the improvement loop, the benchmark, the guardrails.
-- `docs/roadmap.md` — milestones and what is proven at each.
+Full site: **<https://tommasomarchionni.github.io/deputy/>** (source in `docs/`).
+
+| Topic | Page |
+| --- | --- |
+| Install, connect Claude Code, Copilot, Cursor, Codex | [install](docs/install.md) |
+| Configuration, tuning, updates | [configuration](docs/configuration.md) |
+| The four tools and the checks | [tools](docs/tools.md) |
+| Security model | [security](docs/security.md) |
+| Architecture, memory, self-improvement | [architecture](docs/architecture.md), [memory](docs/memory.md), [self-improvement](docs/self-improvement.md) |
+| Measured speed of a local model | [local serving](docs/local-serving.md) |
+| Roadmap | [roadmap](docs/roadmap.md) and the [project board](https://github.com/users/tommasomarchionni/projects/3) |
 
 ## In the repository
 

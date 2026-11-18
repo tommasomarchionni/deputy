@@ -9,3 +9,8 @@ Guidance for AI coding agents working on this repository.
 - Pin every GitHub Action to a full commit SHA; keep workflow `permissions` minimal.
 - Conventional Commit titles; one change per pull request; no secrets in the repository.
 - Report what was verified and what was not. Do not invent results.
+- Work starts from an issue (`status: ready`); one issue, one pull request; branch
+  `<type>/<N>-<slug>`; title `type(area): subject`; body `Closes #N` and a `Regression:` line for
+  `feat` and `fix`. See `CONTRIBUTING.md` ("How the project is run").
+- Never merge your own pull request without a green `Required` and `PR title`; never disable a
+  required check to make something pass.
