@@ -8,7 +8,7 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
 
-from deputy import runs
+from deputy import runs, tokens
 from deputy.backends import BackendError, ChatClient, Reply
 from deputy.checks import Check, CheckResult, failures_message, run_checks
 from deputy.config import Policy
@@ -135,7 +135,11 @@ class AgentRun:
         max_retries: int,
         source: str,
         lessons: list[Lesson],
+        request_tokens: int,
     ) -> None:
+        self._request_tokens = request_tokens
+        self._read_tokens = 0
+        self._cost_tokens = 0
         self._source = source
         self._lessons = lessons
         self._client = client
@@ -221,9 +225,12 @@ class AgentRun:
         return False
 
     def _build_result(self, run_id: str) -> Result:
-        read_tokens = self._sandbox.chars_read // 4
-        cost_tokens = (len(self._answer) + len(self._task)) // 4
-        return Result(
+        """The result, with what delegating cost the orchestrator and what it spared it.
+
+        Cost: the request it sent plus the result it reads (serialised). Spared: what the worker
+        read on its behalf. Both use the same estimator (see `deputy.tokens`); the difference may
+        be negative, which is the point: a delegation that does not pay says so."""
+        result = Result(
             run_id=run_id,
             status=self._status,
             answer=self._answer,
@@ -231,8 +238,11 @@ class AgentRun:
             checks=self._check_results,
             flags=self._flags,
             metrics=self._metrics,
-            orchestrator_tokens_saved_est=max(0, read_tokens - cost_tokens),
         )
+        self._read_tokens = tokens.from_chars(self._sandbox.chars_read)
+        self._cost_tokens = self._request_tokens + tokens.estimate(result.model_dump_json())
+        result.orchestrator_tokens_saved_est = self._read_tokens - self._cost_tokens
+        return result
 
     def _record(self, result: Result) -> None:
         runs.record(
@@ -247,6 +257,8 @@ class AgentRun:
                 "flags": result.flags,
                 "metrics": result.metrics.model_dump(),
                 "checks": [{"name": c.name, "passed": c.passed} for c in result.checks],
+                "read_est": self._read_tokens,
+                "cost_est": self._cost_tokens,
                 "saved_est": result.orchestrator_tokens_saved_est,
             }
         )
@@ -264,6 +276,7 @@ async def run_task(  # noqa: PLR0913
     max_retries: int = 1,
     source: str = "mcp",
     lessons: list[Lesson] | None = None,
+    request_tokens: int | None = None,
 ) -> Result:
     """Delegate `task` to the worker behind `client` and return the verified result.
 
@@ -280,4 +293,5 @@ async def run_task(  # noqa: PLR0913
         max_retries=max_retries,
         source=source,
         lessons=lessons or [],
+        request_tokens=tokens.estimate(task) if request_tokens is None else request_tokens,
     ).execute()
