@@ -13,6 +13,7 @@ import regex
 
 MAX_READ_CHARS = 60_000
 MAX_FILE_BYTES = 5_000_000
+LARGE_FILE_CHARS = 80_000  # above this, a read points the worker at scan_file
 MAX_WRITE_BYTES = 1_000_000
 MAX_GREP_HITS = 50
 MAX_PATTERN_CHARS = 200
@@ -90,7 +91,17 @@ class Sandbox:
         footer = f"[lines {start}-{end} of {total}]"
         if end < total:
             footer += f" read more with offset={end + 1}"
+        if sum(len(line) + 1 for line in lines) > LARGE_FILE_CHARS:
+            footer += "; the file is large: scan_file(path, question) can read all of it in parts"
         return "\n".join([*out, footer])
+
+    def read_all_lines(self, path: str) -> list[str]:
+        """Every line of a file (for a scan in parts), counted as read by the worker."""
+        target = self.resolve(path)
+        lines = _read_text(target).splitlines()
+        self.chars_read += sum(len(line) + 1 for line in lines)
+        self.files_read.add(target.relative_to(self.root).as_posix())
+        return lines
 
     def write_file(self, path: str, content: str) -> str:
         target = self.resolve(path)
