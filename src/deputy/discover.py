@@ -174,9 +174,10 @@ def _step_of(name: str, arguments: dict[str, Any], cwd: str) -> _Step:
     folder = os.path.join(cwd, shellreads.working_folder(command) or "")
     return _Step(
         reads=[
-            (_resolved(r.path, folder), (r.first, r.last, r.from_end))
+            (_resolved(r.path, folder), (r.first, r.last, r.from_end, r.pattern))
             for r in shellreads.shell_reads(command)
-        ]
+        ],
+        edits=[_resolved(path, folder) for path in shellreads.shell_edits(command)],
     )
 
 

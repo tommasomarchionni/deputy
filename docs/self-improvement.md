@@ -198,7 +198,8 @@ The last lines measure **adoption**, the number to watch over time:
 - **Read again** is what went into reading a file a second time with no edit and no compaction in
   between, and how much of that was the very same part of the file.
 
-An edit made through the shell (such as `sed -i`) is not seen, so these numbers are estimates.
+An edit made by a script (rather than an edit tool or `sed -i`) is not seen, so these numbers are
+estimates.
 
 Measured on 11 sessions of one real repository: large reads were 30 % of everything the orchestrator
 read, command output 15 %.

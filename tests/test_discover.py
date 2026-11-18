@@ -224,3 +224,19 @@ def test_the_adoption_rate_is_shown_and_exported(tmp_path: Path) -> None:
     assert report.adoption_rate == 0.5
     assert "Adoption: 50.0% (1 delegations" in discover.format_report(report)
     assert json.loads(discover.report_as_json(report))["adoption_rate"] == 0.5
+
+
+def test_an_edit_through_the_shell_makes_the_read_not_delegable(tmp_path: Path) -> None:
+    lines = _at(
+        "/repo",
+        _use("a", "Bash", command="cat a.md"),
+        _result("a", BIG),
+        _use("b", "Bash", command="sed -i '' 's/x/y/' a.md"),
+        _result("b", ""),
+        _use("c", "Bash", command="cat a.md"),
+        _result("c", BIG),
+    )
+    _write(tmp_path, lines)
+    seen = discover.build_report(tmp_path, days=30).adoption
+    assert seen.again_tokens == 0
+    assert seen.delegable_reads == 1  # the second read: nothing edits the file after it
