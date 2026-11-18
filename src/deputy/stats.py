@@ -26,6 +26,8 @@ class Group:
     accepted: int = 0
     rejected: int = 0
     tokens_saved_est: int = 0
+    read_est: int = 0
+    cost_est: int = 0
     seconds: float = 0.0
 
     @property
@@ -42,6 +44,14 @@ class Group:
         return self.tokens_saved_est / self.runs if self.runs else 0.0
 
     @property
+    def mean_read(self) -> float:
+        return self.read_est / self.runs if self.runs else 0.0
+
+    @property
+    def mean_cost(self) -> float:
+        return self.cost_est / self.runs if self.runs else 0.0
+
+    @property
     def mean_seconds(self) -> float:
         return self.seconds / self.runs if self.runs else 0.0
 
@@ -53,6 +63,8 @@ class Group:
             if self.acceptance_rate is None
             else round(self.acceptance_rate, 3),
             "mean_saved": round(self.mean_saved, 1),
+            "mean_read": round(self.mean_read, 1),
+            "mean_cost": round(self.mean_cost, 1),
             "mean_seconds": round(self.mean_seconds, 1),
         }
 
@@ -104,6 +116,8 @@ def _add(group: Group, event: dict[str, Any], verdict: str | None) -> None:
     group.accepted += verdict == "accepted"
     group.rejected += verdict == "rejected"
     group.tokens_saved_est += int(event.get("saved_est") or 0)
+    group.read_est += int(event.get("read_est") or 0)
+    group.cost_est += int(event.get("cost_est") or 0)
     group.seconds += float(metrics.get("elapsed_s") or 0.0)
 
 
@@ -155,7 +169,7 @@ def _row(group: Group, width: int) -> str:
     return (
         f"{group.key:<{width}}{group.runs:>6}{_percent(group.pass_rate):>6}{group.escalated:>6}"
         f"{group.retried:>6}{_percent(group.acceptance_rate):>9}{group.tokens_saved_est:>9}"
-        f"{group.mean_saved:>8.0f}{group.mean_seconds:>7.1f}"
+        f"{group.mean_read:>7.0f}{group.mean_cost:>7.0f}{group.mean_seconds:>7.1f}"
     )
 
 
@@ -165,7 +179,7 @@ def format_report(report: Report) -> str:
     width = max(14, *(len(g.key) for g in [*report.by_profile, *report.by_class])) + 2
     head = (
         f"{'':<{width}}{'runs':>6}{'ok':>6}{'esc':>6}{'retry':>6}{'accepted':>9}"
-        f"{'saved*':>9}{'/run':>8}{'sec':>7}"
+        f"{'saved*':>9}{'read':>7}{'cost':>7}{'sec':>7}"
     )
     lines = [f"Last {report.days:g} days", head, _row(report.total, width)]
     if len(report.by_profile) > 1:
@@ -173,7 +187,8 @@ def format_report(report: Report) -> str:
     lines += ["", "by task class", *(_row(g, width) for g in report.by_class)]
     lines += [
         "",
-        "* estimated tokens the orchestrator did not have to read (chars / 4)",
+        "* estimated tokens spared to the orchestrator: what the worker read (read, per run) minus",
+        "  what the orchestrator paid (cost, per run: its request and the result); can be below 0",
         "esc = handed back to the orchestrator; accepted = share of judged runs (feedback)",
     ]
     if report.unreadable_lines:

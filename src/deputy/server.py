@@ -11,7 +11,7 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import lessons, model_profiles, runs, stats, updates
+from deputy import lessons, model_profiles, runs, stats, tokens, updates
 from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
@@ -59,7 +59,9 @@ def _setup_error(run_id: str, message: str) -> Result:
     return Result(run_id=run_id, status="error", answer=message, flags=["setup_error"])
 
 
-async def _delegate(prepared: _Delegation, task: str, max_turns: int | None) -> Result:
+async def _delegate(
+    prepared: _Delegation, task: str, max_turns: int | None, request_tokens: int
+) -> Result:
     """Run the task, and flag a kind of task that has not paid off in past runs."""
     advice = stats.advice_for_class(task_class(prepared.profile.name, prepared.checks))
     try:
@@ -72,6 +74,7 @@ async def _delegate(prepared: _Delegation, task: str, max_turns: int | None) -> 
             policy=prepared.config.policy,
             max_turns=max_turns or model_profiles.suggested_max_turns(prepared.measured),
             lessons=lessons.applicable(prepared.profile.name, prepared.checks),
+            request_tokens=request_tokens,
         )
     finally:
         await prepared.client.aclose()
@@ -126,7 +129,15 @@ def build_server() -> MCPServer:
             return _setup_error(run_id, f"invalid check: {detail}")
         except (ConfigError, SandboxError) as exc:
             return _setup_error(run_id, str(exc))
-        return await _delegate(prepared, task, max_turns)
+        request = {
+            "task": task,
+            "workdir": workdir,
+            "profile": profile,
+            "backend": backend,
+            "max_turns": max_turns,
+            "checks": [c.model_dump(exclude_none=True) for c in checks or []],
+        }
+        return await _delegate(prepared, task, max_turns, tokens.estimate_value(request))
 
     @server.tool()
     async def status() -> dict[str, str]:
