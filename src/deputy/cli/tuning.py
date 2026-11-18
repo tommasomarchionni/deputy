@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from deputy import taskfile
+from deputy import compare, taskfile
 from deputy.agent import Result
 from deputy.bench import (
     QUICK_TASKS,
@@ -128,7 +128,21 @@ def _bench_file(args: argparse.Namespace) -> int:
     return 0
 
 
+def _bench_compare(args: argparse.Namespace) -> int:
+    """Say what changed between two `deputy bench --json` reports."""
+    try:
+        before, after = (compare.load_baseline(Path(p)) for p in args.compare)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    result = compare.compare(before, after)
+    print(result.text)
+    return 1 if result.regressed and args.fail_on_regression else 0
+
+
 def bench(args: argparse.Namespace) -> int:
+    if args.compare:
+        return _bench_compare(args)
     if args.tasks_file:
         return _bench_file(args)
     try:
@@ -279,6 +293,17 @@ def register(sub: Subparsers) -> None:
                 "--tasks-file", help="run the tasks of this TOML file on your own folder"
             )
             parser.add_argument("--workdir", default=".", help="folder for --tasks-file")
+            parser.add_argument(
+                "--compare",
+                nargs=2,
+                metavar=("BEFORE", "AFTER"),
+                help="compare two reports made with `deputy bench --json`; runs nothing",
+            )
+            parser.add_argument(
+                "--fail-on-regression",
+                action="store_true",
+                help="with --compare: exit 1 when the second report is worse",
+            )
             parser.add_argument("--json", action="store_true", help="print JSON, not a table")
         else:
             parser.add_argument("--apply", action="store_true", help="write the winner")

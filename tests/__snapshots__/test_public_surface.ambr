@@ -3,7 +3,8 @@
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
                       [--lessons] [--run-code] [--slow] [--variant VARIANT]
-                      [--tasks-file TASKS_FILE] [--workdir WORKDIR] [--json]
+                      [--tasks-file TASKS_FILE] [--workdir WORKDIR]
+                      [--compare BEFORE AFTER] [--fail-on-regression] [--json]
   
   options:
     -h, --help            show this help message and exit
@@ -20,6 +21,10 @@
     --tasks-file TASKS_FILE
                           run the tasks of this TOML file on your own folder
     --workdir WORKDIR     folder for --tasks-file
+    --compare BEFORE AFTER
+                          compare two reports made with `deputy bench --json`;
+                          runs nothing
+    --fail-on-regression  with --compare: exit 1 when the second report is worse
     --json                print JSON, not a table
   
   '''
