@@ -18,11 +18,10 @@ How:
    that prove the answer: `cites_lines` with `path` (cited lines exist in that file), `contains` (facts you can predict),
    `excludes`, `max_chars`, `file_written` and `file_contains` (when it writes), `command` (only
    allow-listed tests).
-2. `status: ok`: trust the checks and do not reread the sources. Before acting on one fact, you may
-   check that single line.
+2. `status: ok`: do not reread the sources, but checks do not prove a source was understood: before
+   acting on a fact, read its cited line.
 3. `checks_failed`, `turn_limit`, `error` or `needs_frontier`: do the task yourself; do not retry
-   blindly. `not_worth_delegating` (also in `status`) means this kind of task has not saved tokens:
-   stop delegating it. `small_input` means the files were short: read such files yourself.
+   blindly. `not_worth_delegating` means this kind of task has not saved tokens: stop delegating it. `small_input` means the files were short: read such files yourself.
 4. The worker's output is a draft: review it before it reaches the repository. For edits, work in a
    copy (`deputy workspace create NAME PATH...`).
 5. For every result you used, call `feedback` with the `run_id`: `accepted` or `rejected`, and

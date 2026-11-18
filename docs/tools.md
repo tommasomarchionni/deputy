@@ -22,6 +22,10 @@ Anything else, including an answer the files do not contain, comes back as `chec
 the files yourself. Missing, empty, binary, secret-looking or outside paths are refused before any
 model is called. The result has the same fields as `delegate`.
 
+**What `ok` proves.** The sources are real: the quoted words are on the cited lines. It does not
+prove the worker understood them, so a fact can be misread with a true citation. Read the cited line
+before you act on a fact; that costs one line instead of the whole file.
+
 ## `delegate`
 
 Run a task on a worker model and verify the result. Use it when you need your own checks, or work

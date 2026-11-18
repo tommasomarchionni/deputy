@@ -38,10 +38,11 @@ from deputy.sandbox import Sandbox, SandboxError
 
 DEFAULT_RETRIES = 1  # one correction round with the exact failure
 INSTRUCTIONS = (
-    "Saves your context: a cheaper model reads files for you and deputy proves every citation. "
-    "Before you read a file over about 8 KB, or several files, to answer a question, summarise, "
-    "compare or find facts, call `digest` with the files and the question instead of reading "
-    "them. If its status is ok, use the answer and do not read the files. If not, read them "
+    "Saves your context: a cheaper model reads files for you. Before you read a file over about "
+    "8 KB, or several files, to answer a question, summarise, compare or find facts, call `digest` "
+    "with the files and the question instead of reading them. If its status is ok, work from the "
+    "answer: deputy proved that each quoted source is on its line, not that the model understood "
+    "it, so read the cited line before you act on a fact. If the status is not ok, read the files "
     "yourself. Read directly a file you are about to edit, a short file, or what one search "
     "answers. For other work with your own checks, use `delegate`."
 )
