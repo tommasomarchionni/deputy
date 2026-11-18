@@ -13,18 +13,25 @@ bytes divided by four on both sides, so a difference is an order of magnitude, n
 21 tasks of the kind an agent hands off during ordinary work, each with checks: 12 on a private
 multi-app TypeScript and Python repository (some of its documents are in Italian), 9 on this
 repository. Inventories, summaries with cited lines, a section list translated from Italian, git
-history, code questions, counts, searches and one-line lookups. One correction round allowed.
+history, code questions, counts, searches and one-line lookups. One correction round allowed. The
+set was run twice, with the current worker profile and tools on the second run.
 
-**Quality.** All 21 answers passed their checks. Claude Opus 5.5 then compared every answer with
-the files by hand, line numbers included: all 21 were correct; one cited range was off by one line.
+**Quality.** First run: all 21 answers passed their checks, and Claude Opus 5.5 compared every
+answer with the files by hand, line numbers included: all 21 were correct, one cited range off by
+one line. Second run: 20 passed; the 21st was correct but failed a check written with a line limit
+that was out of date (the file had grown). `cites_lines` now takes the file's `path` and reads its
+current length, so that check cannot go stale.
 
 **Saving**, net of what the orchestrator paid for the request and the result:
 
-| Kind of task | Tasks | Saved in total | Saved per task | Worker time per task |
+| Kind of task | Tasks | Saved, run 1 | Saved, run 2 | Worker time per task |
 | --- | ---: | ---: | ---: | ---: |
-| Reading: summaries, inventories, translated sections, history, code questions | 11 | 52,751 | about 4,800 | about 113 s |
-| Lookups and searches: one line, a commit subject, which files mention X | 10 | 2,400 | about 240 (4 below zero) | about 29 s |
-| **All** | 21 | 55,151 | about 2,600 | 73 s |
+| Reading: summaries, inventories, translated sections, history, code questions | 11 | 52,751 | 61,767 | about 2 minutes |
+| Lookups and searches: one line, a commit subject, which files mention X | 10 | 2,400 | 10,833 | 30 to 60 s |
+
+A reading task saves about 4,800 to 5,600 frontier tokens. The lookups' figure varies because it
+counts what the worker happened to read: on the second run it read more around a few short answers.
+What an orchestrator would read for a lookup is a line or two either way.
 
 Reading pays; lookups and searches do not, because the orchestrator would see the same short
 result itself. That is the rule in the delegation guide, and why a task that names only small files
@@ -87,12 +94,12 @@ commands print; deputy takes long reads off the orchestrator, and its worker nev
 
 - Savings are estimates with one yardstick on both sides; real tokenizers differ by up to about a
   quarter, and prompt caching changes what a re-read costs.
-- 21 tasks on two repositories, one run each; the profile and tool comparisons have 2 or 3 runs.
+- 21 tasks on two repositories, two runs; the profile and tool comparisons have 2 or 3 runs.
   The numbers show direction and order of magnitude.
 - The frontier references are one pass by hand, not repeated measurements.
 - Worker time is not free for you: a local 27B model needs one to three minutes for a long document.
-- Answers are only as checked as their checks; the frontier review above covered every answer of
-  this run, not of every run.
+- Answers are only as checked as their checks; Claude Opus 5.5 reviewed every answer of both runs
+  against the files they were given.
 
 A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
 `deputy bench --compare` shows what changed between two nights.
