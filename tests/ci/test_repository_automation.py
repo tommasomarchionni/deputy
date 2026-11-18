@@ -2,6 +2,7 @@
 """The repository automation is code like any other: its rules are tested."""
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -165,3 +166,26 @@ def test_the_issue_form_answers_become_labels() -> None:
     assert answers(FORM)["area"] == "checks"
     assert labels_for(FORM, set()) == ["area: checks", "priority: p2", "status: needs-triage"]
     assert labels_for(FORM, {"status: ready", "area: checks"}) == ["priority: p2"]
+
+
+def test_every_issue_form_sets_a_type_label_and_asks_for_area_and_priority() -> None:
+    root = Path(__file__).resolve().parents[2]
+    known = {label["name"] for label in json.loads((root / ".github/labels.json").read_text())}
+    forms = [
+        f for f in sorted((root / ".github/ISSUE_TEMPLATE").glob("*.yml")) if f.name != "config.yml"
+    ]
+    assert {f.name for f in forms} == {"bug_report.yml", "feature_request.yml", "task.yml"}
+    for form in forms:
+        text = form.read_text()
+        found = re.search(r"^labels: \[(.*)\]$", text, re.M)
+        assert found, form.name
+        labels = re.findall(r'"([^"]+)"', found.group(1))
+        assert labels, form.name
+        assert all(label in known for label in labels), form.name
+        assert any(label.startswith("type: ") for label in labels), form.name
+        for field, prefix in (("area", "area: "), ("priority", "priority: ")):
+            block = text.split(f"id: {field}\n", 1)[1]
+            listed = re.search(r"options: \[(.*)\]", block)
+            assert listed, (form.name, field)
+            options = listed.group(1).split(", ")
+            assert all(f"{prefix}{option}" in known for option in options), (form.name, field)
