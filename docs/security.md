@@ -39,8 +39,12 @@ done for issue [#23](https://github.com/tommasomarchionni/deputy/issues/23).
 | A search pattern can take exponential time | medium | **fixed** ([#48](https://github.com/tommasomarchionni/deputy/issues/48)): each line match has a 50 ms limit, a search has a 5 s budget, patterns are capped at 200 characters and lines at 2,000 |
 | A `command` check runs worker-written code with the user's rights | high by design | **mitigated** ([#49](https://github.com/tommasomarchionni/deputy/issues/49)): `policy.command_wrapper` runs it in an OS sandbox (`deputy init --confine`); without it the risk stands, and `deputy doctor` says so |
 
-The fixes ship in the next release. Versions 0.1.0 and 0.2.0 have the `grep` flaw: do not point
-deputy at a folder that contains symlinks to files outside it until you update (`deputy update`).
+All of these are in current releases: the `grep` symlink fix since 0.3.0, the search time limits
+since 0.6.1. Run the latest version (`deputy update`).
+
+Worker tools added after this review go through the same path and secret checks: `list_files`,
+`summarise_log` (both read through the sandbox), and read-only `git`, which also has its own
+allow-list, a clean environment and pathspec exclusion of secret files, each with tests.
 
 Report vulnerabilities privately: see [SECURITY.md](https://github.com/tommasomarchionni/deputy/blob/main/SECURITY.md).
 
