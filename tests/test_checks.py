@@ -342,3 +342,35 @@ def test_excludes_still_catches_a_secret_inside_a_longer_word() -> None:
         )
     )
     assert not result.passed
+
+
+def _cites(tmp_path, answer: str, **spec):  # type: ignore[no-untyped-def]
+    check = to_check(CheckSpec(type="cites_lines", **spec))
+    return asyncio.run(check.evaluate(CheckContext(answer, Sandbox(tmp_path), Policy())))
+
+
+def test_cites_lines_with_a_path_uses_the_file_as_it_is_now(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    doc = tmp_path / "security.md"
+    doc.write_text("x\n" * 72)  # the real case: the file grew past a hand-written max of 64
+    assert _cites(tmp_path, "see line 67", path="security.md").passed
+    result = _cites(tmp_path, "see line 80", path="security.md")
+    assert not result.passed
+    assert "outside 1-72: [80]" in result.detail
+
+
+def test_cites_lines_with_both_max_and_path_keeps_max(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "a.md").write_text("x\n" * 72)
+    assert not _cites(tmp_path, "line 67", path="a.md", max=64).passed
+
+
+@pytest.mark.parametrize("path", ["missing.md", ".env", "../outside.md"])
+def test_cites_lines_on_a_file_it_cannot_read_fails_clearly(tmp_path, path: str) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / ".env").write_text("K=1\n")
+    result = _cites(tmp_path, "line 1", path=path)
+    assert not result.passed
+    assert result.detail.startswith(f"cannot read {path}")
+
+
+def test_cites_lines_needs_a_max_or_a_path() -> None:
+    with pytest.raises(ValueError, match="needs `max` or the `path`"):
+        to_check(CheckSpec(type="cites_lines"))
