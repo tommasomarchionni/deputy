@@ -8,6 +8,9 @@ from pathlib import Path
 
 from deputy.config import config_dir
 
+TURN_LIMITS = (1, 50)
+RETRY_LIMITS = (0, 5)
+
 
 @dataclass(frozen=True)
 class Profile:
@@ -15,6 +18,24 @@ class Profile:
     description: str
     body: str
     source: str
+    max_turns: int | None = None  # None: the measured or default limit applies
+    max_retries: int | None = None  # None: the default (one correction round) applies
+    problems: tuple[str, ...] = ()  # what was wrong in the front matter (those keys are ignored)
+
+
+def _limit(meta: dict[str, str], key: str, bounds: tuple[int, int]) -> tuple[int | None, str]:
+    """A whole number within `bounds` from the front matter, or (None, why it was ignored)."""
+    raw = meta.get(key)
+    if raw is None:
+        return None, ""
+    low, high = bounds
+    try:
+        value = int(raw)
+    except ValueError:
+        return None, f"{key}: '{raw}' is not a whole number (ignored)"
+    if not low <= value <= high:
+        return None, f"{key}: {value} is outside {low}-{high} (ignored)"
+    return value, ""
 
 
 def parse_profile(text: str, source: str, fallback_name: str) -> Profile:
@@ -27,11 +48,16 @@ def parse_profile(text: str, source: str, fallback_name: str) -> Profile:
             if sep:
                 meta[key.strip()] = value.strip()
         body = rest.lstrip("\n")
+    turns, turns_problem = _limit(meta, "max_turns", TURN_LIMITS)
+    retries, retries_problem = _limit(meta, "max_retries", RETRY_LIMITS)
     return Profile(
         name=meta.get("name", fallback_name),
         description=meta.get("description", ""),
         body=body.strip(),
         source=source,
+        max_turns=turns,
+        max_retries=retries,
+        problems=tuple(p for p in (turns_problem, retries_problem) if p),
     )
 
 

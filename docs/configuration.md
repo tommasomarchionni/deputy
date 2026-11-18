@@ -44,7 +44,28 @@ Several backends can be listed; pick one per call with the `backend` argument.
 
 A profile is a markdown file with a short front matter and the instructions the worker follows.
 Bundled: `helper`. Add your own in `~/.config/deputy/profiles/` (yours) or `.deputy/profiles/`
-(per project; the project wins). See [`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md) for a template.
+(per project; the project wins). See
+[`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md)
+for a template.
+
+The front matter can set the profile's limits:
+
+```yaml
+---
+name: strict-reader
+description: Reads and reports, no second chances
+max_turns: 4        # 1 to 50: the most tool turns the worker may take
+max_retries: 0      # 0 to 5: correction rounds after a failed check (default 1)
+---
+```
+
+- **`max_turns`**: precedence, highest first: the `max_turns` argument of the call, the profile's,
+  the limit derived from the measured model profile, 8.
+- **`max_retries`**: `0` means a failed check hands the task back at once (`checks_failed`,
+  `needs_frontier`); `2` allows up to two correction rounds, each with the exact failure, and
+  stops as soon as the checks pass. Without it, one correction round, as before.
+- A value that is not a whole number, or is outside its range, is **ignored** (the default
+  applies) and `deputy doctor` says which profile and why.
 
 ## Policy
 
