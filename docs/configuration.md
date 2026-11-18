@@ -94,6 +94,12 @@ config, never into your config; they overlay the backend's `extra_body` and `max
 deleting the file undoes them. A candidate is chosen only if it keeps pass rate and citation
 accuracy and is faster than the measured spread or uses at least 15% fewer output tokens.
 
+**When the served model changes.** `deputy doctor` compares the model the server answers with the
+one that was measured. With `auto_tune = "propose"` or `"off"` it only says what to do. With
+`"apply"` it runs one quick tune (four tasks, one pass, one of them held out) and writes the new
+profile and any confirmed winner. This happens only in `doctor`, never during a `delegate` call,
+because it takes minutes. A model that was never measured is not re-tuned.
+
 Server flags (context size, thinking budget, cache) are outside deputy's reach: when thinking
 dominates the time, `tune` prints the flag to try instead of changing anything. Custom candidates:
 `deputy bench --variant 'name={"extra_body":{"temperature":0.1},"max_tokens":512}'`.

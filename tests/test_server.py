@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from deputy import cli, model_profiles, server
+from deputy.backends import Probe
 from deputy.bench import Summary
 from deputy.config import Backend, state_dir
 from deputy.server import build_server
@@ -244,9 +245,9 @@ def test_doctor_reports_what_is_wrong_in_a_profile_front_matter(
     monkeypatch.chdir(tmp_path)
 
     async def healthy(self):  # type: ignore[no-untyped-def]
-        return True, "ok"
+        return Probe(True, "ok")
 
-    monkeypatch.setattr("deputy.backends.ChatClient.health", healthy)
+    monkeypatch.setattr("deputy.backends.ChatClient.probe", healthy)
     cli.main(["doctor"])
     assert (
         "profile oops: max_turns: 'lots' is not a whole number (ignored)" in capsys.readouterr().out
