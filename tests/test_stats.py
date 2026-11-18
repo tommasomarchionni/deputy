@@ -9,8 +9,9 @@ from hypothesis import strategies as st
 
 from deputy import cli, runs, stats
 from deputy.agent import run_task, task_class
+from deputy.bench import Variant, run_suite
 from deputy.checks import CitesLines, Contains, FileWritten
-from deputy.config import Policy, state_dir
+from deputy.config import Backend, Policy, state_dir
 from deputy.profiles import load_profiles
 from deputy.sandbox import Sandbox
 from helpers import message
@@ -178,3 +179,53 @@ def test_the_totals_always_add_up(items) -> None:  # type: ignore[no-untyped-def
     assert sum(g.runs for g in report.by_profile) == report.total.runs
     assert sum(g.runs for g in report.by_class) == report.total.runs
     assert report.total.accepted + report.total.rejected == sum(1 for _, _, v in items if v)
+
+
+def test_benchmark_runs_are_left_out_unless_asked_and_old_lines_count_as_real_use() -> None:
+    real = run_event("real")
+    real["source"] = "mcp"
+    synthetic = run_event("synthetic")
+    synthetic["source"] = "bench"
+    legacy = run_event("legacy")  # an older trace line: no source
+    events = [real, synthetic, legacy, feedback("synthetic", "rejected")]
+    assert stats.build_report(events, days=30, now=NOW).total.runs == 2
+    everything = stats.build_report(events, days=30, now=NOW, include_bench=True).total
+    assert everything.runs == 3
+    assert everything.rejected == 1
+
+
+def test_the_benchmark_tags_its_runs_and_a_delegation_tags_itself_as_real_use(
+    fake_client, tmp_path: Path
+) -> None:  # type: ignore[no-untyped-def]
+    asyncio.run(
+        run_suite(
+            Backend(name="b", base_url="http://x"),
+            Variant(name="v"),
+            runs=1,
+            only=["short-summary"],
+            client_factory=lambda backend: fake_client([message("short")]),
+        )
+    )
+    asyncio.run(
+        run_task(
+            client=fake_client([message("done")]),
+            profile=load_profiles()["helper"],
+            task="x",
+            sandbox=Sandbox(tmp_path),
+            checks=[],
+            policy=Policy(),
+        )
+    )
+    events, _ = stats.read_trace()
+    assert [e["source"] for e in events if e["event"] == "run"] == ["bench", "mcp"]
+    assert stats.build_report(events, days=1).total.runs == 1
+    assert stats.build_report(events, days=1, include_bench=True).total.runs == 2
+
+
+def test_the_stats_command_can_include_the_benchmark(capsys: pytest.CaptureFixture[str]) -> None:
+    runs.record({"event": "run", "run_id": "b", "profile": "helper", "status": "ok",
+                 "source": "bench", "metrics": {}, "saved_est": 5})  # fmt: skip
+    assert cli.main(["stats", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["total"]["runs"] == 0
+    assert cli.main(["stats", "--json", "--include-bench"]) == 0
+    assert json.loads(capsys.readouterr().out)["total"]["runs"] == 1

@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from deputy.bench import BENCH_SOURCE
 from deputy.config import state_dir
 
 SECONDS_PER_DAY = 86_400
@@ -107,9 +108,17 @@ def _add(group: Group, event: dict[str, Any], verdict: str | None) -> None:
 
 
 def build_report(
-    events: list[dict[str, Any]], *, days: float, unreadable: int = 0, now: float | None = None
+    events: list[dict[str, Any]],
+    *,
+    days: float,
+    unreadable: int = 0,
+    now: float | None = None,
+    include_bench: bool = False,
 ) -> Report:
-    """Aggregate the runs of the last `days` days, joining each to the feedback given for it."""
+    """Aggregate the runs of the last `days` days, joining each to the feedback given for it.
+
+    Benchmark runs are synthetic traffic, so they are left out unless `include_bench` is set; a
+    line without a source (an older trace) counts as real use."""
     since = (now if now is not None else time.time()) - days * SECONDS_PER_DAY
     verdicts = _verdicts(events)
     total = Group("all")
@@ -117,6 +126,8 @@ def build_report(
     classes: dict[str, Group] = {}
     for event in events:
         if event.get("event") != "run" or float(event.get("ts") or 0) < since:
+            continue
+        if event.get("source") == BENCH_SOURCE and not include_bench:
             continue
         profile = str(event.get("profile") or "unknown")
         task_class = str(event.get("task_class") or f"{profile}:unknown")

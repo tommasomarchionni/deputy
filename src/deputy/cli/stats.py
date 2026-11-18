@@ -10,7 +10,9 @@ from deputy.cli._common import Subparsers
 
 def run(args: argparse.Namespace) -> int:
     events, unreadable = stats.read_trace()
-    report = stats.build_report(events, days=args.days, unreadable=unreadable)
+    report = stats.build_report(
+        events, days=args.days, unreadable=unreadable, include_bench=args.include_bench
+    )
     print(stats.report_as_json(report) if args.json else stats.format_report(report))
     return 0
 
@@ -19,4 +21,7 @@ def register(sub: Subparsers) -> None:
     parser = sub.add_parser("stats", help="usage, acceptance and tokens saved, from the trace")
     parser.add_argument("--days", type=float, default=30, help="how far back to look (default 30)")
     parser.add_argument("--json", action="store_true", help="print JSON, not a table")
+    parser.add_argument(
+        "--include-bench", action="store_true", help="also count benchmark runs (synthetic)"
+    )
     parser.set_defaults(func=run)
