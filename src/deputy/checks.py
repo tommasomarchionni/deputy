@@ -47,6 +47,20 @@ def _result(name: str, problem: str = "") -> CheckResult:
     return CheckResult(name=name, passed=not problem, detail=problem)
 
 
+def appears(value: str, text: str) -> bool:
+    """`value` is in `text` as a whole, ignoring case: "12" is not found in "12,599" or "112",
+    "log" is not found in "logs". Edges that are not letters or digits ("#100", "30 days") match
+    as written."""
+    if not value:
+        return True
+    pattern = re.escape(value)
+    if value[0].isalnum():
+        pattern = r"(?<!\w)" + (r"(?<!\d[.,])" if value[0].isdigit() else "") + pattern
+    if value[-1].isalnum():
+        pattern += r"(?!\w)" + (r"(?![.,]\d)" if value[-1].isdigit() else "")
+    return re.search(pattern, text, re.IGNORECASE) is not None
+
+
 class Contains(BaseModel):
     """Every value appears in the answer."""
 
@@ -54,7 +68,7 @@ class Contains(BaseModel):
     values: list[str]
 
     async def evaluate(self, ctx: CheckContext) -> CheckResult:
-        missing = [v for v in self.values if v.lower() not in ctx.answer.lower()]
+        missing = [v for v in self.values if not appears(v, ctx.answer)]
         return _result("contains", f"missing: {missing}" if missing else "")
 
 
