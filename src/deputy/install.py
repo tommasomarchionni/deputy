@@ -30,9 +30,9 @@ class InstructionTarget:
 
 
 _DESCRIPTION = (
-    "Delegate small, checkable, read-heavy tasks (reading long files or logs, extraction, "
-    "summaries, translations, first drafts of tests) to a cheaper model with the deputy MCP "
-    "tools, to save tokens. Use when a task is input-heavy and its answer is short."
+    "Delegate reading to a cheaper model with the deputy MCP tools, to save tokens: summaries, "
+    "inventories, facts with their lines from long files, big logs, git history. Use when a task "
+    "needs reading more than a few KB and its answer is short; not for lookups or searches."
 )
 
 INSTRUCTION_TARGETS: dict[str, InstructionTarget] = {
