@@ -41,26 +41,28 @@ Full documentation: **<https://tommasomarchionni.github.io/deputy/>** (source in
 
 ## What it is
 
-`deputy` is an MCP server plus a set of agent profiles. A *frontier orchestrator* (Claude Code
-today; GitHub Copilot and others later) hands small, checkable tasks to *worker models* of any
-kind (local llama.cpp, Ollama, OpenAI- or Anthropic-compatible endpoints, hosted APIs). The
-server runs the worker inside a sandbox, verifies the result with checks the orchestrator
-declares, corrects it when it can, and reports back a structured result with evidence and
-metrics. It records what worked, so routing and prompts improve from measurements, not hunches.
+`deputy` is an MCP server plus a set of agent profiles. A *frontier orchestrator* (Claude Code;
+GitHub Copilot, Cursor and Codex are configured but not yet verified in their apps) hands small,
+checkable tasks to *worker models* behind an OpenAI-compatible API (llama.cpp, Ollama, LM Studio,
+vLLM, hosted APIs). The server runs the worker inside a sandbox, verifies the result with checks
+the orchestrator declares, corrects it once when it can, and reports back a structured result with
+evidence and metrics. It records every run and your feedback; using that to improve routing and
+prompts is planned.
 
 ## Goals, stated so they can be measured
 
-"Perfect" and "best in the world" are not testable. These are (targets, to be confirmed by the
-benchmark in `docs/self-improvement.md`):
+"Perfect" and "best in the world" are not testable. These are the targets, and the table says
+honestly where each one stands today (see also [how deputy improves](docs/self-improvement.md)):
 
-- every claim a worker makes about a file is checked by code, not trusted;
-- line citations correct >= 98% on the benchmark; zero writes outside the sandbox;
-- a worker never gets a shell: checks run in the server, from an allow-list;
-- for each model and task class, the router picks the cheapest path that passes the checks;
-- the orchestrator spends fewer tokens with deputy than without, per task class, measured and
-  reported (`tokens_saved`); a class that does not save is not delegated;
-- a change to prompts, profiles or parameters ships only if it beats the baseline on a held-out
-  set, with variance accounted for.
+| Goal | Where it stands |
+| --- | --- |
+| Every claim a worker makes is checked by code, not trusted | **today**, for the claims you declare checks for (`contains`, `cites_lines`, `excludes`, `max_chars`, files, allow-listed commands) |
+| Line citations correct on the benchmark; no writes outside the sandbox | citations are **measured** on a small built-in suite (a larger one is [#6](https://github.com/tommasomarchionni/deputy/issues/6)); the sandbox is covered by tests and a [written review](docs/security.md) |
+| A worker never gets a shell | **today**: it has `read_file`, `write_file`, `grep`; checks run in the server from an allow-list (a `command` check still runs worker-written code with your rights: [#49](https://github.com/tommasomarchionni/deputy/issues/49)) |
+| The orchestrator spends fewer tokens with deputy than without | **estimated today** on every run (`orchestrator_tokens_saved_est`); a better measure is [#46](https://github.com/tommasomarchionni/deputy/issues/46) |
+| A task class that does not save tokens is not delegated | planned ([#43](https://github.com/tommasomarchionni/deputy/issues/43)) |
+| The router picks the cheapest path that passes the checks | planned ([#18](https://github.com/tommasomarchionni/deputy/issues/18)) |
+| A change ships only if it beats the baseline, variance accounted for | **today** for request settings (`deputy tune`, one pass or `--runs N`); a held-out split and prompt or profile changes are planned ([#6](https://github.com/tommasomarchionni/deputy/issues/6), [#21](https://github.com/tommasomarchionni/deputy/issues/21)) |
 
 ## Documentation
 

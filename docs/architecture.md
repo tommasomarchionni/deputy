@@ -65,7 +65,8 @@ fallback. Local first when the checks pass; hosted only when allowed by the proj
 
 - Python 3.12+, `uv`; the official MCP SDK / FastMCP; pydantic v2; httpx.
 - Transports: stdio first (works in Claude Code and VS Code/Copilot), streamable HTTP later.
-- Adapters behind one interface: llama.cpp server, Ollama, OpenAI-compatible, Anthropic-compatible.
+- One adapter today: the OpenAI-compatible chat API (llama.cpp, Ollama, LM Studio, vLLM, hosted
+  APIs). Other adapter families are possible behind the same interface but are not built.
 - SQLite (WAL, FTS5) for memory, traces and benchmark results; `sqlite-vec` only if the benchmark
   shows retrieval by meaning beats keyword search.
 - OpenTelemetry-shaped JSONL traces.
