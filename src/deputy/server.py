@@ -11,11 +11,12 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import runs, stats, updates
+from deputy import model_profiles, runs, stats, updates
 from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
 from deputy.config import Config, ConfigError, load_config
+from deputy.model_profiles import ModelProfile
 from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
 
@@ -31,6 +32,7 @@ class _Delegation:
     sandbox: Sandbox
     client: ChatClient
     checks: list[Check]
+    measured: ModelProfile | None
 
 
 def _prepare(
@@ -42,12 +44,14 @@ def _prepare(
     chosen = profiles.get(profile)
     if chosen is None:
         raise ConfigError(f"unknown profile '{profile}'; known: {', '.join(profiles)}")
+    chosen_backend = config.backend(backend)
     return _Delegation(
         config=config,
         profile=chosen,
         sandbox=Sandbox(Path(workdir)),
-        client=ChatClient(config.backend(backend)),
+        client=ChatClient(chosen_backend),
         checks=[to_check(c) for c in checks or []],
+        measured=model_profiles.load_profile(chosen_backend),
     )
 
 
@@ -55,7 +59,7 @@ def _setup_error(run_id: str, message: str) -> Result:
     return Result(run_id=run_id, status="error", answer=message, flags=["setup_error"])
 
 
-async def _delegate(prepared: _Delegation, task: str, max_turns: int) -> Result:
+async def _delegate(prepared: _Delegation, task: str, max_turns: int | None) -> Result:
     """Run the task, and flag a kind of task that has not paid off in past runs."""
     advice = stats.advice_for_class(task_class(prepared.profile.name, prepared.checks))
     try:
@@ -66,7 +70,7 @@ async def _delegate(prepared: _Delegation, task: str, max_turns: int) -> Result:
             sandbox=prepared.sandbox,
             checks=prepared.checks,
             policy=prepared.config.policy,
-            max_turns=max_turns,
+            max_turns=max_turns or model_profiles.suggested_max_turns(prepared.measured),
         )
     finally:
         await prepared.client.aclose()
@@ -80,10 +84,13 @@ async def _backend_status(config: Config) -> dict[str, str]:
     for backend in config.backends:
         client = ChatClient(backend)
         try:
-            ok, detail = await client.health()
+            probe = await client.probe()
         finally:
             await client.aclose()
-        out[backend.name] = ("up: " if ok else "down: ") + detail
+        out[backend.name] = ("up: " if probe.ok else "down: ") + probe.detail
+        if probe.ok:
+            measured = model_profiles.load_profile(backend)
+            out[f"{backend.name} profile"] = model_profiles.describe(measured, probe.models)
     usage = stats.usage_line()
     if usage:
         out["usage"] = usage
@@ -107,7 +114,7 @@ def build_server() -> MCPServer:
         profile: str = "helper",
         checks: list[CheckSpec] | None = None,
         backend: str | None = None,
-        max_turns: int = 8,
+        max_turns: int | None = None,
     ) -> Result:
         """Run a task on a worker model in `workdir` (absolute path). Verified by `checks`."""
         run_id = runs.new_run_id()

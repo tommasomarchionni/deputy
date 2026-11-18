@@ -120,3 +120,16 @@ use (delete `runs.jsonl` for a clean start).
 
 The saving is an estimate (characters divided by four, of the files the worker read minus the task
 and the answer); treat it as an order of magnitude.
+
+## The measured model profile
+
+`deputy bench` and `deputy tune` save what they measured for your model (pass rate, mean turns,
+seconds, and the model name the server answered with) in `~/.local/state/deputy/models/`. deputy
+uses it in two ways:
+
+- **Turn limit.** When a `delegate` call does not give `max_turns`, the limit is the measured mean
+  number of turns times two, between 4 and 12; without a profile it is 8. An explicit `max_turns`
+  always wins. A fast, reliable model gets a short leash; a slower one gets room.
+- **`status`.** Next to each backend it shows `<backend> profile`: when it was measured and how it
+  did, or `never measured: run deputy tune`, or, when the server now serves a different model than
+  the one measured, a note saying so and to run `deputy tune` again.

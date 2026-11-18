@@ -1,8 +1,9 @@
 # Memory
 
 !!! note "Status: design"
-    Only two pieces exist today: `deputy bench` writes a measured model profile, and every run and
-    `feedback` is recorded in a trace that `deputy stats` reports on. Nothing learns from them yet. Loading profiles, lessons and project
+    Only two pieces exist today: `deputy bench` writes a measured model profile (read back for the
+    turn limit and by `status`), and every run and `feedback` is recorded in a trace that
+    `deputy stats` reports on. Nothing learns from the trace yet. Loading profiles, lessons and project
     memory are planned ([#13](https://github.com/tommasomarchionni/deputy/issues/13),
     [#14](https://github.com/tommasomarchionni/deputy/issues/14),
     [#15](https://github.com/tommasomarchionni/deputy/issues/15)). The rest of this page is the design.
