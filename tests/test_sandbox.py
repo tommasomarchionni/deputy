@@ -1,6 +1,7 @@
 # pyright: basic
 import contextlib
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -272,3 +273,22 @@ def test_no_catastrophic_pattern_on_any_line_length_takes_long(
     (box.root / "line.txt").write_text("a" * length + "!\n")
     with contextlib.suppress(SandboxError):
         box.grep(pattern)
+
+
+def test_grep_skips_what_git_ignores_but_finds_untracked_files(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    subprocess.run(["git", "init", "-q", str(box.root)], check=True)
+    (box.root / ".gitignore").write_text("coverage/\n")
+    (box.root / "coverage").mkdir()
+    (box.root / "coverage" / "report.json").write_text("needle in a generated file")
+    (box.root / "src.py").write_text("needle in the source")
+    out = box.grep("needle")
+    assert "src.py" in out
+    assert "coverage" not in out
+
+
+def test_grep_still_searches_everything_outside_a_git_work_tree(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "coverage").mkdir()
+    (box.root / "coverage" / "report.json").write_text("needle")
+    assert "coverage/report.json" in box.grep("needle")
