@@ -1,18 +1,15 @@
 # Roadmap
 
-Each milestone says what must be **proven**, not only built.
+Each milestone says what must be **proven**, not only built. The plan lives in the
+[milestones](https://github.com/tommasomarchionni/deputy/milestones) and the
+[project board](https://github.com/users/tommasomarchionni/projects/3).
 
-- **M0 — repository and design** (done). Documents, imported agent profiles, sandbox script.
-- **M1 — core** (done: this release). MCP server skeleton, adapter interface, llama.cpp and OpenAI/Anthropic-compatible
-  adapters, sandbox, structured results. *Proven by:* contract tests per adapter; sandbox escape tests.
-- **M2 — benchmark and tuning** (first version done: `bench`, `tune`). `deputy bench` runs the built-in tasks on the chosen model and
-  `deputy tune` proposes (or, if allowed, applies) settings. *Details in `self-improvement.md`.*
-- **M2a — benchmark.** Task set, deterministic graders, runner, baseline for the models on hand.
-  *Proven by:* reproducible numbers with spread.
-- **M3 — verification and correction.** Declared checks run by the server, bounded retries,
-  chunking of long files. *Proven by:* citation accuracy and coverage up on the benchmark.
-- **M4 — profiles and memory.** Measured model profiles, lessons, project memory with ablation.
-  *Proven by:* a run with memory beats one without.
-- **M5 — async and routing.** MCP tasks for slow models, routing by measured profile.
-- **M6 — second agent.** Same server driven from GitHub Copilot; same benchmark, same results.
-- **M7 — improvement loop.** Offline optimiser proposing changes with reports; human gate.
+| Milestone | Proven by | State |
+| --- | --- | --- |
+| **M1 Core server** | the server, sandbox, checks and installer work end to end with a real model | done (v0.1.0) |
+| **M2 Benchmark and tuning** | reproducible numbers with spread for the models in use; `deputy tune` applies a setting only when it wins, with rollback | in progress: `bench` and `tune` exist; more tasks, repeats and a held-out split are open |
+| **M3 Verification and correction** | citation accuracy and fact coverage rise on the benchmark; files larger than the model context are handled | planned |
+| **M4 Profiles and memory** | a run with memory beats the same run without it (ablation); profiles are measured, not typed | planned |
+| **M5 Async and routing** | slow models do not block the agent; the router picks the cheapest passing path | planned |
+| **M6 Second agent** | the same server driven from GitHub Copilot (VS Code) gives the same benchmark results as through Claude Code | planned; instruction files for every agent exist, the real-app verification does not |
+| **M7 Improvement loop** | an offline optimiser proposes profile and parameter changes with a report; a human approves; rollback works | planned |

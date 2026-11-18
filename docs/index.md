@@ -1,7 +1,7 @@
 # deputy
 
-**A frontier model orchestrates. Any other model does the legwork, through MCP, and gets better at
-it every week.**
+**A frontier model orchestrates. Any other model does the legwork, through MCP. Every answer is
+checked by code, and your frontier tokens are saved.**
 
 deputy is an MCP server. Your agent (Claude Code, GitHub Copilot, Cursor, Codex, anything that
 speaks MCP) hands small, checkable, read-heavy tasks to a cheaper model (a local llama.cpp or Ollama
@@ -15,7 +15,7 @@ trust.
 | --- | --- |
 | **Fewer tokens for the frontier model** | Four tiny tool schemas (about 1,200 tokens), results by reference, checks instead of re-reading, and a measured `orchestrator_tokens_saved_est` on every run. |
 | **Quality you can verify** | The worker has no shell and a confined sandbox. Every claim is checked by code: cited lines, required facts, forbidden leaks, files written, allow-listed commands. |
-| **Gets better by itself, safely** | `deputy bench` measures your model on a built-in suite; `deputy tune` recommends (or applies, if you allow it) settings. Nothing changes without a measurement. |
+| **Measured, then tuned** | `deputy bench` measures your model on a built-in suite; `deputy tune` recommends (or applies, if you allow it) request settings. Nothing changes without a measurement. Learning from feedback is planned: [how deputy improves](self-improvement.md). |
 
 ## Get started
 
@@ -24,7 +24,7 @@ curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/insta
 deputy init
 deputy doctor
 deputy install claude-code --apply     # or: vscode, cursor, codex, generic
-deputy instructions --write CLAUDE.md
+deputy instructions --for claude --apply
 ```
 
 Then read [Install and connect an agent](install.md).
@@ -32,4 +32,5 @@ Then read [Install and connect an agent](install.md).
 ## Status
 
 Alpha. The server, installer, checks, benchmark and tuning commands work and are tested; routing,
-memory and asynchronous tasks are on the [roadmap](roadmap.md).
+memory, lessons and asynchronous tasks are planned: see the [roadmap](roadmap.md) and
+[how deputy improves](self-improvement.md) for what exists today.

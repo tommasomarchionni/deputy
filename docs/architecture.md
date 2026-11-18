@@ -1,5 +1,11 @@
 # Architecture
 
+!!! note "What exists today"
+    Built and tested: the four tools, the execution loop with sandbox, checks and one correction round,
+    OpenAI-compatible backends, the benchmark and tuning commands, workspaces, install and update.
+    Planned: asynchronous tasks, routing by measured profile, memory, a second adapter family
+    (see the [roadmap](roadmap.md)). Sections below that describe planned work say so.
+
 ## Roles
 
 - **Orchestrator** (frontier model, in an agent such as Claude Code or Copilot): plans, splits the
@@ -34,12 +40,12 @@ Results are structured (JSON schema), not free text: the orchestrator can act on
    (for example: every quoted line number contains the quoted text; `node --test <file>` in the
    sandbox; a JSON schema; a required-facts list). The worker never runs commands.
 4. **Correct:** on failure, one or two retries with the precise failure, within the budget.
-5. **Escalate:** still failing, or low confidence: return `needs_frontier` with the evidence so the
-   orchestrator takes over. Delegating again from inside a run is allowed only for splitting a task,
-   depth <= 2, inside the same budget.
+5. **Escalate:** still failing: return `needs_frontier` with the evidence so the orchestrator takes
+   over. (Planned: low-confidence detection, and delegating again from inside a run only for
+   splitting a task, depth <= 2, inside the same budget.)
 6. **Record:** trace and metrics, always; memory only through the reviewed path.
 
-## Routing
+## Routing (planned)
 
 By task class, size, latency and cost budget, using **measured** model profiles (tokens/s, context
 that really works, tool-call reliability, best reasoning budget per class), with deterministic
