@@ -25,7 +25,8 @@ Numbers are from one machine and few runs: they show direction, not precision.
 ## Consequence for deputy
 
 Reasoning is a **per-task-class parameter**, not a global one: off or small for extraction and
-translation, larger for code. The router sets it from measured profiles. Quality at each setting
+translation, larger for code. Setting it per kind of task is planned; today it is one server flag.
+Quality at each setting
 must be measured by the benchmark before it becomes a default; speed alone is not a reason.
 
 ## Nightly benchmark (macOS)

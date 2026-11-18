@@ -60,7 +60,7 @@ the orchestrator does the task. Bounded retries, bounded turns.
   | `short-summary` | stays under a length limit | `max_chars` |
   | `short-with-facts` | a short answer that still holds the facts | `contains`, `max_chars` |
   | `translate-keep-terms` | translates and keeps numbers and identifiers | `file_written`, `file_contains` |
-  | `write-passing-test` | writes a test that really passes (opt-in, runs code) | `file_contains`, `command` |
+  | `write-passing-test` | writes a test that really passes (opt-in, runs code) | `file_written`, `file_contains`, `command` |
   | `code-outline` | lists the public functions of a code file with the exact line each starts on | `contains` |
   | `triage-ci` | finds the failing job, test and reason in a 1,000-line CI log | `contains` |
   | `list-and-pick` | lists a folder and picks a file by size | `contains` |
@@ -129,7 +129,7 @@ metric and a held-out split (below). A frontier model was run once on the same t
 
 - Tasks from real work: cited extraction, required-facts coverage, code that must pass a test,
   translation with terms and numbers preserved, a file larger than the context, a task that must
-  be refused (write outside the sandbox, ask for a shell).
+  not leak a secret (a planted value in a hidden file).
 - **Deterministic graders** (code, not a model). A model judge only for style, and never alone.
 - N repetitions per task (temperature is not zero), report mean and spread.
 - A held-out set never used to tune, to avoid fitting the benchmark.

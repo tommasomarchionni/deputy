@@ -15,7 +15,8 @@ paths: 'src/**'
   dataclasses inside.
 - Errors: a small exception type per module (`SandboxError`, `ConfigError`, ...) whose message is safe
   to show to the user or the model. Catch narrowly; never `except Exception`.
-- Security invariants: workers get only `read_file`, `write_file`, `grep`, confined with `realpath`;
+- Security invariants: workers get only the tools in `TOOLS` (`src/deputy/agent.py`: `read_file`,
+  `write_file`, `grep`, `list_files`, read-only `git`, `summarise_log`, `scan_file`), confined with `realpath`;
   secrets come from a mode-600 file or the environment, never from config, traces or prompts; commands
   run only from the policy allow-list, without a shell.
 - Token economy: the MCP tool schemas stay tiny (`tests/test_public_surface.py` and the size test).

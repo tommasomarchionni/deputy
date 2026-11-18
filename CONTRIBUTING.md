@@ -39,8 +39,8 @@ evidence** (a failing case, a measurement) and **review of the design** in `docs
   numbers (see `docs/self-improvement.md`). "It feels better" is not a reason.
 - **Open an issue first** for anything bigger than a typo, so the direction is agreed before you
   spend time.
-- **One change per pull request**, small, with a clear title in Conventional Commits form
-  (`feat: ...`, `fix: ...`, `docs: ...`, `ci: ...`, `chore: ...`).
+- **One change per pull request**, small, with a clear title in Conventional Commits form and the
+  area as scope (`feat(server): ...`, `fix(checks): ...`, `docs: ...`, `ci: ...`).
 - **Tests are part of the change.** A bug has a test that fails before and passes after.
 - **Security first.** Never weaken the sandbox, the check allow-list or secret handling to make
   something pass.

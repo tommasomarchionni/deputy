@@ -112,7 +112,8 @@ main() {
   say "next:"
   say "  1. deputy init        # point it at your model server"
   say "  2. deputy doctor      # check that it answers"
-  say "  3. deputy install claude-code   # or: vscode (Copilot), cursor, codex"
+  say "  3. deputy install claude-code --apply   # or: vscode (Copilot), cursor, codex"
+  say "  4. deputy instructions --for claude --apply   # in each project: when to delegate"
 }
 
 main "$@"

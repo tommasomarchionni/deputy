@@ -50,7 +50,8 @@ Do not run what is not needed: a focused test while editing, the full suite once
 ## How we work
 
 Issue first (`status: ready`), one issue per pull request, branch `<type>/<N>-<slug>`, title
-`type(area): subject`, body `Closes #N`, a `Regression:` line for `feat` and `fix`. `feat`, `fix`
+`type(area): subject`, body `Closes #N`, and for `feat` and `fix` a test, or the line
+`Regression: none - <reason>`. `feat`, `fix`
 and `perf` must change `src/deputy/` or `install.sh`. Report what was verified and what was not;
 never invent results. Details: CONTRIBUTING.md ("How the project is run").
 
