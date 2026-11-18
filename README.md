@@ -8,7 +8,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 deputy is an MCP server. Your coding agent (Claude Code, or any MCP client) hands it a read-heavy
-task, such as "summarise this 900-line document" or "which files mention this setting". deputy runs
+task, such as "summarise this 900-line document" or "what changed in the last ten commits, and why". deputy runs
 the task on a cheaper model (a local llama.cpp or Ollama model, or any OpenAI-compatible API),
 checks the answer with code, and returns a short result. Your agent reads the answer, not the files.
 
@@ -19,9 +19,10 @@ Claude Code; GitHub Copilot, Cursor and Codex are configured by the installer bu
 
 | Delegate | Do it yourself |
 | --- | --- |
-| Long reads: summaries, inventories, cross-references, searches across many files | Tiny lookups in a short file (deputy flags these as `small_input`) |
+| Long reads: summaries, inventories, cross-references, facts with their lines | Lookups in a short file or one line (deputy flags these as `small_input`) |
 | Big logs and test output (`summarise_log`) | Reading code you are about to edit |
-| Questions about git history (`git log`, `diff`, `show`, `blame`) | Anything that needs a shell, the network or credentials |
+| Questions about git history (`git log`, `diff`, `show`, `blame`) | Searches that only list files: you would see the same list |
+| | Anything that needs a shell, the network or credentials |
 
 Measured on a real multi-app repository (6 read-heavy tasks, a local 27B worker, version 0.12):
 about 6,900 frontier tokens saved per task on average, from about 0 on the smallest task to about

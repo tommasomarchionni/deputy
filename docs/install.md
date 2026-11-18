@@ -81,7 +81,7 @@ time; in shared files only the block between the `deputy:start` and `deputy:end`
 so your own text is safe. Prefer `claude` over `claude-md`: a skill is loaded on demand, a
 `CLAUDE.md` block on every turn.
 
-The guide is short on purpose (about 400 tokens). It says what to delegate and what not, how to write
+The guide is short on purpose (about 450 tokens). It says what to delegate and what not, how to write
 `checks`, what to trust (`status: ok`) and what to do yourself, to review worker output, and to send
 `feedback`.
 
