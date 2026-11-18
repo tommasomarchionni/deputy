@@ -8,17 +8,42 @@
 #
 # Options (after `sh -s --` when piped):
 #   --uninstall     remove deputy
-#   --install-uv    also install uv if it is missing (runs the official astral.sh installer)
+#   --install-uv    also install uv if it is missing (the official uv installer, pinned to one
+#                   version and checked against its SHA-256 before it runs)
 # Environment:
 #   DEPUTY_REF      git branch, tag or commit to install from source instead of a release
 #   DEPUTY_SOURCE   install from this local path or URL instead of GitHub (used by CI)
+#   UV_INSTALLER_URL where to fetch the pinned uv installer (a mirror; tests); the checksum still applies
 set -eu
 
 REPO_URL="https://github.com/tommasomarchionni/deputy"
+UV_VERSION="0.13.9"
+UV_INSTALLER_SHA256="ccc888115ac831bd9c30855c1d4abeae32fce679701d2aac8e72eb0beffb41c2"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+sha256_of() {
+  if have sha256sum; then sha256sum "$1" | cut -d ' ' -f 1
+  elif have shasum; then shasum -a 256 "$1" | cut -d ' ' -f 1
+  else fail "sha256sum or shasum is needed to check the uv installer"
+  fi
+}
+
+# Download the pinned uv installer, check its SHA-256, and only then run it.
+install_uv() {
+  url="${UV_INSTALLER_URL:-https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-installer.sh}"
+  script="$(mktemp)"
+  curl -LsSf "$url" -o "$script" || { rm -f "$script"; fail "could not download the uv installer"; }
+  actual="$(sha256_of "$script")"
+  if [ "$actual" != "$UV_INSTALLER_SHA256" ]; then
+    rm -f "$script"
+    fail "the uv installer does not match its pinned SHA-256; nothing was run"
+  fi
+  sh "$script"
+  rm -f "$script"
+}
 
 # The wheel of the latest release (built and attested by the release workflow), or nothing.
 latest_wheel() {
@@ -30,9 +55,9 @@ latest_wheel() {
 ensure_uv() {
   have uv && return 0
   if [ "${INSTALL_UV:-0}" = 1 ]; then
-    say "installing uv (https://astral.sh/uv) ..."
+    say "installing uv ${UV_VERSION} (https://astral.sh/uv), checked against its SHA-256 ..."
     have curl || fail "curl is needed to install uv"
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    install_uv
     # shellcheck disable=SC1091
     [ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
     PATH="$HOME/.local/bin:$PATH"

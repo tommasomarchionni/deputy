@@ -12,7 +12,8 @@ curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/insta
 ```
 
 The script is short; [read it](https://github.com/tommasomarchionni/deputy/blob/main/install.sh) first if you like. It needs [uv](https://docs.astral.sh/uv/);
-add `-s -- --install-uv` to let it install uv too:
+add `-s -- --install-uv` to let it install uv too (a pinned version of the official uv installer,
+checked against its SHA-256 before it runs):
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh -s -- --install-uv
