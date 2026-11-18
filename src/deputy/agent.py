@@ -66,6 +66,23 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "git",
+            "description": (
+                'Read-only git in the folder: args such as ["log", "--oneline", "-n", "20"], '
+                '["diff", "--stat", "HEAD~3"], ["show", "abc123", "--", "file"] or '
+                '["blame", "-L", "10,20", "--", "file"]. Only log, show, diff and blame; '
+                "paths go after --. Start with --stat or --oneline, then narrow."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"args": {"type": "array", "items": {"type": "string"}}},
+                "required": ["args"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "summarise_log",
             "description": (
                 "For a large repetitive file (a log, a test run): every distinct kind of line "
@@ -184,6 +201,11 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
             )
         if name == "write_file":
             return sandbox.write_file(str(arguments["path"]), str(arguments["content"]))
+        if name == "git":
+            raw = arguments["args"]
+            if not isinstance(raw, list):
+                raise TypeError
+            return sandbox.git([str(a) for a in cast("list[object]", raw)])
         if name == "summarise_log":
             return sandbox.summarise_log(str(arguments["path"]))
         if name == "grep":
@@ -192,9 +214,8 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
         return f"ERROR: {exc}"
     except (KeyError, TypeError, ValueError):
         return "ERROR: missing or invalid arguments"
-    return (
-        f"ERROR: unknown tool '{name}'; use read_file, write_file, grep, summarise_log or scan_file"
-    )
+    known = "read_file, write_file, grep, git, summarise_log or scan_file"
+    return f"ERROR: unknown tool '{name}'; use {known}"
 
 
 FAILED_ANSWER_CHARS = 300  # a failed answer is cut here: the orchestrator will redo the task

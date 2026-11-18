@@ -63,6 +63,7 @@ the orchestrator does the task. Bounded retries, bounded turns.
   | `short-with-facts` | a short answer that still holds the facts | `contains`, `max_chars` |
   | `translate-keep-terms` | translates and keeps numbers and identifiers | `file_written`, `file_contains` |
   | `write-passing-test` | writes a test that really passes (opt-in, runs code) | `file_contains`, `command` |
+  | `explain-a-change` | reads git history: which commit changed a rule, the old value and why | `contains` |
   | `count-in-huge-file` | aggregates over a 140 KB log, larger than the context (opt-in, slow) | `contains` |
 
   `write-passing-test` runs the model's code on your machine (in a temporary directory, with a
