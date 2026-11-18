@@ -27,3 +27,20 @@ Numbers are from one machine and few runs: they show direction, not precision.
 Reasoning is a **per-task-class parameter**, not a global one: off or small for extraction and
 translation, larger for code. The router sets it from measured profiles. Quality at each setting
 must be measured by the benchmark before it becomes a default; speed alone is not a reason.
+
+## Nightly benchmark (macOS)
+
+Regressions in a model's behaviour are invisible to ordinary CI, which has no model. To watch yours,
+run the benchmark every night on the machine that serves it. This uses `launchd` on your own Mac,
+not a CI runner: a self-hosted runner on a public repository would run code from pull requests.
+
+```sh
+mkdir -p ~/.local/share/deputy ~/Library/LaunchAgents
+cp examples/nightly-bench.sh ~/.local/share/deputy/
+cp examples/deputy-nightly-bench.plist ~/Library/LaunchAgents/dev.deputy.nightly-bench.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.deputy.nightly-bench.plist
+```
+
+It runs at 03:00, skips (and says so in `skipped.log`) when the backend does not answer, and keeps
+one report per night in `~/.local/state/deputy/nightly/` for 90 days. Reports never block anything:
+compare two nights with `jq`. Remove it with `launchctl bootout gui/$(id -u)/dev.deputy.nightly-bench`.
