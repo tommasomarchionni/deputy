@@ -124,9 +124,9 @@ commands print; deputy takes long reads off the orchestrator, and its worker nev
   against the files they were given.
 
 **Where to start measuring your own use.** `deputy discover` on 30 days of real sessions of one
-repository: about 5.3 million tokens of tool results read by the orchestrator, large reads 30 % of
-it, and 11 delegations against 835 large reads done directly. That is the baseline before the read
-hint and the delegation skill were turned on.
+repository: 768 large file reads (about 1.45 million tokens), of which 660 were not followed by an
+edit of the file (about 1.24 million tokens), against 17 delegations: an adoption of 2.5 %. About
+589,000 tokens went into reading an unchanged file again, 230,000 of them the very same part.
 
 A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
 `deputy bench --compare` shows what changed between two nights.

@@ -1,7 +1,7 @@
 # pyright: basic
 """Decide whether to cut a release now, and which version, from the commits since the last tag.
 
-Cadence (the one that worked in voice-translations): release when 10 releasable changes have
+Cadence: release when 10 releasable changes have
 accumulated, otherwise at most every 12 hours; on demand with `force`, which skips the thresholds
 and never the safety checks (`main` must be green and there must be something to release).
 """
