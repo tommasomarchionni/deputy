@@ -240,6 +240,35 @@ def _row(summary: Summary) -> str:
     )
 
 
+SLOWER_WARNING = 0.25  # a confirmed proposal that is this much slower per task gets a warning
+
+
+def cost_and_gain(report: Report) -> str:
+    """One sentence for a confirmed proposal: what it gains and what it costs, so a person can
+    weigh both before applying it. "Confirmed" only means it lost no accuracy on held-out tasks."""
+    winner = next((c for c in report.candidates if c.variant == report.winner), None)
+    if winner is None or len(report.held_out) != 2:
+        return ""
+    base, held_base, held_win = report.baseline, report.held_out[0], report.held_out[1]
+
+    def change(before: float, after: float) -> str:
+        return f"{(after - before) / before:+.0%}" if before else "n/a"
+
+    parts = [
+        f"selection pass rate {base.pass_rate:.0%} -> {winner.pass_rate:.0%}",
+        f"held-out {held_base.pass_rate:.0%} -> {held_win.pass_rate:.0%}",
+        f"time per task {change(base.mean_elapsed_s, winner.mean_elapsed_s)}",
+        f"output tokens {change(base.mean_tokens_out, winner.mean_tokens_out)}",
+    ]
+    notes: list[str] = []
+    if held_win.pass_rate <= held_base.pass_rate:
+        notes.append("no held-out gain")
+    if base.mean_elapsed_s and winner.mean_elapsed_s > base.mean_elapsed_s * (1 + SLOWER_WARNING):
+        notes.append(f"over {SLOWER_WARNING:.0%} slower per task")
+    sentence = "Gain and cost: " + ", ".join(parts) + "."
+    return sentence + (f" Note: {'; '.join(notes)}." if notes else "")
+
+
 def to_markdown(report: Report) -> str:
     head = TABLE_HEAD
     lines = [
@@ -264,6 +293,8 @@ def to_markdown(report: Report) -> str:
             "",
             f"**Decision: proposal `{report.winner}` is confirmed.** Review it, then apply with "
             f"`deputy optimise --apply {report.id}`.",
+            "",
+            cost_and_gain(report),
             "",
             "```diff",
             report.diff,
