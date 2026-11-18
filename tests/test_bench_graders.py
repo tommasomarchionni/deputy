@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from deputy.bench import (
+    FAILED_TEST,
     HUGE_ERRORS,
     NOTICE_IT,
     TEST_FILE,
@@ -16,6 +17,7 @@ from deputy.bench import (
     Variant,
     _policy_for,
     build_project,
+    ci_log,
     huge_log,
     run_suite,
     runnable,
@@ -162,3 +164,18 @@ def test_slow_tasks_run_only_when_asked_and_never_in_tuning() -> None:
     assert "count-in-huge-file" in [t.name for t in runnable(slow=True)]
     assert "count-in-huge-file" not in selection_names()
     assert "count-in-huge-file" not in tasks_with_kind("contains")
+
+
+def test_the_ci_log_hides_one_failure_among_noise_and_the_task_grades_it() -> None:
+    log = ci_log()
+    assert log.count("FAILED ") == 1
+    assert log.count("##[error]") == 1
+    assert len(log.splitlines()) > 900
+    task = next(t for t in tasks() if t.name == "triage-ci")
+    good = f"Job unit (3.12) failed: {FAILED_TEST} expected '+02:00' but got '+00:00'."
+    wrong_job = f"Job lint failed: {FAILED_TEST} expected '+02:00'."
+    vague = "A test failed in unit (3.12)."
+    for answer, passes in ((good, True), (wrong_job, False), (vague, False)):
+        ctx = CheckContext(answer=answer, sandbox=None, policy=None)  # type: ignore[arg-type]
+        outcomes = [asyncio.run(c.evaluate(ctx)) for c in task.checks]
+        assert all(o.passed for o in outcomes) is passes

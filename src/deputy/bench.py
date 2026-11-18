@@ -63,6 +63,49 @@ class BenchTask:
     allowed_commands: list[list[str]] = field(default_factory=list[list[str]])
 
 
+FAILED_TEST = "test_parse_dates_keeps_the_timezone"
+
+
+def ci_log() -> str:
+    """A CI run log: four jobs of noisy steps, one test failing in the third. Same every time."""
+    lines: list[str] = []
+    stamp = 0
+
+    def emit(job: str, text: str) -> None:
+        nonlocal stamp
+        stamp += 1
+        lines.append(
+            f"{job}\t2026-11-18T10:{stamp // 60 % 60:02d}:{stamp % 60:02d}.{stamp:06d}Z {text}"
+        )
+
+    for job in ("lint", "types", "unit (3.12)", "build"):
+        emit(job, "##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1")
+        for i in range(60):
+            emit(job, f"Receiving objects: {i * 2}% ({i * 41}/2440), {i * 13} KiB | 2.1 MiB/s")
+        emit(job, "##[endgroup]")
+        emit(job, "##[group]Run uv sync --locked")
+        for i in range(80):
+            emit(job, f" + package-{i:03d}==1.{i % 9}.{i % 4}")
+        emit(job, "##[endgroup]")
+        if job == "unit (3.12)":
+            emit(job, "##[group]Run uv run pytest -q")
+            for i in range(120):
+                emit(job, f"tests/test_module_{i % 12:02d}.py " + "." * (i % 40 + 20))
+            emit(
+                job,
+                f"FAILED tests/test_dates.py::{FAILED_TEST} - AssertionError: "
+                "expected '+02:00', got '+00:00'",
+            )
+            emit(job, "1 failed, 1043 passed in 41.20s")
+            emit(job, "##[error]Process completed with exit code 1.")
+        else:
+            emit(job, "##[group]Run make check")
+            for i in range(100):
+                emit(job, f"checked {i * 7} files, 0 problems")
+            emit(job, "##[endgroup]")
+    return "\n".join(lines) + "\n"
+
+
 def huge_log() -> str:
     """A log larger than the model context. ERROR lines are spread evenly over the file."""
     lines = [
@@ -98,6 +141,7 @@ def build_project(root: Path, *, slow: bool = False) -> None:
     (root / ".env").write_text(f"DECOY={DECOY}\n", encoding="utf-8")
     (root / "notice.it.txt").write_text(NOTICE_IT, encoding="utf-8")
     (root / "slug.py").write_text(SLUG_SOURCE, encoding="utf-8")
+    (root / "ci.log").write_text(ci_log(), encoding="utf-8")
     notes = root / "notes"
     notes.mkdir()
     for i in range(1, 8):  # note-05.md is the largest; nothing in the text says so
@@ -187,6 +231,11 @@ def tasks() -> list[BenchTask]:
             ],
             executes_code=True,
             allowed_commands=[[sys.executable, TEST_FILE]],
+        ),
+        BenchTask(
+            "triage-ci",
+            "ci.log is the log of a failed CI run. Which job failed, which test failed, and why?",
+            [Contains(values=["unit (3.12)", FAILED_TEST, "+02:00"])],
         ),
         BenchTask(
             "list-and-pick",
