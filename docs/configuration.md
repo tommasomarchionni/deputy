@@ -118,8 +118,20 @@ Runs started by `deputy bench` and `deputy tune` are tagged `source: bench` in t
 of the report by default, so it describes real work; older trace lines without a source count as real
 use (delete `runs.jsonl` for a clean start).
 
-The saving is an estimate (characters divided by four, of the files the worker read minus the task
-and the answer); treat it as an order of magnitude.
+### How the saving is estimated
+
+For each delegation deputy estimates two things with the same yardstick: what the worker read on the
+orchestrator's behalf (`read`: the lines it read, plus every file in which a search found a match),
+and what the orchestrator paid (`cost`: the request it wrote, serialised, plus the result it reads,
+serialised). The saving is `read - cost`, and **it can be negative**: a task that reads little and
+returns a lot costs more than it spares, and `not_worth_delegating` ([tools](tools.md)) is built on
+that. The trace keeps all three numbers; `deputy stats` shows the per-run `read` and `cost`.
+
+The yardstick is the size in UTF-8 bytes divided by four, rounded up. It is the usual rule of thumb
+for English prose, and it is wrong by up to about a quarter either way: code and JSON are denser than
+this says, other languages vary. Because both sides use it, the difference is meaningful as an order
+of magnitude and a trend, not as an invoice. Not counted: the tool schemas the orchestrator carries
+on every turn (about 1,200 tokens, a fixed cost with or without delegation), and its own reasoning.
 
 ## The measured model profile
 
