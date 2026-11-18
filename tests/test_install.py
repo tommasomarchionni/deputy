@@ -211,3 +211,26 @@ def test_doctor_names_a_stale_project_copy_of_the_skill(tmp_path: Path) -> None:
     warning = install.stale_project_skill(tmp_path)
     assert warning is not None
     assert "older copy of the delegation guide" in warning
+
+
+def test_re_running_install_on_a_registered_machine_still_installs_skill_and_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _fake_claude(tmp_path, monkeypatch)
+    fake = tmp_path / "bin" / "claude"
+    fake.write_text(
+        "#!/bin/sh\necho 'MCP server deputy already exists in user config' >&2\nexit 1\n"
+    )
+    report = install.apply("claude-code", tmp_path)
+    assert report.startswith("already registered with Claude Code")
+    assert (tmp_path / "claude" / "skills" / "deputy" / "SKILL.md").is_file()
+    assert hook.is_enabled(settings)
+
+
+def test_any_other_registration_failure_still_stops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_claude(tmp_path, monkeypatch)
+    (tmp_path / "bin" / "claude").write_text("#!/bin/sh\necho 'permission denied' >&2\nexit 1\n")
+    with pytest.raises(RuntimeError, match="permission denied"):
+        install.apply("claude-code", tmp_path)
