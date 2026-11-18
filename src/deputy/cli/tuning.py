@@ -32,6 +32,9 @@ THINKING_HINT = (
     "is llama.cpp, cap the thinking with --reasoning-budget N (see docs/local-serving.md)."
 )
 THINKING_TOKENS_THRESHOLD = 800
+# The model profile sets the turn limit and the time budget of every delegation, so only a run of
+# the whole suite may write it: one task alone is too noisy.
+PARTIAL_NOTE = "profile kept: only a run of the whole suite updates it (this run used --tasks)"
 
 
 def _pass(r: Summary) -> str:
@@ -153,14 +156,13 @@ def bench(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    profile = save_model_profile(backend, summaries[0], summaries[1:])
+    profile = None if only else save_model_profile(backend, summaries[0], summaries[1:])
     if args.json:
-        print(
-            json.dumps({"summaries": [s.model_dump() for s in summaries], "profile": str(profile)})
-        )
+        saved = str(profile) if profile else None
+        print(json.dumps({"summaries": [s.model_dump() for s in summaries], "profile": saved}))
         return 0
     print(format_table(summaries))
-    print(f"profile saved: {profile}")
+    print(f"profile saved: {profile}" if profile else PARTIAL_NOTE)
     return 0
 
 
@@ -222,7 +224,10 @@ def tune(args: argparse.Namespace) -> int:
         return 1
     baseline, measured = summaries[0], summaries[1:]
     print(format_table(summaries))
-    print(f"profile saved: {save_model_profile(backend, baseline, measured)}")
+    if args.tasks:
+        print(PARTIAL_NOTE)
+    else:
+        print(f"profile saved: {save_model_profile(backend, baseline, measured)}")
     best = choose_best(baseline, measured)
     if best is None:
         print("\nrecommendation: keep your current settings (no candidate was clearly better).")

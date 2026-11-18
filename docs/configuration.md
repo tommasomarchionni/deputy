@@ -194,7 +194,9 @@ its own reasoning.
 ## The measured model profile
 
 `deputy bench` and `deputy tune` save what they measured for your model (pass rate, mean turns,
-seconds, and the model name the server answered with) in `~/.local/state/deputy/models/`. deputy
+seconds, and the model name the server answered with) in `~/.local/state/deputy/models/`, but only
+after a run of the whole suite: a run limited with `--tasks` keeps the profile, because one task is
+too noisy to set the turn limit and the time budget of every delegation. deputy
 uses it in two ways:
 
 - **Turn limit.** When a `delegate` call does not give `max_turns`, the limit is the measured mean
