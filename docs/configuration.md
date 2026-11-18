@@ -172,7 +172,10 @@ tool carries a one-line version of the last 7 days.
 
 Runs started by `deputy bench` and `deputy tune` are tagged `source: bench` in the trace and left out
 of the report by default, so it describes real work; older trace lines without a source count as real
-use (delete `runs.jsonl` for a clean start).
+use (delete `runs.jsonl` for a clean start). Savings are summed only for runs that record how they
+were estimated (`read` and `cost`): versions before 0.12 recorded a total from an estimate that
+could count a whole file for each search hit, so their runs still count as runs but not their
+saving, and the report says how many there were.
 
 ### How the saving is estimated
 

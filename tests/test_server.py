@@ -118,7 +118,7 @@ def _delegate_with_history(
         {
             "event": "run", "run_id": f"h{i}", "ts": now, "profile": "helper",
             "task_class": "helper:contains", "status": "ok", "flags": [], "metrics": {},
-            "saved_est": history_saved,
+            "saved_est": history_saved, "read_est": history_saved + 100, "cost_est": 100,
         }
         for i in range(6)
     ]  # fmt: skip

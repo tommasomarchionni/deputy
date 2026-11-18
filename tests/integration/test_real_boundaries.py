@@ -157,6 +157,8 @@ def test_the_status_tool_shows_the_usage_line_over_the_real_protocol(configured:
             "status": "ok",
             "metrics": {},
             "saved_est": 640,
+            "read_est": 740,
+            "cost_est": 100,
         }
     )
 
@@ -187,6 +189,8 @@ def test_the_status_tool_names_the_kinds_of_task_that_do_not_pay_off(configured:
                 "status": "ok",
                 "metrics": {},
                 "saved_est": 0,
+                "read_est": 100,
+                "cost_est": 100,
             }
         )
 

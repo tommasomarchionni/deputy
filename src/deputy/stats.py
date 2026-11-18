@@ -28,6 +28,7 @@ class Group:
     tokens_saved_est: int = 0
     read_est: int = 0
     cost_est: int = 0
+    estimated: int = 0  # runs that record how their saving was estimated (read and cost)
     seconds: float = 0.0
 
     @property
@@ -41,15 +42,15 @@ class Group:
 
     @property
     def mean_saved(self) -> float:
-        return self.tokens_saved_est / self.runs if self.runs else 0.0
+        return self.tokens_saved_est / self.estimated if self.estimated else 0.0
 
     @property
     def mean_read(self) -> float:
-        return self.read_est / self.runs if self.runs else 0.0
+        return self.read_est / self.estimated if self.estimated else 0.0
 
     @property
     def mean_cost(self) -> float:
-        return self.cost_est / self.runs if self.runs else 0.0
+        return self.cost_est / self.estimated if self.estimated else 0.0
 
     @property
     def mean_seconds(self) -> float:
@@ -115,9 +116,13 @@ def _add(group: Group, event: dict[str, Any], verdict: str | None) -> None:
     group.retried += bool(metrics.get("retries"))
     group.accepted += verdict == "accepted"
     group.rejected += verdict == "rejected"
-    group.tokens_saved_est += int(event.get("saved_est") or 0)
-    group.read_est += int(event.get("read_est") or 0)
-    group.cost_est += int(event.get("cost_est") or 0)
+    if "read_est" in event and "cost_est" in event:
+        # Older versions recorded only a total, from an estimate that could count a whole file
+        # per search hit (millions of tokens in one run): not comparable, so not summed.
+        group.estimated += 1
+        group.tokens_saved_est += int(event.get("saved_est") or 0)
+        group.read_est += int(event.get("read_est") or 0)
+        group.cost_est += int(event.get("cost_est") or 0)
     group.seconds += float(metrics.get("elapsed_s") or 0.0)
 
 
@@ -191,6 +196,9 @@ def format_report(report: Report) -> str:
         "  what the orchestrator paid (cost, per run: its request and the result); can be below 0",
         "esc = handed back to the orchestrator; accepted = share of judged runs (feedback)",
     ]
+    older = report.total.runs - report.total.estimated
+    if older:
+        lines.append(f"({older} run(s) from older versions are counted, but not their saving)")
     if report.unreadable_lines:
         lines.append(f"({report.unreadable_lines} unreadable trace line(s) were skipped)")
     return "\n".join(lines)
@@ -219,7 +227,7 @@ def advice_for(group: Group) -> Advice | None:
     if group.runs < MIN_RUNS_FOR_ADVICE:
         return None
     rate = group.escalated / group.runs
-    if group.mean_saved <= 0:
+    if group.estimated >= MIN_RUNS_FOR_ADVICE and group.mean_saved <= 0:
         reason = f"no net token saving (mean {group.mean_saved:.0f} per run)"
     elif rate > MAX_ESCALATION_RATE:
         reason = f"{rate:.0%} of runs were handed back to the orchestrator"
