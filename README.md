@@ -24,10 +24,10 @@ Claude Code; GitHub Copilot, Cursor and Codex are configured by the installer bu
 | Questions about git history (`git log`, `diff`, `show`, `blame`) | Searches that only list files: you would see the same list |
 | | Anything that needs a shell, the network or credentials |
 
-Measured on a real multi-app repository (6 read-heavy tasks, a local 27B worker, version 0.12):
-about 6,900 frontier tokens saved per task on average, from about 0 on the smallest task to about
-22,500 on a long summary. The checks passed on 5 of 6 tasks; the sixth was caught by its check and
-handed back (a search limit, fixed since).
+Measured on 21 everyday tasks on two real repositories, with a local 27B worker: every answer
+passed its checks and was confirmed correct by a frontier model (Claude Opus 5.5). The 11 reading
+tasks saved about 4,800 frontier tokens each and made 96 % of the saving; lookups and searches saved
+about nothing, so do those yourself.
 These are estimates (bytes / 4), and worker time is not free: minutes for long documents on a
 laptop. Details and limits: [evidence](docs/evidence.md).
 
