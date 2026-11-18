@@ -4,10 +4,10 @@
     Built: the measured model profile (written by `deputy bench`, read back for the turn limit and by
     `status`), the trace of every run and `feedback` (reported by `deputy stats`), and **lessons**
     derived from the trace (`deputy learn`, see
-    [configuration](configuration.md#lessons-learned-from-use)). Planned: project memory
-    ([#15](https://github.com/tommasomarchionni/deputy/issues/15)) and the ablation that drops
-    lessons that do not help ([#16](https://github.com/tommasomarchionni/deputy/issues/16)). The rest
-    of this page is the design.
+    [configuration](configuration.md#lessons-learned-from-use)). Lessons are tested
+    against the benchmark (`deputy lessons check`). Planned: project memory
+    ([#15](https://github.com/tommasomarchionni/deputy/issues/15)). The rest of this page is the
+    design.
 
 Does memory make sense? Yes, but narrowly. A model that is not trained on your project forgets
 everything between calls; the useful part of memory is what is **measured and verified**, not a

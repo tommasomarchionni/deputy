@@ -91,14 +91,18 @@
 # ---
 # name: test_each_command_help_is_stable[lessons]
   '''
-  usage: deputy lessons [-h] [{list,remove}] [id]
+  usage: deputy lessons [-h] [--backend BACKEND] [--runs RUNS] [--apply]
+                        [{list,remove,check}] [id]
   
   positional arguments:
-    {list,remove}
-    id             the lesson to remove (profile:check)
+    {list,remove,check}
+    id                   the lesson to remove (profile:check)
   
   options:
-    -h, --help     show this help message and exit
+    -h, --help           show this help message and exit
+    --backend BACKEND    check: the backend to test on
+    --runs RUNS          check: repetitions per side
+    --apply              check: remove the lessons that hurt
   
   '''
 # ---
