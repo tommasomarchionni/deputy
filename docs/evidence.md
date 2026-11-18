@@ -88,12 +88,12 @@ about 490 tokens.
 
 ## Where an agent's reading goes, and rtk
 
-`deputy discover` on 11 Claude Code sessions of one real repository: about 5.2 million tokens of
-tool results read by the orchestrator. Reads (files, searches, listings) were 62 %, and large reads,
-over about 1,000 tokens each, 30 % of everything: that is what delegation can take. Command output
-(git, gh, test runners) was 15 %.
+`deputy discover` on 11 Claude Code sessions and 250 subagents of one real repository: about 18.9
+million tokens of tool results read by the agents. Reads (files, searches, listings) were 71 %, and
+large reads, over about 1,000 tokens each, 50 % of everything: that is what delegation can take.
+Command output (git, gh, test runners) was 13 %.
 
-That 15 % is what [rtk](https://github.com/rtk-ai/rtk) (1.2.0, run unmodified) compresses. On
+That 13 % is what [rtk](https://github.com/rtk-ai/rtk) (1.2.0, run unmodified) compresses. On
 read-only commands of two real repositories:
 
 | Command | Raw | With rtk | Saved |
@@ -144,9 +144,10 @@ Qwen3.8 27B (Q4_K_M). Claude Opus 5.5 checked every passing answer against the s
 - **Time:** a median of 109 seconds per question on this laptop.
 
 **Where to start measuring your own use.** `deputy discover` on 30 days of real sessions of one
-repository: 768 large file reads (about 1.45 million tokens), of which 660 were not followed by an
-edit of the file (about 1.24 million tokens), against 17 delegations: an adoption of 2.5 %. About
-589,000 tokens went into reading an unchanged file again, 230,000 of them the very same part.
+repository, 11 main sessions and 249 subagents: 3,572 large file reads (about 8.5 million tokens),
+of which 3,148 were not followed by an edit of the file (about 7.5 million tokens), against 16
+delegations: an adoption of 0.5 %. Subagents did 2,601 of those reads (about 6.5 million tokens), so
+that is where a delegation can save the most.
 
 A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
 `deputy bench --compare` shows what changed between two nights.

@@ -64,8 +64,10 @@ class Report:
     total: Bucket = field(default_factory=Bucket)
     by_category: dict[str, Bucket] = field(default_factory=dict[str, Bucket])
     by_source: dict[str, Bucket] = field(default_factory=dict[str, Bucket])
-    delegations: int = 0  # calls of deputy's `delegate` tool, to compare with the large reads
+    delegations: int = 0  # calls of deputy's delegation tools, to compare with the large reads
     adoption: Adoption = field(default_factory=Adoption)
+    subagents: int = 0  # subagent transcripts read
+    subagent_adoption: Adoption = field(default_factory=Adoption)  # the part of `adoption` in them
 
     @property
     def adoption_rate(self) -> float:
@@ -75,8 +77,8 @@ class Report:
 
 
 def is_delegation(source: str) -> bool:
-    """A call of deputy's `delegate` tool, whatever name the agent gave the server."""
-    return "deputy" in source and source.endswith("delegate")
+    """A call of deputy's `delegate` or `digest`, whatever name the agent gave the server."""
+    return "deputy" in source and source.endswith(("delegate", "digest"))
 
 
 def transcripts_dir(project: Path) -> Path:
@@ -124,8 +126,9 @@ def category_of(source: str) -> str:
 
 
 def _results(lines: Iterable[str]) -> Iterator[tuple[str, int]]:
-    """(source, characters) for every tool result of one transcript."""
+    """(source, characters) for every tool result of one transcript, each counted once."""
     calls: dict[str, str] = {}
+    counted: set[str] = set()
     for line in lines:
         try:
             event: object = json.loads(line)
@@ -140,7 +143,8 @@ def _results(lines: Iterable[str]) -> Iterator[tuple[str, int]]:
                 calls[str(block.get("id"))] = source_of(
                     str(block.get("name")), _as_dict(block.get("input"))
                 )
-            elif block.get("type") == "tool_result":
+            elif block.get("type") == "tool_result" and block.get("tool_use_id") not in counted:
+                counted.add(str(block.get("tool_use_id")))
                 source = calls.get(str(block.get("tool_use_id")), "?")
                 yield source, _text_size(block.get("content"))
 
@@ -195,7 +199,7 @@ def _steps(lines: Iterable[str]) -> list[_Step]:
         content: object = _as_dict(event.get("message")).get("content")
         for raw in cast("list[object]", content) if isinstance(content, list) else []:
             block = _as_dict(raw)
-            if block.get("type") == "tool_use":
+            if block.get("type") == "tool_use" and str(block.get("id")) not in by_id:
                 arguments = _as_dict(block.get("input"))
                 step = _step_of(str(block.get("name")), arguments, str(event.get("cwd") or "/"))
                 by_id[str(block.get("id"))] = step
@@ -219,6 +223,18 @@ def _count_large_read(into: Adoption, steps: list[_Step], index: int, seen: set[
         into.again_tokens += size
         if all(read in seen for read in step.reads):
             into.same_part_tokens += size
+
+
+def _transcripts(folder: Path, since: float) -> tuple[list[Path], set[Path]]:
+    """The session transcripts of a project folder and, apart, those of their subagents."""
+    subagents = {f for f in folder.glob("*/subagents/*.jsonl") if f.stat().st_mtime >= since}
+    sessions = [f for f in sorted(folder.glob("*.jsonl")) if f.stat().st_mtime >= since]
+    return [*sessions, *sorted(subagents)], subagents
+
+
+def _merge(into: Adoption, part: Adoption) -> None:
+    for name, value in asdict(part).items():
+        setattr(into, name, getattr(into, name) + value)
 
 
 def _measure_adoption(into: Adoption, steps: list[_Step]) -> None:
@@ -245,8 +261,8 @@ def _add(bucket: Bucket, chars: int) -> None:
 
 def build_report(folder: Path, *, days: float, now: float | None = None) -> Report:
     since = (now if now is not None else time.time()) - days * 86_400
-    files = [f for f in sorted(folder.glob("*.jsonl")) if f.stat().st_mtime >= since]
-    report = Report(days=days, sessions=len(files))
+    files, subagents = _transcripts(folder, since)
+    report = Report(days=days, sessions=len(files) - len(subagents), subagents=len(subagents))
     report.by_category = {name: Bucket() for name in CATEGORIES}
     for path in files:
         with path.open(encoding="utf-8", errors="replace") as handle:
@@ -255,7 +271,11 @@ def build_report(folder: Path, *, days: float, now: float | None = None) -> Repo
                 _add(report.by_category[category_of(source)], chars)
                 _add(report.by_source.setdefault(source, Bucket()), chars)
             handle.seek(0)
-            _measure_adoption(report.adoption, _steps(handle))
+            part = Adoption()
+            _measure_adoption(part, _steps(handle))
+            _merge(report.adoption, part)
+            if path in subagents:
+                _merge(report.subagent_adoption, part)
     report.delegations = sum(
         b.results for name, b in report.by_source.items() if is_delegation(name)
     )
@@ -268,12 +288,15 @@ def _share(part: int, whole: int) -> str:
 
 def _adoption_lines(report: Report) -> list[str]:
     seen = report.adoption
+    agents = report.subagent_adoption
     return [
         f"Adoption: {report.adoption_rate:.1%} ({report.delegations} delegations; "
         f"{seen.delegable_reads} large file reads a delegation could have taken, "
         f"~{seen.delegable_tokens:,} tokens).",
         f"Large file reads: {seen.file_reads}, ~{seen.file_tokens:,} tokens; the others were "
         f"followed by an edit of the file within {EDIT_WINDOW} tool calls.",
+        f"Of the reads a delegation could have taken, subagents did {agents.delegable_reads} "
+        f"(~{agents.delegable_tokens:,} tokens) and the main sessions the rest.",
         f"Read again with no change or compaction in between: ~{seen.again_tokens:,} tokens, "
         f"~{seen.same_part_tokens:,} of them the very same part of the file.",
     ]
@@ -286,7 +309,8 @@ def format_report(report: Report, *, top: int = 8) -> str:
     reads = report.by_category["reads"]
     output = report.by_category["command output"]
     lines = [
-        f"{report.sessions} sessions, last {report.days:g} days: {total.results} tool results, "
+        f"{report.sessions} sessions and {report.subagents} subagents, last {report.days:g} days: "
+        f"{total.results} tool results, "
         f"~{total.tokens:,} tokens read by the orchestrator (bytes / 4, text only)",
         "",
         f"{'':<22}{'results':>9}{'tokens':>12}{'share':>7}{'large*':>9}{'in large':>11}",
