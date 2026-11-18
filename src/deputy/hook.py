@@ -19,6 +19,7 @@ from deputy import tokens
 
 # About 2,000 tokens: in real sessions about 1.5 % of reads, holding about 18 % of what was read.
 HINT_BYTES = 8_000
+HOOK_TIMEOUT_S = 5  # the hint must never hold a read for long
 HOOK_COMMAND = "deputy-hook"  # a light entry point: it runs before every read
 _EVENT = "PreToolUse"
 
@@ -96,9 +97,12 @@ def enable(path: Path | None = None) -> str:
     target = path or settings_path()
     settings = _load(target)
     entries = _entries(settings)
-    if any(_is_ours(e) for e in entries):
+    ours = {"type": "command", "command": HOOK_COMMAND, "timeout": HOOK_TIMEOUT_S}
+    current = [e for e in entries if _is_ours(e)]
+    if current and all(e.get("hooks") == [ours] for e in current):
         return f"the read hint is already on ({target})"
-    entries.append({"matcher": "Read", "hooks": [{"type": "command", "command": HOOK_COMMAND}]})
+    entries[:] = [e for e in entries if not _is_ours(e)]
+    entries.append({"matcher": "Read", "hooks": [ours]})
     _write(target, settings)
     return (
         f"read hint on: Claude Code will suggest delegating large reads ({target}); "
