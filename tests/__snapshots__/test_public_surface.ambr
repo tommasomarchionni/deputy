@@ -53,6 +53,18 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[hook]
+  '''
+  usage: deputy hook [-h] {on,off,status,read-hint}
+  
+  positional arguments:
+    {on,off,status,read-hint}
+  
+  options:
+    -h, --help            show this help message and exit
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[init]
   '''
   usage: deputy init [-h] [--name NAME] [--url URL] [--model MODEL]
@@ -72,7 +84,8 @@
 # ---
 # name: test_each_command_help_is_stable[install]
   '''
-  usage: deputy install [-h] [--apply] {claude-code,vscode,cursor,codex,generic}
+  usage: deputy install [-h] [--apply] [--no-hook]
+                        {claude-code,vscode,cursor,codex,generic}
   
   positional arguments:
     {claude-code,vscode,cursor,codex,generic}
@@ -80,6 +93,8 @@
   options:
     -h, --help            show this help message and exit
     --apply               do it instead of printing
+    --no-hook             claude-code: do not add the hint that suggests
+                          delegating large reads
   
   '''
 # ---
@@ -246,6 +261,7 @@
     'bench',
     'discover',
     'doctor',
+    'hook',
     'init',
     'install',
     'instructions',

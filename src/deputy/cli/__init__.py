@@ -7,6 +7,7 @@ import argparse
 from deputy.cli import (
     connect,
     discover,
+    hook,
     memory,
     optimise,
     serve,
@@ -25,6 +26,7 @@ _COMMAND_MODULES = (
     tuning,
     stats,
     discover,
+    hook,
     lessons_cli,
     memory,
     optimise,
