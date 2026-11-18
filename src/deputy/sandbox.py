@@ -167,6 +167,11 @@ def _open_regular(
     return descriptor, info
 
 
+def read_lines(path: Path) -> list[str]:
+    """The lines of a text file inside the sandbox, read with the same safety as `read_file`."""
+    return _read_text(path).splitlines()
+
+
 def _read_text(path: Path) -> str:
     """Read a UTF-8 text file; files larger than the cap are refused."""
     descriptor, info = _open_regular(path, os.O_RDONLY)
