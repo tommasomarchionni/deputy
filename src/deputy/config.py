@@ -65,6 +65,14 @@ class Policy(BaseModel):
         description="argv prefixes a `command` check may run, e.g. [['node','--test']]",
     )
     command_timeout_s: float = 120.0
+    run_budget_s: float = Field(
+        default=900.0,
+        ge=0,
+        description=(
+            "the least time one delegation may take before it is stopped; a measured slow model "
+            "gets more (20 times its measured time per task); 0 means no limit"
+        ),
+    )
     command_wrapper: list[str] = Field(
         default_factory=list[str],
         description="argv prefix that confines every `command` check; {workdir} is replaced",

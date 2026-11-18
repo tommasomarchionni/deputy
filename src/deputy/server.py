@@ -28,7 +28,7 @@ from deputy import (
 from deputy.agent import Outcome, Result, outcome_of, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
-from deputy.config import Backend, Config, ConfigError, load_config
+from deputy.config import Backend, Config, ConfigError, Policy, load_config
 from deputy.model_profiles import ModelProfile
 from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
@@ -84,6 +84,12 @@ def _setup_error(run_id: str, message: str) -> Result:
     return Result(run_id=run_id, status="error", answer=message, flags=["setup_error"])
 
 
+def _with_run_budget(policy: Policy, measured: ModelProfile | None) -> Policy:
+    """The policy with the time budget this model needs (see `model_profiles.run_budget`)."""
+    budget = model_profiles.run_budget(policy.run_budget_s, measured)
+    return policy.model_copy(update={"run_budget_s": budget})
+
+
 def _turn_limit(prepared: _Delegation, explicit: int | None, measured: ModelProfile | None) -> int:
     """The turn limit: what the caller asked for, else the profile's, else what was measured for
     this model, else the default."""
@@ -114,6 +120,7 @@ async def _run_on(
     prepared: _Delegation, candidate: router.Candidate, route: str, args: _Request
 ) -> Result:
     backend = candidate.backend
+    measured = model_profiles.load_profile(backend)
     client = ChatClient(backend)
     try:
         return await run_task(
@@ -122,8 +129,8 @@ async def _run_on(
             task=args.task,
             sandbox=prepared.sandbox,
             checks=prepared.checks,
-            policy=prepared.config.policy,
-            max_turns=_turn_limit(prepared, args.max_turns, model_profiles.load_profile(backend)),
+            policy=_with_run_budget(prepared.config.policy, measured),
+            max_turns=_turn_limit(prepared, args.max_turns, measured),
             max_retries=DEFAULT_RETRIES
             if prepared.profile.max_retries is None
             else prepared.profile.max_retries,
