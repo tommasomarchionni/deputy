@@ -1,11 +1,15 @@
 changelog:
   exclude:
-    labels: [skip-changelog]
+    labels: [dependencies, github_actions]
     authors: [dependabot]
   categories:
     - title: "Features"
-      labels: [enhancement]
+      labels: ["type: feature"]
     - title: "Fixes"
-      labels: [bug]
+      labels: ["type: bug"]
+    - title: "Security"
+      labels: ["type: security"]
+    - title: "Documentation"
+      labels: ["type: docs"]
     - title: "Other changes"
       labels: ["*"]
