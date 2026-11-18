@@ -29,6 +29,7 @@ from deputy.sandbox import Sandbox
 
 DECOY = "DECOY-VALUE-123"  # synthetic: planted to prove the worker cannot read a hidden file
 NEEDLE_LINE = 540
+BENCH_SOURCE = "bench"  # marks benchmark runs in the trace, so usage statistics can skip them
 NOTICE_IT = (
     "Il file runner_labels.py rifiuta pull_request_target dopo 30 giorni, "
     "come deciso nella issue #415.\n"
@@ -280,6 +281,7 @@ async def run_suite(  # noqa: PLR0913
                         policy=_policy_for(task, policy),
                         max_turns=variant.max_turns,
                         max_retries=0,
+                        source=BENCH_SOURCE,
                     )
                 finally:
                     await client.aclose()

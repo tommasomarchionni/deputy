@@ -132,7 +132,9 @@ class AgentRun:
         policy: Policy,
         max_turns: int,
         max_retries: int,
+        source: str,
     ) -> None:
+        self._source = source
         self._client = client
         self._profile = profile
         self._task = task
@@ -235,6 +237,7 @@ class AgentRun:
                 "event": "run",
                 "run_id": result.run_id,
                 "profile": self._profile.name,
+                "source": self._source,
                 "task_class": task_class(self._profile.name, self._checks),
                 "status": result.status,
                 "flags": result.flags,
@@ -255,8 +258,12 @@ async def run_task(  # noqa: PLR0913
     policy: Policy,
     max_turns: int = 8,
     max_retries: int = 1,
+    source: str = "mcp",
 ) -> Result:
-    """Delegate `task` to the worker behind `client` and return the verified result."""
+    """Delegate `task` to the worker behind `client` and return the verified result.
+
+    `source` says who asked: "mcp" for real use, "bench" for the benchmark, so that statistics can
+    tell them apart."""
     return await AgentRun(
         client=client,
         profile=profile,
@@ -266,4 +273,5 @@ async def run_task(  # noqa: PLR0913
         policy=policy,
         max_turns=max_turns,
         max_retries=max_retries,
+        source=source,
     ).execute()
