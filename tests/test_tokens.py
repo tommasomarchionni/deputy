@@ -108,4 +108,5 @@ def test_a_trace_line_from_before_the_accounting_still_counts() -> None:
     legacy = {"event": "run", "run_id": "x", "ts": 1e9, "profile": "helper", "status": "ok",
               "metrics": {}, "saved_est": 50}  # fmt: skip
     total = stats.build_report([legacy], days=1e6, now=1e9 + 10).total
-    assert (total.mean_read, total.mean_cost, total.tokens_saved_est) == (0, 0, 50)
+    assert total.runs == 1
+    assert (total.mean_read, total.mean_cost, total.tokens_saved_est) == (0, 0, 0)

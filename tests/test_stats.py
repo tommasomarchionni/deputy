@@ -36,6 +36,7 @@ def run_event(
     return {
         "event": "run", "run_id": run_id, "ts": NOW - age_days * DAY, "profile": profile,
         "task_class": task_class_, "status": status, "flags": flags or [], "saved_est": saved,
+        "read_est": max(saved, 0) + 100, "cost_est": max(saved, 0) + 100 - saved,
         "metrics": {"retries": retries, "elapsed_s": elapsed},
     }  # fmt: skip
 
@@ -89,7 +90,9 @@ def test_old_trace_lines_without_the_new_fields_still_count() -> None:
               "metrics": {"elapsed_s": 5}, "saved_est": 50}  # fmt: skip
     report = stats.build_report([legacy], days=30, now=NOW)
     assert report.by_class[0].key == "helper:unknown"
-    assert report.total.tokens_saved_est == 50
+    assert report.total.runs == 1  # still counted as a run
+    assert report.total.tokens_saved_est == 0  # but its old, not comparable estimate is not summed
+    assert "1 run(s) from older versions" in stats.format_report(report)
 
 
 def test_the_task_class_names_the_profile_and_the_kinds_of_checks() -> None:
@@ -141,7 +144,7 @@ def test_the_text_report_has_the_numbers_and_says_when_there_is_nothing() -> Non
 def test_the_status_line_is_absent_without_runs_and_short_with_them() -> None:
     assert stats.usage_line() is None
     runs.record({"event": "run", "run_id": "a", "profile": "helper", "status": "ok",
-                 "metrics": {}, "saved_est": 700})  # fmt: skip
+                 "metrics": {}, "saved_est": 700, "read_est": 800, "cost_est": 100})  # fmt: skip
     line = stats.usage_line()
     assert line is not None
     assert "1 runs" in line
@@ -151,7 +154,7 @@ def test_the_status_line_is_absent_without_runs_and_short_with_them() -> None:
 def test_the_stats_command_prints_a_table_and_json(capsys: pytest.CaptureFixture[str]) -> None:
     runs.record({"event": "run", "run_id": "a", "profile": "helper", "status": "ok",
                  "task_class": "helper:contains", "metrics": {"elapsed_s": 3},
-                 "saved_est": 90})  # fmt: skip
+                 "saved_est": 90, "read_est": 190, "cost_est": 100})  # fmt: skip
     assert cli.main(["stats"]) == 0
     assert "helper:contains" in capsys.readouterr().out
     assert cli.main(["stats", "--days", "1", "--json"]) == 0
@@ -287,3 +290,13 @@ def test_the_advice_is_found_by_class_and_listed_for_the_status_tool() -> None:
     (line,) = stats.advice_lines()
     assert line.startswith("helper:contains: 6 runs, no net token saving")
     assert line.endswith("do these yourself")
+
+
+def test_an_old_inflated_run_does_not_swamp_the_saving() -> None:
+    # The real case: one run from an old version reported 34,705,913 tokens with no breakdown.
+    old = {"event": "run", "run_id": "old", "ts": NOW, "profile": "helper", "status": "ok",
+           "metrics": {}, "saved_est": 34_705_913}  # fmt: skip
+    report = stats.build_report([old, run_event("new", saved=4_000)], days=30, now=NOW)
+    assert report.total.runs == 2
+    assert report.total.tokens_saved_est == 4_000
+    assert report.total.mean_saved == 4_000
