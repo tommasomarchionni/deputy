@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from deputy.agent import TOOLS
 from deputy.config import config_dir
 from deputy.profiles import load_profiles, parse_profile
 
@@ -58,3 +59,9 @@ def test_a_profile_can_set_its_limits_and_a_bad_value_is_ignored_with_a_reason(
 def test_the_bundled_profile_keeps_the_default_limits() -> None:
     helper = load_profiles()["helper"]
     assert (helper.max_turns, helper.max_retries, helper.problems) == (None, None, ())
+
+
+def test_the_bundled_profile_names_every_worker_tool() -> None:
+    text = load_profiles()["helper"].body
+    for tool in TOOLS:
+        assert f"`{tool['function']['name']}`" in text
