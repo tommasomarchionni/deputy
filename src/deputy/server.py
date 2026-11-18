@@ -10,7 +10,7 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import runs, updates
+from deputy import runs, stats, updates
 from deputy.agent import Result, run_task
 from deputy.backends import ChatClient
 from deputy.checks import CheckSpec, to_check
@@ -82,6 +82,9 @@ def build_server() -> MCPServer:
             finally:
                 await client.aclose()
             out[backend.name] = ("up: " if ok else "down: ") + detail
+        usage = stats.usage_line()
+        if usage:
+            out["usage"] = usage
         if config.auto_update != "off":
             info = await asyncio.to_thread(updates.check)
             if info.available:
