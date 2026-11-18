@@ -31,5 +31,5 @@ Then read [Install and connect an agent](install.md).
 
 ## Status
 
-Alpha. The server, installer, checks, benchmark and tuning commands work and are tested; routing is planned: see the [roadmap](roadmap.md) and
+Alpha. The server, installer, checks, benchmark and tuning commands work and are tested; the next work is real-app verification and the offline optimiser: see the [roadmap](roadmap.md) and
 [how deputy improves](self-improvement.md) for what exists today.

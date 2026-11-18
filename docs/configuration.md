@@ -9,6 +9,7 @@
 default_backend = "local"
 auto_tune = "propose"                # off | propose | apply, see "Tuning" below
 auto_update = "notify"               # off | notify | apply, see "Updates" below
+routing = "auto"                     # off | auto, see "Routing" below
 
 [[backends]]
 name = "local"
@@ -214,6 +215,19 @@ an answer or a file; at most 3 lessons are added to a prompt, only for the profi
 checks the task asks for; a lesson expires after 14 days and is re-derived only while the evidence
 still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
 `deputy stats` and the benchmark can tell whether they help.
+
+## Routing
+
+With more than one `[[backends]]`, `delegate` without a `backend` argument chooses one. Rules, in
+order: never a more expensive or less private kind than the default backend (a local default only
+uses local backends; a `hosted` default may fall back to local ones); local before hosted; measured
+to pass (`deputy bench` or `tune` ran, at least 50% passed) before not measured before measured to
+fail; the faster measured time first; then the default backend, then the order of the file. The
+backends are probed (3 seconds) in that order: a silent one is skipped, and a run that ends in a
+backend error moves on to the next. The choice and the reason are written to the trace as `route`.
+
+`routing = "off"` always uses `default_backend`, with no fallback; naming a `backend` in the call
+does the same for that call. With one backend nothing is probed and nothing changes.
 
 ## Project memory
 
