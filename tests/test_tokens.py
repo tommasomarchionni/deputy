@@ -110,3 +110,17 @@ def test_a_trace_line_from_before_the_accounting_still_counts() -> None:
     total = stats.build_report([legacy], days=1e6, now=1e9 + 10).total
     assert total.runs == 1
     assert (total.mean_read, total.mean_cost, total.tokens_saved_est) == (0, 0, 0)
+
+
+def test_a_failed_run_records_a_loss_of_its_cost(fake_client, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "a.txt").write_text("alpha line\n" * 2000)
+    script = [
+        message(tool_calls=[tool_call("read_file", {"path": "a.txt", "limit": 2000})]),
+        message("no"),
+        message("still no"),
+    ]
+    result = run(fake_client, tmp_path, script, request_tokens=300)  # neither answer says "alpha"
+    event = last_run()
+    assert result.status == "checks_failed"
+    assert event["read_est"] > 5000  # it read a lot
+    assert result.orchestrator_tokens_saved_est == event["saved_est"] == -event["cost_est"]

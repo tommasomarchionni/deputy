@@ -250,6 +250,12 @@ def excerpt_of_failed(answer: str) -> str:
     return answer[:FAILED_ANSWER_CHARS] + "\n[...cut: this answer failed its checks]"
 
 
+def saving(status: str, read: int, cost: int) -> int:
+    """What a delegation spared the orchestrator. Only a run that ended `ok` spared the reading;
+    any other outcome means the orchestrator does the task itself, so it only lost the cost."""
+    return read - cost if status == "ok" else -cost
+
+
 def task_class(profile: str, checks: list[Check]) -> str:
     """Group runs that ask for the same kind of work: the profile and the kinds of checks."""
     kinds = sorted({check.type for check in checks})
@@ -421,7 +427,9 @@ class AgentRun:
         self._cost_tokens = self._request_tokens + tokens.estimate(
             outcome_of(result).model_dump_json(exclude_none=True)
         )
-        result.orchestrator_tokens_saved_est = self._read_tokens - self._cost_tokens
+        result.orchestrator_tokens_saved_est = saving(
+            result.status, self._read_tokens, self._cost_tokens
+        )
         return result
 
     def _record(self, result: Result) -> None:

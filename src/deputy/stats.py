@@ -120,7 +120,8 @@ def _add(group: Group, event: dict[str, Any], verdict: str | None) -> None:
         # Older versions recorded only a total, from an estimate that could count a whole file
         # per search hit (millions of tokens in one run): not comparable, so not summed.
         group.estimated += 1
-        group.tokens_saved_est += int(event.get("saved_est") or 0)
+        read, cost = int(event.get("read_est") or 0), int(event.get("cost_est") or 0)
+        group.tokens_saved_est += read - cost if event.get("status") == "ok" else -cost
         group.read_est += int(event.get("read_est") or 0)
         group.cost_est += int(event.get("cost_est") or 0)
     group.seconds += float(metrics.get("elapsed_s") or 0.0)

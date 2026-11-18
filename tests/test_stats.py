@@ -57,7 +57,8 @@ def test_the_report_counts_outcomes_acceptance_and_savings() -> None:
     assert (total.runs, total.ok, total.escalated, total.retried) == (3, 2, 1, 1)
     assert (total.accepted, total.rejected) == (1, 1)
     assert total.acceptance_rate == 0.5
-    assert total.tokens_saved_est == 400
+    # The failed run spared nothing: it counts as minus its cost (100 in run_event), a loss.
+    assert total.tokens_saved_est == 300 + 100 - 100
     assert total.pass_rate == pytest.approx(2 / 3)
     assert total.mean_seconds == pytest.approx(40 / 3)
 
@@ -179,7 +180,8 @@ def test_the_totals_always_add_up(items) -> None:  # type: ignore[no-untyped-def
     report = stats.build_report(events, days=30, now=NOW)
     assert report.total.runs == len(items)
     assert report.total.ok == sum(1 for status, _, _ in items if status == "ok")
-    assert report.total.tokens_saved_est == sum(saved for _, saved, _ in items)
+    expected = sum(saved if status == "ok" else -100 for status, saved, _ in items)
+    assert report.total.tokens_saved_est == expected  # a failed run counts as minus its cost
     assert sum(g.runs for g in report.by_profile) == report.total.runs
     assert sum(g.runs for g in report.by_class) == report.total.runs
     assert report.total.accepted + report.total.rejected == sum(1 for _, _, v in items if v)
@@ -300,3 +302,11 @@ def test_an_old_inflated_run_does_not_swamp_the_saving() -> None:
     assert report.total.runs == 2
     assert report.total.tokens_saved_est == 4_000
     assert report.total.mean_saved == 4_000
+
+
+def test_a_handed_back_run_is_a_loss_even_if_it_read_a_lot() -> None:
+    # The real case: a summary handed back after reading 8,754 tokens was shown as +8,526.
+    failed = run_event("x", status="checks_failed", flags=["needs_frontier"], saved=8_526)
+    failed["read_est"], failed["cost_est"] = 8_754, 228
+    report = stats.build_report([failed], days=30, now=NOW)
+    assert report.total.tokens_saved_est == -228
