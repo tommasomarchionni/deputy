@@ -23,11 +23,12 @@ def structured(result: Any) -> dict[str, Any]:
     return result.structured_content
 
 
-def test_exposes_exactly_five_small_tools() -> None:
+def test_exposes_exactly_six_small_tools() -> None:
     tools = asyncio.run(build_server().list_tools())
     assert sorted(t.name for t in tools) == [
         "collect",
         "delegate",
+        "digest",
         "feedback",
         "profiles",
         "status",
@@ -311,3 +312,74 @@ def test_a_passing_result_sent_over_the_tool_call_has_no_empty_fields(
         )
     )
     assert set(structured(out)) == {"run_id", "status", "answer", "checks"}
+
+
+def _digest(tmp_path: Path, **overrides: object) -> dict:
+    arguments = {"files": ["a.md"], "question": "What is beta?", "workdir": str(tmp_path)}
+    out: Any = asyncio.run(build_server().call_tool("digest", {**arguments, **overrides}))
+    return json.loads(out.content[0].text)
+
+
+def test_digest_answers_with_proven_citations(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    (tmp_path / "a.md").write_text("alpha\nbeta is the second letter\n")
+    script = [
+        message(tool_calls=[tool_call("read_file", {"path": "a.md"})]),
+        message('- beta comes second (a.md:2 "beta is the second letter")'),
+    ]
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client(script))
+    data = _digest(tmp_path)
+    assert data["status"] == "ok"
+    assert data["checks"] == "2/2 passed"
+
+
+def test_digest_hands_back_an_answer_quoting_words_the_line_does_not_hold(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    (tmp_path / "a.md").write_text("alpha\nbeta is the second letter\n")
+    wrong = message('- beta comes first (a.md:1 "beta is the first letter")')
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client([wrong, wrong]))
+    data = _digest(tmp_path)
+    assert data["status"] == "checks_failed"
+    assert "needs_frontier" in data["flags"]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    [
+        ({"files": ["missing.md"]}, "not a file"),
+        ({"files": ["../outside.md"]}, "outside the working directory"),
+        ({"files": [".env"]}, "not accessible"),
+        ({"files": ["image.bin"]}, "not a UTF-8 text file"),
+        ({"files": ["empty.md"]}, "empty file"),
+        ({"files": []}, "between 1 and 8"),
+        ({"files": ["a.md"] * 9}, "between 1 and 8"),
+        ({"question": "  "}, "question is empty"),
+    ],
+)
+def test_digest_refuses_bad_requests_before_any_model_call(
+    tmp_path: Path,
+    monkeypatch,  # type: ignore[no-untyped-def]
+    overrides: dict,
+    expected: str,
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    (tmp_path / "a.md").write_text("alpha\n")
+    (tmp_path / "empty.md").write_text("")
+    (tmp_path / ".env").write_text("KEY=1\n")
+    (tmp_path / "image.bin").write_bytes(b"\xff\xfe\x00\x01")
+
+    def no_model(backend: object) -> None:
+        raise AssertionError("no model may be called")
+
+    monkeypatch.setattr(server, "ChatClient", no_model)
+    data = _digest(tmp_path, **overrides)
+    assert data["status"] == "error"
+    assert expected in data["answer"]
