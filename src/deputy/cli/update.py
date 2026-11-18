@@ -22,7 +22,7 @@ def run(args: argparse.Namespace) -> int:
     if args.check:
         return 0
     try:
-        print(updates.upgrade(info.latest))
+        print(updates.upgrade(info.latest, require_verified=args.require_verified))
     except updates.UpdateError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -40,7 +40,8 @@ def apply_if_opted_in() -> str | None:
         info = updates.check()
         if not info.compatible or info.latest is None:
             return None
-        return updates.upgrade(info.latest)
+        # Nobody is watching: an automatic update installs only what it could verify.
+        return updates.upgrade(info.latest, require_verified=True)
     except (ConfigError, updates.UpdateError) as exc:
         return f"auto-update skipped: {exc}"
 
@@ -48,4 +49,9 @@ def apply_if_opted_in() -> str | None:
 def register(sub: Subparsers) -> None:
     parser = sub.add_parser("update", help="check for a newer release and upgrade")
     parser.add_argument("--check", action="store_true", help="only look, change nothing")
+    parser.add_argument(
+        "--require-verified",
+        action="store_true",
+        help="refuse unless the release provenance could be verified (needs gh, logged in)",
+    )
     parser.set_defaults(func=run)

@@ -93,8 +93,25 @@ release" of this repository, at most once a day (cached; one hour after a failur
   version; while the major is 0, the same minor too, because a new 0.x minor may break things).
   A new major version is never installed without you. The new version runs from the next start.
 
-`deputy update --check` only looks; `deputy update` upgrades now (it installs the released wheel with
-`uv tool install`, so you can always go back with `DEPUTY_REF=<tag> sh install.sh`).
+`deputy update --check` only looks; `deputy update` upgrades now.
+
+**What an update does.** It downloads the released wheel, checks where it was built, and only then
+installs it:
+
+1. the wheel is fetched from the GitHub release (and refused if it is far larger than a deputy
+   release);
+2. its **build provenance** is verified with `gh attestation verify`: the release workflow of this
+   repository attests every wheel, so a match proves it was built there from a tagged commit and was
+   not swapped afterwards;
+3. if the check **fails**, nothing is installed, always;
+4. if the check **cannot be done** (the GitHub CLI `gh` is missing or not logged in), a manual
+   `deputy update` goes ahead and says plainly *"provenance NOT verified"* and why; add
+   `--require-verified` to refuse instead. An **automatic** update (`auto_update = "apply"`) always
+   requires verification: with nobody watching, it installs only what it could verify.
+
+You can go back to any release with `DEPUTY_REF=<tag> sh install.sh`. The installer itself does not
+verify provenance; to check a release by hand: `gh release download <tag> -R tommasomarchionni/deputy`
+then `gh attestation verify <file>.whl -R tommasomarchionni/deputy`.
 
 ## Usage report
 

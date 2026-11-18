@@ -144,11 +144,13 @@
 # ---
 # name: test_each_command_help_is_stable[update]
   '''
-  usage: deputy update [-h] [--check]
+  usage: deputy update [-h] [--check] [--require-verified]
   
   options:
-    -h, --help  show this help message and exit
-    --check     only look, change nothing
+    -h, --help          show this help message and exit
+    --check             only look, change nothing
+    --require-verified  refuse unless the release provenance could be verified
+                        (needs gh, logged in)
   
   '''
 # ---
