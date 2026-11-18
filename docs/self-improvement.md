@@ -62,9 +62,11 @@ the orchestrator does the task. Bounded retries, bounded turns.
   | `short-with-facts` | a short answer that still holds the facts | `contains`, `max_chars` |
   | `translate-keep-terms` | translates and keeps numbers and identifiers | `file_written`, `file_contains` |
   | `write-passing-test` | writes a test that really passes (opt-in, runs code) | `file_contains`, `command` |
+  | `count-in-huge-file` | aggregates over a 140 KB log, larger than the context (opt-in, slow) | `contains` |
 
   `write-passing-test` runs the model's code on your machine (in a temporary directory, with a
-  minimal environment and a 30 second limit), so it only runs with `--run-code`.
+  minimal environment and a 30 second limit), so it only runs with `--run-code`. `count-in-huge-file` takes minutes on a local model, so it only
+  runs with `deputy bench --slow` (never in `tune` or in lesson checks).
   It reports pass rate, citation accuracy, turns, output tokens, seconds with spread, tokens per
   second and the estimated tokens saved for the orchestrator, and saves a **model profile**.
 - `deputy tune` runs the suite for your settings and for candidates (thinking off, shorter output,
