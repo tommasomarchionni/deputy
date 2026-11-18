@@ -19,6 +19,7 @@ dependencies = [
   "mcp>=2.3,<3",
   "httpx>=0.28,<1",
   "pydantic>=2.11,<3",
+  "regex>=2026.11.15",
 ]
 
 [project.urls]

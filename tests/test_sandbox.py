@@ -1,10 +1,21 @@
 # pyright: basic
+import contextlib
 import os
+import time
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
-from deputy.sandbox import Sandbox, SandboxError, _read_text, _write_text
+from deputy.sandbox import (
+    MAX_LINE_CHARS,
+    MAX_PATTERN_CHARS,
+    Sandbox,
+    SandboxError,
+    _read_text,
+    _write_text,
+)
 
 
 def make(tmp_path: Path) -> Sandbox:
@@ -196,3 +207,67 @@ def test_ordinary_names_that_resemble_secrets_are_still_readable(tmp_path: Path)
     for name in ("environment.md", "keys.md", "credits.txt", "gitignore.txt", "secretary.md"):
         (box.root / name).write_text("fine\n")
         assert "fine" in box.read_file(name)
+
+
+CATASTROPHIC = ["(a+)+$", "(a|aa)+$", "(.*)*x", "([a-z]+)*$", "(a*)*b"]
+
+
+@pytest.mark.parametrize("pattern", CATASTROPHIC)
+def test_a_catastrophic_pattern_never_hangs(tmp_path: Path, pattern: str) -> None:
+    """With Python's `re` each of these takes longer than the age of the universe on this line;
+    the regex engine either finishes at once (it optimises some of them) or is cut by the limit."""
+    box = make(tmp_path)
+    (box.root / "victim.txt").write_text("a" * 60 + "!\n")
+    started = time.monotonic()
+    with contextlib.suppress(SandboxError):  # either answer is fine; hanging is not
+        box.grep(pattern)
+    assert time.monotonic() - started < 2.0
+
+
+def test_a_pattern_that_takes_too_long_is_reported_to_the_worker(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "victim.txt").write_text("a" * 60 + "!\n")
+    with pytest.raises(SandboxError, match="too slow"):
+        box.grep("(a|aa)+$")
+
+
+def test_ordinary_patterns_behave_as_before(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "a.log").write_text("ERROR code=CODE-7431 after retry\nINFO fine\n")
+    assert box.grep(r"CODE-\d+") == "a.log:1: ERROR code=CODE-7431 after retry"
+    assert box.grep(r"^INFO") == "a.log:2: INFO fine"
+    assert box.grep("nothing") == "no matches"
+    with pytest.raises(SandboxError, match="invalid pattern"):
+        box.grep("(")
+
+
+def test_a_very_long_pattern_is_refused(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    with pytest.raises(SandboxError, match="too long"):
+        box.grep("a" * (MAX_PATTERN_CHARS + 1))
+
+
+def test_a_long_line_is_cut_before_matching(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "wide.txt").write_text(
+        "x" * (MAX_LINE_CHARS + 50) + "NEEDLE\n" + "NEEDLE at the start\n"
+    )
+    assert box.grep("NEEDLE") == "wide.txt:2: NEEDLE at the start"
+
+
+def test_a_whole_search_has_a_time_budget(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("deputy.sandbox.GREP_BUDGET_S", -1.0)  # already spent
+    box = make(tmp_path)
+    (box.root / "a.txt").write_text("needle\n" * 10)
+    assert "time budget" in box.grep("needle")
+
+
+@given(st.sampled_from(CATASTROPHIC), st.integers(min_value=1, max_value=200))
+@settings(deadline=2000, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_no_catastrophic_pattern_on_any_line_length_takes_long(
+    tmp_path: Path, pattern: str, length: int
+) -> None:
+    box = make(tmp_path) if not (tmp_path / "work").exists() else Sandbox(tmp_path / "work")
+    (box.root / "line.txt").write_text("a" * length + "!\n")
+    with contextlib.suppress(SandboxError):
+        box.grep(pattern)
