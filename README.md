@@ -13,8 +13,9 @@ task, such as "summarise this 900-line document" or "what changed in the last te
 the task on a cheaper model (a local llama.cpp or Ollama model, or any OpenAI-compatible API),
 checks the answer with code, and returns a short result. Your agent reads the answer, not the files.
 
-**Status: alpha.** It works end to end and is tested; expect breaking changes. Verified with
-Claude Code; GitHub Copilot, Cursor and Codex are configured by the installer but not yet verified.
+**Status: alpha, in daily use.** It works end to end, is tested and measured on real repositories,
+and is used to develop a real multi-app project. Expect breaking changes. Verified with Claude Code;
+GitHub Copilot, Cursor and Codex are configured by the installer but not yet verified.
 
 ## When it pays, and when it does not
 
