@@ -123,3 +123,15 @@ def test_off_also_removes_an_entry_written_with_the_long_command(tmp_path: Path)
     settings.write_text(json.dumps({"hooks": {"PreToolUse": [old]}}))
     hook.disable(settings)
     assert json.loads(settings.read_text()) == {}
+
+
+def test_the_hook_entry_has_a_short_timeout_and_on_upgrades_an_old_entry(tmp_path: Path) -> None:
+    settings = tmp_path / "settings.json"
+    old = {"matcher": "Read", "hooks": [{"type": "command", "command": "deputy-hook"}]}
+    settings.write_text(json.dumps({"hooks": {"PreToolUse": [old]}}))
+    hook.enable(settings)
+    entries = json.loads(settings.read_text())["hooks"]["PreToolUse"]
+    assert entries == [
+        {"matcher": "Read", "hooks": [{"type": "command", "command": "deputy-hook", "timeout": 5}]}
+    ]
+    assert "already on" in hook.enable(settings)
