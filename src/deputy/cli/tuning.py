@@ -7,7 +7,9 @@ import asyncio
 import json
 import sys
 from collections.abc import Callable
+from pathlib import Path
 
+from deputy import taskfile
 from deputy.agent import Result
 from deputy.bench import (
     QUICK_TASKS,
@@ -22,6 +24,7 @@ from deputy.bench import (
 )
 from deputy.cli._common import Subparsers
 from deputy.config import Backend, Config, ConfigError, load_config
+from deputy.sandbox import SandboxError
 from deputy.tune import revert_tuned, save_model_profile, tuned_path, write_tuned
 
 THINKING_HINT = (
@@ -104,7 +107,30 @@ async def _measure(
     return backend, summaries
 
 
+def _bench_file(args: argparse.Namespace) -> int:
+    """Run the tasks of a file in a folder of the user's choice (`--tasks-file`, `--workdir`)."""
+    try:
+        config = load_config()
+        tasks = taskfile.load_tasks(Path(args.tasks_file))
+        rows = asyncio.run(
+            taskfile.run_tasks(
+                tasks,
+                Path(args.workdir),
+                config.backend(args.backend),
+                policy=config.policy,
+                on_row=lambda r: print(f"  {r.name:<24}{r.status}", file=sys.stderr, flush=True),
+            )
+        )
+    except (ConfigError, SandboxError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(taskfile.format_rows(rows))
+    return 0
+
+
 def bench(args: argparse.Namespace) -> int:
+    if args.tasks_file:
+        return _bench_file(args)
     try:
         raw: list[str] = args.variant or []
         extra = [parse_variant(v) for v in raw]
@@ -249,6 +275,10 @@ def register(sub: Subparsers) -> None:
                 help="also run tasks that take minutes (a file larger than the context)",
             )
             parser.add_argument("--variant", action="append", help="extra setting: NAME=JSON")
+            parser.add_argument(
+                "--tasks-file", help="run the tasks of this TOML file on your own folder"
+            )
+            parser.add_argument("--workdir", default=".", help="folder for --tasks-file")
             parser.add_argument("--json", action="store_true", help="print JSON, not a table")
         else:
             parser.add_argument("--apply", action="store_true", help="write the winner")
