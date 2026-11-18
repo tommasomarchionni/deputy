@@ -117,5 +117,110 @@ def test_delegations_to_deputy_are_counted_next_to_the_large_reads(tmp_path: Pat
     report = discover.build_report(tmp_path, days=30)
     assert report.delegations == 2
     text = discover.format_report(report)
-    assert "Delegations to deputy: 2; large reads the orchestrator did itself: 1." in text
+    assert "2 delegations; 1 large file reads a delegation could have taken" in text
     assert json.loads(discover.report_as_json(report))["delegations"] == 2
+
+
+def _at(cwd: str, *blocks: dict) -> list[str]:
+    return [json.dumps({"cwd": cwd, "message": {"content": [b]}}) for b in blocks]
+
+
+def _write(folder: Path, lines: list[str]) -> None:
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "s.jsonl").write_text("\n".join(lines) + "\n")
+
+
+BIG = "x" * 8_000  # 2,000 tokens
+
+
+def test_reads_through_the_shell_count_as_file_reads(tmp_path: Path) -> None:
+    lines = _at(
+        "/repo",
+        _use("a", "Read", file_path="/repo/a.md"),
+        _result("a", BIG),
+        _use("b", "Bash", command="sed -n 1,400p b.md"),
+        _result("b", BIG),
+        _use("c", "Bash", command="cd sub && cat c.md"),
+        _result("c", BIG),
+        _use("d", "Bash", command="git log"),
+        _result("d", BIG),
+    )
+    _write(tmp_path, lines)
+    seen = discover.build_report(tmp_path, days=30).adoption
+    assert (seen.file_reads, seen.delegable_reads, seen.delegable_tokens) == (3, 3, 6_000)
+
+
+def test_a_read_followed_by_an_edit_of_that_file_is_not_delegable(tmp_path: Path) -> None:
+    lines = _at(
+        "/repo",
+        _use("a", "Bash", command="cat a.md"),
+        _result("a", BIG),
+        _use("b", "Edit", file_path="/repo/a.md"),
+        _result("b", "ok"),
+        _use("c", "Read", file_path="/repo/other.md"),
+        _result("c", BIG),
+        _use("d", "Edit", file_path="/repo/unrelated.md"),
+        _result("d", "ok"),
+    )
+    _write(tmp_path, lines)
+    seen = discover.build_report(tmp_path, days=30).adoption
+    assert (seen.file_reads, seen.delegable_reads) == (2, 1)
+
+
+def test_an_edit_long_after_the_read_does_not_excuse_it(tmp_path: Path) -> None:
+    filler: list[dict] = []
+    for i in range(discover.EDIT_WINDOW):
+        filler += [_use(f"f{i}", "Bash", command="true"), _result(f"f{i}", "ok")]
+    lines = _at(
+        "/repo",
+        _use("a", "Read", file_path="/repo/a.md"),
+        _result("a", BIG),
+        *filler,
+        _use("b", "Edit", file_path="/repo/a.md"),
+        _result("b", "ok"),
+    )
+    _write(tmp_path, lines)
+    assert discover.build_report(tmp_path, days=30).adoption.delegable_reads == 1
+
+
+def test_reading_an_unchanged_file_again_is_counted(tmp_path: Path) -> None:
+    lines = _at(
+        "/repo",
+        _use("a", "Bash", command="sed -n 1,300p a.md"),
+        _result("a", BIG),
+        _use("b", "Bash", command="sed -n 1,300p a.md"),
+        _result("b", BIG),
+        _use("c", "Bash", command="sed -n 301,600p a.md"),
+        _result("c", BIG),
+    )
+    _write(tmp_path, lines)
+    seen = discover.build_report(tmp_path, days=30).adoption
+    assert (seen.again_tokens, seen.same_part_tokens) == (4_000, 2_000)
+
+
+@pytest.mark.parametrize("between", ["edit", "compaction"])
+def test_a_read_after_an_edit_or_a_compaction_is_not_a_repeat(tmp_path: Path, between: str) -> None:
+    first = _at("/repo", _use("a", "Read", file_path="/repo/a.md"), _result("a", BIG))
+    second = _at("/repo", _use("c", "Read", file_path="/repo/a.md"), _result("c", BIG))
+    middle = (
+        _at("/repo", _use("b", "Edit", file_path="/repo/a.md"), _result("b", "ok"))
+        if between == "edit"
+        else [json.dumps({"isCompactSummary": True, "message": {"content": "summary"}})]
+    )
+    _write(tmp_path, [*first, *middle, *second])
+    assert discover.build_report(tmp_path, days=30).adoption.again_tokens == 0
+
+
+def test_the_adoption_rate_is_shown_and_exported(tmp_path: Path) -> None:
+    lines = _at(
+        "/repo",
+        _use("a", "mcp__deputy__delegate", task="t"),
+        _result("a", "ok"),
+        _use("b", "Read", file_path="/repo/a.md"),
+        _result("b", BIG),
+    )
+    _write(tmp_path, lines)
+    report = discover.build_report(tmp_path, days=30)
+    assert report.adoption_rate == 0.5
+    assert "Adoption: 50.0% (1 delegations" in discover.format_report(report)
+    assert json.loads(discover.report_as_json(report))["adoption_rate"] == 0.5
