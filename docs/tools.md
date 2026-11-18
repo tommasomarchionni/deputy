@@ -104,6 +104,16 @@ a citation; one wrong quote fails the check and the detail names the line and th
 and ask the worker, in the task, to quote the exact words of every line it cites. The check is
 about one file; run one per file.
 
+## History: read-only `git`
+
+The worker can read the history of a git repository: `git` with args such as
+`["log", "--oneline", "-n", "20"]`, `["diff", "--stat", "HEAD~3"]`, `["show", "abc123", "--", "file"]`
+or `["blame", "-L", "10,20", "--", "file"]`. Only `log`, `show`, `diff` and `blame`, with an
+allow-list of options; paths go after `--`. The output is capped at 60,000 characters and says when
+it was cut, and it counts as read on your behalf. Questions such as "what changed in this range and
+why" or "which commit changed this rule" are long to read and short to answer: good delegations.
+What is refused, and why, is in [security](security.md).
+
 ## Large logs: `summarise_log`
 
 For a big repetitive file (a log, a test run) the worker has a tool that needs no model at all:

@@ -1,5 +1,6 @@
 # pyright: basic
 import asyncio
+import subprocess as sp
 from pathlib import Path
 
 from deputy import agent
@@ -171,3 +172,21 @@ def test_an_outcome_with_files_and_no_checks_keeps_only_what_exists() -> None:
     assert out.checks is None
     assert out.files_written == ["out.txt"]
     assert out.flags is None
+
+
+def test_the_worker_can_read_git_history(fake_client, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    setup = (["init", "-q"], ["config", "user.email", "t@e.com"], ["config", "user.name", "T"])
+    for args in setup:
+        sp.run(["git", "-C", str(tmp_path), *args], check=True)
+    (tmp_path / "a.txt").write_text("one\n")
+    sp.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    sp.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "add a"], check=True)
+    client = fake_client(
+        [
+            message(tool_calls=[tool_call("git", {"args": ["log", "--oneline"]})]),
+            message("one commit: add a"),
+        ]
+    )
+    result = go(client, tmp_path, [Contains(values=["add a"])])
+    assert result.status == "ok"
+    assert result.metrics.tool_calls == 1

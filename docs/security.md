@@ -1,9 +1,16 @@
 # Security model
 
-- **The worker is untrusted.** It can only call `read_file`, `write_file` and `grep`, all confined
+- **The worker is untrusted.** It can only call `read_file`, `write_file`, `grep`, `summarise_log`,
+  `scan_file` and a read-only `git`, all confined
   to `workdir` with `realpath` checks: `..`, absolute paths and symlinks pointing outside are
   refused. Files that look like secrets (`.env*`, `*.pem`, `*.key`, SSH keys, `.npmrc`, `.netrc`)
   are never readable or writable.
+- **Read-only git.** The worker's `git` runs only `log`, `show`, `diff` and `blame`, with an argv
+  built from an allow-list of options (no shell). Refused: any other subcommand, any option off the
+  list (`--output`, `--ext-diff`, `-c`, `--exec`...), `rev:path` blob reads and paths outside the
+  folder. Git runs with system and global config ignored, and with external diff, textconv, pager,
+  fsmonitor and hooks off. Secret-looking files are excluded from every command by pathspec, so
+  their content never appears, not even from history.
 - **The worker has no shell.** Checks that run commands are declared by the orchestrator and run by
   the server, only when the argv matches `policy.allowed_commands`, without a shell, with a stripped
   environment and a timeout.
