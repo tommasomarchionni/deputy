@@ -181,8 +181,8 @@ answer to "should I delegate this". Nothing leaves your machine except the calls
 deputy discover --project /path/to/your/repo --days 30
 ```
 
-It reads the Claude Code session transcripts of that folder on your machine (nothing is sent
-anywhere) and sums the text of every tool result, by category: **reads** (file reads, searches,
+It reads the Claude Code session transcripts of that folder, subagents included, on your machine
+(nothing is sent anywhere) and sums the text of every tool result, by category: **reads** (file reads, searches,
 listings, and shell commands such as `sed`, `cat`, `grep`), **command output** (git, gh, test
 runners, build tools) and the rest. A result over 4,000 characters (about 1,000 tokens) is counted
 as *large*: that is where a delegation can pay. The last lines give two upper bounds: the large
@@ -192,7 +192,8 @@ prompt caching makes a re-read cheaper.
 
 The last lines measure **adoption**, the number to watch over time:
 
-- **Adoption** is the share of delegations among the large file reads a delegation could have taken.
+- **Adoption** is the share of delegations (`digest` and `delegate`) among the large file reads a
+  delegation could have taken, with the part done by subagents shown apart.
   A file read through `Read`, `cat`, `sed -n`, `head`, `tail` or `nl` counts, unless the same file
   was edited within the next 40 tool calls: that read needed the exact text.
 - **Read again** is what went into reading a file a second time with no edit and no compaction in
@@ -201,5 +202,5 @@ The last lines measure **adoption**, the number to watch over time:
 An edit made by a script (rather than an edit tool or `sed -i`) is not seen, so these numbers are
 estimates.
 
-Measured on 11 sessions of one real repository: large reads were 30 % of everything the orchestrator
-read, command output 15 %.
+Measured on 11 sessions and 250 subagents of one real repository: large reads were 50 % of everything
+the agents read, command output 13 %.

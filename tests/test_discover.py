@@ -240,3 +240,33 @@ def test_an_edit_through_the_shell_makes_the_read_not_delegable(tmp_path: Path) 
     seen = discover.build_report(tmp_path, days=30).adoption
     assert seen.again_tokens == 0
     assert seen.delegable_reads == 1  # the second read: nothing edits the file after it
+
+
+def test_a_tool_call_repeated_in_the_transcript_counts_once(tmp_path: Path) -> None:
+    call = _use("a", "Read", file_path="/repo/a.md")
+    result = _result("a", BIG)
+    _write(tmp_path, _at("/repo", call, call, result, result))
+    report = discover.build_report(tmp_path, days=30)
+    assert report.total.results == 1
+    assert report.adoption.file_reads == 1
+    assert report.adoption.again_tokens == 0
+
+
+def test_subagents_are_read_and_shown_apart(tmp_path: Path) -> None:
+    _write(tmp_path, _at("/repo", _use("a", "Read", file_path="/repo/a.md"), _result("a", BIG)))
+    folder = tmp_path / "session" / "subagents"
+    folder.mkdir(parents=True)
+    lines = _at("/repo", _use("b", "Bash", command="cat b.md"), _result("b", BIG))
+    (folder / "agent-1.jsonl").write_text("\n".join(lines) + "\n")
+    report = discover.build_report(tmp_path, days=30)
+    assert (report.sessions, report.subagents) == (1, 1)
+    assert report.adoption.delegable_reads == 2
+    assert report.subagent_adoption.delegable_reads == 1
+    assert "1 sessions and 1 subagents" in discover.format_report(report)
+
+
+def test_a_digest_call_counts_as_a_delegation(tmp_path: Path) -> None:
+    _write(
+        tmp_path, _at("/repo", _use("a", "mcp__deputy__digest", question="q"), _result("a", "ok"))
+    )
+    assert discover.build_report(tmp_path, days=30).delegations == 1
