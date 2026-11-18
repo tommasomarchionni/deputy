@@ -12,6 +12,7 @@ from deputy.bench import (
     FAILED_TEST,
     HUGE_ERRORS,
     NOTICE_IT,
+    PUBLIC_FUNCTIONS,
     TEST_FILE,
     BenchTask,
     Variant,
@@ -22,6 +23,7 @@ from deputy.bench import (
     run_suite,
     runnable,
     selection_names,
+    service_source,
     tasks,
     tasks_with_kind,
 )
@@ -179,3 +181,15 @@ def test_the_ci_log_hides_one_failure_among_noise_and_the_task_grades_it() -> No
         ctx = CheckContext(answer=answer, sandbox=None, policy=None)  # type: ignore[arg-type]
         outcomes = [asyncio.run(c.evaluate(ctx)) for c in task.checks]
         assert all(o.passed for o in outcomes) is passes
+
+
+def test_the_code_outline_task_needs_every_public_function_and_its_line() -> None:
+    lines = service_source().splitlines()
+    starts = {ln.split("(")[0][4:]: i + 1 for i, ln in enumerate(lines) if ln.startswith("def ")}
+    assert [starts[name] for name in PUBLIC_FUNCTIONS] == [41, 111, 181, 251]
+    task = next(t for t in tasks() if t.name == "code-outline")
+    good = "create_invoice 41, cancel_invoice 111, send_reminder 181, export_ledger 251"
+    off_by_one = "create_invoice 42, cancel_invoice 111, send_reminder 181, export_ledger 251"
+    for answer, passes in ((good, True), (off_by_one, False)):
+        ctx = CheckContext(answer=answer, sandbox=None, policy=None)  # type: ignore[arg-type]
+        assert all(asyncio.run(c.evaluate(ctx)).passed for c in task.checks) is passes
