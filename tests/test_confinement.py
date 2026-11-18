@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from deputy import cli, confinement
+from deputy.backends import Probe
 from deputy.checks import Command, run_checks
 from deputy.config import Policy, config_path, load_config
 from deputy.sandbox import Sandbox
@@ -141,9 +142,9 @@ def test_doctor_says_plainly_whether_commands_are_confined(
     code: int,
 ) -> None:
     async def healthy(self):  # type: ignore[no-untyped-def]
-        return True, "ok"
+        return Probe(True, "ok")
 
-    monkeypatch.setattr("deputy.backends.ChatClient.health", healthy)
+    monkeypatch.setattr("deputy.backends.ChatClient.probe", healthy)
     _configure(lines)
     assert cli.main(["doctor"]) == code or code == 1
     assert expected in capsys.readouterr().out

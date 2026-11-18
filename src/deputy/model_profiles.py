@@ -61,6 +61,13 @@ def suggested_max_turns(profile: ModelProfile | None) -> int:
     return max(MIN_MAX_TURNS, min(MAX_MAX_TURNS, wanted))
 
 
+def changed_model(profile: ModelProfile | None, served: list[str]) -> str | None:
+    """The model the server serves now, when it is not the one that was measured."""
+    if profile and profile.served_model and served and profile.served_model not in served:
+        return served[0]
+    return None
+
+
 def describe(profile: ModelProfile | None, served: list[str], *, now: float | None = None) -> str:
     """One sentence for `status`: how old the measurement is, and whether the model changed."""
     if profile is None:
@@ -68,7 +75,7 @@ def describe(profile: ModelProfile | None, served: list[str], *, now: float | No
     age = ((now if now is not None else time.time()) - profile.measured_at) / SECONDS_PER_DAY
     when = "today" if age < 1 else f"{age:.0f} days ago"
     summary = f"measured {when}: {profile.pass_rate:.0%} passed, {profile.mean_turns:.1f} turns"
-    if profile.served_model and served and profile.served_model not in served:
-        now_serving = f"the server now serves {served[0]}, not {profile.served_model}"
+    if (moved := changed_model(profile, served)) is not None:
+        now_serving = f"the server now serves {moved}, not {profile.served_model}"
         return f"{summary}; {now_serving}: run deputy tune"
     return summary

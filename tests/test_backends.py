@@ -8,7 +8,10 @@ import pytest
 
 from deputy import cli
 from deputy.backends import BackendError, ChatClient
-from deputy.config import Backend
+from deputy.bench import QUICK_TASKS, Summary, holdout_names, selection_names
+from deputy.cli import tuning
+from deputy.config import Backend, config_path, load_config
+from deputy.tune import save_model_profile
 from helpers import message
 
 
@@ -85,3 +88,67 @@ def test_doctor_fails_when_the_backend_is_down(
     monkeypatch.setattr("deputy.cli.setup.ChatClient", down)
     assert cli.main(["doctor"]) == 1
     assert "FAIL" in capsys.readouterr().out
+
+
+def _measured_on(model: str) -> None:
+    summary = Summary(
+        variant="baseline", runs=1, pass_rate=1.0, citation_rate=1.0, mean_turns=2.0,
+        mean_tokens_out=50, mean_elapsed_s=5, stdev_elapsed_s=0, tokens_per_s=10,
+        served_model=model,
+    )  # fmt: skip
+    save_model_profile(load_config().backend(None), summary, [])
+
+
+def _doctor_with(
+    auto_tune: str,
+    served: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> tuple[str, list[str]]:
+    cli.main(["init", "--yes", "--url", "http://srv", "--model", "m"])
+    config = config_path()
+    config.write_text(config.read_text().replace("# auto_tune", "auto_tune").replace(
+        '"propose"', f'"{auto_tune}"'))  # fmt: skip
+    _measured_on("qwen-27b")
+    body = {"data": [{"id": served}]}
+    monkeypatch.setattr(
+        "deputy.cli.setup.ChatClient",
+        lambda b: client_for(lambda _: httpx.Response(200, json=body)),
+    )
+    retuned: list[str] = []
+    monkeypatch.setattr(tuning, "retune", lambda name: retuned.append(name) or 0)
+    code = cli.main(["doctor"])
+    assert code == 0  # a changed model is a notice, never a failure
+    return capsys.readouterr().out, retuned
+
+
+def test_doctor_retunes_a_changed_model_only_when_auto_tune_is_apply(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out, retuned = _doctor_with("apply", "llama-70b", monkeypatch, capsys)
+    assert "now serves llama-70b, was measured on qwen-27b" in out
+    assert retuned == ["local"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "hint"), [("propose", "run: deputy tune"), ("off", "auto_tune is off")]
+)
+def test_doctor_only_says_what_to_do_unless_auto_tune_is_apply(
+    mode: str, hint: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out, retuned = _doctor_with(mode, "llama-70b", monkeypatch, capsys)
+    assert hint in out
+    assert retuned == []
+
+
+def test_doctor_stays_quiet_when_the_model_is_the_one_measured(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out, retuned = _doctor_with("apply", "qwen-27b", monkeypatch, capsys)
+    assert "now serves" not in out
+    assert retuned == []
+
+
+def test_the_quick_retune_uses_real_tasks_and_writes_the_winner() -> None:
+    assert set(QUICK_TASKS) <= set(selection_names()) | set(holdout_names())
+    assert set(QUICK_TASKS) & set(holdout_names())  # one held-out task, so a winner is confirmed

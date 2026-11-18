@@ -10,6 +10,7 @@ from collections.abc import Callable
 
 from deputy.agent import Result
 from deputy.bench import (
+    QUICK_TASKS,
     Summary,
     Variant,
     candidate_variants,
@@ -206,6 +207,20 @@ def tune(args: argparse.Namespace) -> int:
     )
     print(_settle(config, backend, winner, apply_now=args.apply))
     return 0
+
+
+def retune(backend: str) -> int:
+    """One quick tune that writes the winner: what `deputy doctor` runs when the model changed."""
+    args = argparse.Namespace(
+        backend=backend,
+        runs=1,
+        tasks=",".join(QUICK_TASKS),
+        lessons=False,
+        run_code=False,
+        apply=True,
+        revert=False,
+    )
+    return tune(args)
 
 
 def register(sub: Subparsers) -> None:

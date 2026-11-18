@@ -204,6 +204,8 @@ class Summary(BaseModel):
 
 # Tasks kept out of the choice: `deputy tune` picks a setting on the other tasks and then confirms
 # it on these, so a setting that merely suits the tasks it was judged on does not get through.
+# A short pass for a re-tune after the served model changed: a few selection tasks and one held out.
+QUICK_TASKS = ("cited-extract", "write-file", "short-with-facts", "translate-keep-terms")
 HOLDOUT = frozenset({"needle-in-long-file", "translate-keep-terms"})
 
 
