@@ -91,5 +91,5 @@ release" of this repository, at most once a day (cached; one hour after a failur
   version; while the major is 0, the same minor too, because a new 0.x minor may break things).
   A new major version is never installed without you. The new version runs from the next start.
 
-`deputy update --check` only looks; `deputy update` upgrades now (it reinstalls the release tag
-with `uv tool install`, so you can always go back with `DEPUTY_REF=<tag> sh install.sh`).
+`deputy update --check` only looks; `deputy update` upgrades now (it installs the released wheel with
+`uv tool install`, so you can always go back with `DEPUTY_REF=<tag> sh install.sh`).

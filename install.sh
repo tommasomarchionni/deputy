@@ -10,7 +10,7 @@
 #   --uninstall     remove deputy
 #   --install-uv    also install uv if it is missing (runs the official astral.sh installer)
 # Environment:
-#   DEPUTY_REF      git branch, tag or commit to install (default: the latest release, else main)
+#   DEPUTY_REF      git branch, tag or commit to install from source instead of a release
 #   DEPUTY_SOURCE   install from this local path or URL instead of GitHub (used by CI)
 set -eu
 
@@ -20,10 +20,11 @@ say() { printf '%s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-latest_release() {
+# The wheel of the latest release (built and attested by the release workflow), or nothing.
+latest_wheel() {
   have curl || return 1
   curl -fsSL --max-time 5 "https://api.github.com/repos/tommasomarchionni/deputy/releases/latest" 2>/dev/null |
-    sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
+    sed -n 's/.*"browser_download_url": *"\([^"]*-py3-none-any\.whl\)".*/\1/p' | head -n 1
 }
 
 ensure_uv() {
@@ -61,10 +62,14 @@ main() {
     exit 0
   fi
 
-  REF="${DEPUTY_REF:-}"
-  [ -n "$REF" ] || REF="$(latest_release || true)"
-  REF="${REF:-main}"
-  SOURCE="${DEPUTY_SOURCE:-git+${REPO_URL}@${REF}}"
+  if [ -n "${DEPUTY_SOURCE:-}" ]; then
+    SOURCE="$DEPUTY_SOURCE"
+  elif [ -n "${DEPUTY_REF:-}" ]; then
+    SOURCE="git+${REPO_URL}@${DEPUTY_REF}"
+  else
+    SOURCE="$(latest_wheel || true)"
+    [ -n "$SOURCE" ] || SOURCE="git+${REPO_URL}@main"
+  fi
   say "installing deputy from ${SOURCE} ..."
   uv tool install --force "$SOURCE"
 
