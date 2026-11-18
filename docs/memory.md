@@ -1,12 +1,13 @@
 # Memory
 
-!!! note "Status: design"
-    Only two pieces exist today: `deputy bench` writes a measured model profile (read back for the
-    turn limit and by `status`), and every run and `feedback` is recorded in a trace that
-    `deputy stats` reports on. Nothing learns from the trace yet. Loading profiles, lessons and project
-    memory are planned ([#13](https://github.com/tommasomarchionni/deputy/issues/13),
-    [#14](https://github.com/tommasomarchionni/deputy/issues/14),
-    [#15](https://github.com/tommasomarchionni/deputy/issues/15)). The rest of this page is the design.
+!!! note "Status: partly built"
+    Built: the measured model profile (written by `deputy bench`, read back for the turn limit and by
+    `status`), the trace of every run and `feedback` (reported by `deputy stats`), and **lessons**
+    derived from the trace (`deputy learn`, see
+    [configuration](configuration.md#lessons-learned-from-use)). Planned: project memory
+    ([#15](https://github.com/tommasomarchionni/deputy/issues/15)) and the ablation that drops
+    lessons that do not help ([#16](https://github.com/tommasomarchionni/deputy/issues/16)). The rest
+    of this page is the design.
 
 Does memory make sense? Yes, but narrowly. A model that is not trained on your project forgets
 everything between calls; the useful part of memory is what is **measured and verified**, not a

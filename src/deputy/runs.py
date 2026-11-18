@@ -10,6 +10,8 @@ from typing import Any
 
 from deputy.config import state_dir
 
+BENCH_SOURCE = "bench"  # marks benchmark runs, so usage statistics and lessons skip them
+
 
 def new_run_id() -> str:
     return time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]

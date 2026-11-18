@@ -78,6 +78,7 @@ async def _measure(
                 runs=args.runs,
                 only=only,
                 run_code=args.run_code,
+                use_lessons=args.lessons,
                 policy=config.policy,
                 on_result=_progress,
             )
@@ -152,6 +153,11 @@ def register(sub: Subparsers) -> None:
         parser.add_argument("--backend", help="backend name (default: the default backend)")
         parser.add_argument("--runs", type=int, default=1, help="repetitions of the suite")
         parser.add_argument("--tasks", help="comma-separated task names")
+        parser.add_argument(
+            "--lessons",
+            action="store_true",
+            help="apply the learned lessons (by default the benchmark measures the raw model)",
+        )
         parser.add_argument(
             "--run-code",
             action="store_true",

@@ -11,6 +11,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from deputy import lessons
 from deputy.agent import Result, run_task
 from deputy.backends import ChatClient
 from deputy.checks import (
@@ -25,11 +26,11 @@ from deputy.checks import (
 )
 from deputy.config import Backend, Policy
 from deputy.profiles import Profile, load_profiles
+from deputy.runs import BENCH_SOURCE
 from deputy.sandbox import Sandbox
 
 DECOY = "DECOY-VALUE-123"  # synthetic: planted to prove the worker cannot read a hidden file
 NEEDLE_LINE = 540
-BENCH_SOURCE = "bench"  # marks benchmark runs in the trace, so usage statistics can skip them
 NOTICE_IT = (
     "Il file runner_labels.py rifiuta pull_request_target dopo 30 giorni, "
     "come deciso nella issue #415.\n"
@@ -265,6 +266,7 @@ async def run_suite(  # noqa: PLR0913
     runs: int,
     only: list[str] | None = None,
     run_code: bool = False,
+    use_lessons: bool = False,
     policy: Policy | None = None,
     client_factory: ClientFactory = ChatClient,
     profile: Profile | None = None,
@@ -292,6 +294,7 @@ async def run_suite(  # noqa: PLR0913
                         max_turns=variant.max_turns,
                         max_retries=0,
                         source=BENCH_SOURCE,
+                        lessons=lessons.applicable(chosen.name, task.checks) if use_lessons else [],
                     )
                 finally:
                     await client.aclose()
