@@ -84,6 +84,17 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[stats]
+  '''
+  usage: deputy stats [-h] [--days DAYS] [--json]
+  
+  options:
+    -h, --help   show this help message and exit
+    --days DAYS  how far back to look (default 30)
+    --json       print JSON, not a table
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[tune]
   '''
   usage: deputy tune [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
@@ -143,6 +154,7 @@
     'install',
     'instructions',
     'mcp',
+    'stats',
     'tune',
     'update',
     'workspace',

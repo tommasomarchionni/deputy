@@ -95,3 +95,23 @@ release" of this repository, at most once a day (cached; one hour after a failur
 
 `deputy update --check` only looks; `deputy update` upgrades now (it installs the released wheel with
 `uv tool install`, so you can always go back with `DEPUTY_REF=<tag> sh install.sh`).
+
+## Usage report
+
+Every run and every `feedback` is recorded in `~/.local/state/deputy/runs.jsonl` (metadata only: no
+file content, no answers, no secrets). `deputy stats` turns it into a report:
+
+```sh
+deputy stats                 # the last 30 days
+deputy stats --days 7        # a different window
+deputy stats --json          # for scripts
+```
+
+It shows runs, the share that passed their checks (`ok`), how many were handed back to the
+orchestrator (`esc`), how many needed a retry, the acceptance rate from your `feedback`, and the
+estimated tokens saved (total and per run), for everything, by profile, and by **task class** (the
+profile and the kinds of checks asked for, for example `helper:cites_lines+contains`). The `status`
+tool carries a one-line version of the last 7 days.
+
+The saving is an estimate (characters divided by four, of the files the worker read minus the task
+and the answer); treat it as an order of magnitude.

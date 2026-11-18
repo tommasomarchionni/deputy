@@ -112,6 +112,12 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
     return f"ERROR: unknown tool '{name}'; use read_file, write_file or grep"
 
 
+def task_class(profile: str, checks: list[Check]) -> str:
+    """Group runs that ask for the same kind of work: the profile and the kinds of checks."""
+    kinds = sorted({check.type for check in checks})
+    return f"{profile}:{'+'.join(kinds) if kinds else 'no-checks'}"
+
+
 class AgentRun:
     """One delegated task: converse with the worker, run its tools, verify, correct, report."""
 
@@ -229,7 +235,9 @@ class AgentRun:
                 "event": "run",
                 "run_id": result.run_id,
                 "profile": self._profile.name,
+                "task_class": task_class(self._profile.name, self._checks),
                 "status": result.status,
+                "flags": result.flags,
                 "metrics": result.metrics.model_dump(),
                 "checks": [{"name": c.name, "passed": c.passed} for c in result.checks],
                 "saved_est": result.orchestrator_tokens_saved_est,

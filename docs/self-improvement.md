@@ -30,7 +30,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Benchmark of your model on a built-in suite (`deputy bench`, `--json`) | **today** |
 | Tuning of request settings, recommended or applied (`deputy tune`, `auto_tune`, `--revert`) | **today** |
 | Measured model profile written to disk after every benchmark | **today** (written, not yet read) |
-| Trace of every run and your feedback | **today** (recorded, not yet used) |
+| Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (the report reads it; lessons and routing do not yet) |
 | Lessons learned from feedback, with evidence | planned ([#14](https://github.com/tommasomarchionni/deputy/issues/14)) |
 | Profiles read by routing; choose model and settings per task | planned ([#13](https://github.com/tommasomarchionni/deputy/issues/13), [#18](https://github.com/tommasomarchionni/deputy/issues/18)) |
 | Offline optimiser that proposes profile and parameter changes | planned ([#21](https://github.com/tommasomarchionni/deputy/issues/21)) |

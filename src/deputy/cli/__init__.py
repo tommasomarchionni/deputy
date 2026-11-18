@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 
-from deputy.cli import connect, serve, setup, tuning, update, workspace
+from deputy.cli import connect, serve, setup, stats, tuning, update, workspace
 from deputy.version import current_version
 
-_COMMAND_MODULES = (setup, connect, tuning, workspace, update, serve)
+_COMMAND_MODULES = (setup, connect, tuning, stats, workspace, update, serve)
 
 
 def build_parser() -> argparse.ArgumentParser:
