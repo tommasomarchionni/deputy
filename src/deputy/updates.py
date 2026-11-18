@@ -18,7 +18,9 @@ from deputy.version import current_version, is_compatible, is_newer
 
 REPO = "tommasomarchionni/deputy"
 RELEASE_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
-INSTALL_SOURCE = f"git+https://github.com/{REPO}"
+WHEEL_URL = (
+    "https://github.com/{repo}/releases/download/v{version}/deputy-{version}-py3-none-any.whl"
+)
 SUCCESS_TTL_S = 24 * 3600
 FAILURE_TTL_S = 3600
 
@@ -110,11 +112,12 @@ def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def upgrade(latest: str, runner: Runner = _run) -> str:
-    """Reinstall deputy at the tag of `latest` with uv. Returns a one-line report."""
+    """Install the released wheel of `latest` with uv. Returns a one-line report."""
     uv = shutil.which("uv")
     if uv is None:
         raise UpdateError("uv is not on PATH; run the installer again (see docs/install.md)")
-    done = runner([uv, "tool", "install", "--force", f"{INSTALL_SOURCE}@v{latest}"])
+    wheel = WHEEL_URL.format(repo=REPO, version=latest)
+    done = runner([uv, "tool", "install", "--force", wheel])
     if done.returncode != 0:
         detail = (done.stderr or done.stdout).strip().splitlines()[-1:]
         raise UpdateError(f"uv failed: {detail[0] if detail else 'unknown error'}")

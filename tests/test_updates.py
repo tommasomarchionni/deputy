@@ -84,11 +84,11 @@ def fake_run(code: int, err: str = "") -> updates.Runner:
     return run
 
 
-def test_upgrade_reinstalls_at_the_release_tag(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_upgrade_installs_the_released_wheel(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/uv")
     runner = fake_run(0)
     assert "updated to 0.2.0" in updates.upgrade("0.2.0", runner)
-    assert runner.argv[-1].endswith("@v0.2.0")  # type: ignore[attr-defined]
+    assert runner.argv[-1].endswith("/download/v0.2.0/deputy-0.2.0-py3-none-any.whl")  # type: ignore[attr-defined]
 
 
 def test_upgrade_failures_are_explained(monkeypatch: pytest.MonkeyPatch) -> None:

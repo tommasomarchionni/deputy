@@ -27,7 +27,8 @@ uv tool install git+https://github.com/tommasomarchionni/deputy
 Pin a version with `DEPUTY_REF=v0.1.0`. Remove it with `sh install.sh --uninstall`
 (your config and traces are kept).
 
-The installer picks the **latest release** (or `main` if there is none yet). Update later with
+The installer picks the **latest release** (the wheel built and attested by the release workflow;
+`main` if there is none yet). Update later with
 `deputy update`; see [configuration](configuration.md#updates) for automatic updates.
 
 ## 2. Point it at a model
