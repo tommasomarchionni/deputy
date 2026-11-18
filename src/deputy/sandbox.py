@@ -19,7 +19,9 @@ MAX_READ_CHARS = 60_000
 MAX_FILE_BYTES = 5_000_000
 LARGE_FILE_CHARS = 80_000  # above this, a read points the worker at scan_file
 MAX_WRITE_BYTES = 1_000_000
-MAX_GREP_HITS = 50
+MAX_GREP_HITS = 50  # up to this many hits are shown line by line; more are grouped by file
+MAX_GREP_FILES = 300  # files listed when hits are grouped
+MAX_GREP_SCAN_HITS = 20_000  # a search never collects more than this
 MAX_PATTERN_CHARS = 200
 MAX_LINE_CHARS = 2_000  # a line is cut here before matching: a long line must not become a bomb
 MATCH_TIMEOUT_S = 0.05  # one line may take this long (a catastrophic pattern is abandoned)
@@ -179,7 +181,8 @@ class Sandbox:
         deadline = time.monotonic() + GREP_BUDGET_S
         base = self.resolve(path)
         files = [base] if base.is_file() else self._searchable(base)
-        hits: list[str] = []
+        hits: list[tuple[str, int, str]] = []
+        note = ""
         for candidate in files:
             file = self._contained(candidate)
             if file is None or "node_modules" in file.parts:
@@ -191,12 +194,14 @@ class Sandbox:
                 continue
             for number, line in enumerate(lines, start=1):
                 if time.monotonic() > deadline:
-                    return self._seen([*hits, "[search stopped: its time budget was used up]"])
+                    note = "[search stopped: its time budget was used up]"
+                    return self._seen(_format_hits(hits, note))
                 if _matches(compiled, line):
-                    hits.append(f"{rel}:{number}: {line[:200]}")
-                    if len(hits) >= MAX_GREP_HITS:
-                        return self._seen([*hits, f"[stopped at {MAX_GREP_HITS} hits]"])
-        return self._seen(hits or ["no matches"])
+                    hits.append((rel, number, line[:200]))
+                    if len(hits) >= MAX_GREP_SCAN_HITS:
+                        note = f"[search stopped after {MAX_GREP_SCAN_HITS} hits]"
+                        return self._seen(_format_hits(hits, note))
+        return self._seen(_format_hits(hits, note))
 
     def _searchable(self, base: Path) -> list[Path]:
         """The files to search under `base`: what git tracks or does not ignore, else every file.
@@ -300,3 +305,26 @@ def _matches(compiled: regex.Pattern[str], line: str) -> bool:
         raise SandboxError(
             "this pattern is too slow on this file (catastrophic backtracking); use a simpler one"
         ) from exc
+
+
+def _format_hits(hits: list[tuple[str, int, str]], note: str = "") -> list[str]:
+    """Hits line by line when they are few; otherwise every file once, with its count and lines.
+
+    A capped list of lines hides the files past the cap; a list of files does not."""
+    if not hits:
+        return [note] if note else ["no matches"]
+    if len(hits) <= MAX_GREP_HITS:
+        rows = [f"{rel}:{number}: {text}" for rel, number, text in hits]
+        return [*rows, note] if note else rows
+    by_file: dict[str, list[int]] = {}
+    for rel, number, _text in hits:
+        by_file.setdefault(rel, []).append(number)
+    rows = [
+        f"[{len(hits)} hits in {len(by_file)} files: grouped by file; grep one file for the lines]"
+    ]
+    for rel, numbers in list(by_file.items())[:MAX_GREP_FILES]:
+        shown = ", ".join(str(n) for n in numbers[:5]) + (", ..." if len(numbers) > 5 else "")
+        rows.append(f"{rel}: {len(numbers)} hits, lines {shown}")
+    if len(by_file) > MAX_GREP_FILES:
+        rows.append(f"[... {len(by_file) - MAX_GREP_FILES} more files; narrow the pattern or path]")
+    return [*rows, note] if note else rows

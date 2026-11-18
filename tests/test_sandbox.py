@@ -292,3 +292,30 @@ def test_grep_still_searches_everything_outside_a_git_work_tree(tmp_path: Path) 
     (box.root / "coverage").mkdir()
     (box.root / "coverage" / "report.json").write_text("needle")
     assert "coverage/report.json" in box.grep("needle")
+
+
+def test_a_large_search_lists_every_file_instead_of_hiding_those_past_the_cap(
+    tmp_path: Path,
+) -> None:
+    box = make(tmp_path)
+    for i in range(30):
+        (box.root / f"a{i:02d}.txt").write_text("needle\nneedle\nneedle\n")
+    (box.root / "zz-last.txt").write_text("needle\n")
+    out = box.grep("needle")
+    assert out.startswith("[91 hits in 31 files: grouped by file")
+    assert "zz-last.txt: 1 hits, lines 1" in out
+    assert "a00.txt: 3 hits, lines 1, 2, 3" in out
+
+
+def test_a_small_search_keeps_the_line_by_line_format(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "a.txt").write_text("one\nneedle here\n")
+    assert box.grep("needle") == "a.txt:2: needle here"
+
+
+def test_a_file_with_many_hits_shows_its_first_lines_and_says_there_are_more(
+    tmp_path: Path,
+) -> None:
+    box = make(tmp_path)
+    (box.root / "big.txt").write_text("needle\n" * 60)
+    assert "big.txt: 60 hits, lines 1, 2, 3, 4, 5, ..." in box.grep("needle")
