@@ -30,9 +30,28 @@ done for issue [#23](https://github.com/tommasomarchionni/deputy/issues/23).
 | A FIFO or device in the folder could block the server; a huge file could exhaust memory | low | **fixed**: only regular files are read, up to 5 MB |
 | Secret-looking names missed `.git`, `.ssh`, `.aws`, `credentials*`, `.pypirc`, `*.keystore`, `secrets.*` | medium | **fixed** |
 | A search pattern can take exponential time | medium | open: [#48](https://github.com/tommasomarchionni/deputy/issues/48) |
-| A `command` check runs worker-written code with the user's rights | high by design | open: [#49](https://github.com/tommasomarchionni/deputy/issues/49); until then use a workspace copy and a throwaway environment |
+| A `command` check runs worker-written code with the user's rights | high by design | **mitigated** ([#49](https://github.com/tommasomarchionni/deputy/issues/49)): `policy.command_wrapper` runs it in an OS sandbox (`deputy init --confine`); without it the risk stands, and `deputy doctor` says so |
 
 The fixes ship in the next release. Versions 0.1.0 and 0.2.0 have the `grep` flaw: do not point
 deputy at a folder that contains symlinks to files outside it until you update (`deputy update`).
 
 Report vulnerabilities privately: see [SECURITY.md](https://github.com/tommasomarchionni/deputy/blob/main/SECURITY.md).
+
+## Confining `command` checks
+
+A `command` check may run a file the worker just wrote (a test, a script), so **without a wrapper
+the worker can run code with your rights**. `deputy doctor` says plainly whether commands are
+confined. To confine them, set `policy.command_wrapper`, an argv prefix put in front of every
+command; `{workdir}` is replaced by the check's working directory. `deputy init --confine` writes a
+ready-made one for your platform:
+
+| Platform | Wrapper | What it allows |
+| --- | --- | --- |
+| macOS | `sandbox-exec` with a profile written to `~/.config/deputy/command-sandbox.sb` | read anywhere except `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config`; write only in the work folder, `/private/tmp` and the user temp folders; no network. Verified on macOS (the test runs a real command under it) |
+| Linux | `bwrap` (bubblewrap) | a read-only view of the system, write only in the work folder and a private `/tmp`, no network. Written from the bubblewrap documentation, **not verified on real hardware yet** |
+| Windows | none | commands are not confined; leave `allowed_commands` empty |
+
+The allow-list still judges the command you declared, not the wrapper. If the wrapper program is
+missing, the check fails instead of running unconfined. The wrapper reduces the damage a worker's
+code can do; it is not a promise of perfect isolation: keep `allowed_commands` short and run
+deputy on a workspace copy (`deputy workspace`).

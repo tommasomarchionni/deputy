@@ -65,6 +65,10 @@ class Policy(BaseModel):
         description="argv prefixes a `command` check may run, e.g. [['node','--test']]",
     )
     command_timeout_s: float = 120.0
+    command_wrapper: list[str] = Field(
+        default_factory=list[str],
+        description="argv prefix that confines every `command` check; {workdir} is replaced",
+    )
 
 
 class Config(BaseModel):
