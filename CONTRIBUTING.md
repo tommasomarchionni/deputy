@@ -58,8 +58,19 @@ uv run mkdocs serve                       # the documentation site, live
 
 Optional: `uvx pre-commit install` runs ruff and basic hygiene checks before each commit.
 
-Tests against a real model are skipped by default; to run them:
-`DEPUTY_LIVE_URL=http://127.0.0.1:8080 uv run pytest tests/live`.
+### Kinds of tests
+
+| Kind | Where | What it protects | Run |
+| --- | --- | --- | --- |
+| Unit | `tests/test_*.py` | rules of one module; no network (sockets are disabled) | `uv run pytest` |
+| Property | `tests/test_properties.py` | guarantees for any input (sandbox confinement, parsers) | `uv run pytest` |
+| Integration | `tests/integration/` | real HTTP, a real subprocess and the real MCP protocol; only the model is faked | `uv run pytest tests/integration` |
+| Snapshot (regression) | `tests/test_public_surface.py` | tool schemas, CLI help, report format | `uv run pytest`; on purpose: `--snapshot-update` |
+| Repository automation | `tests/ci/` | the rules of the PR and label automation | `uv run pytest tests/ci` |
+| Live | `tests/live/` | the real model; skipped unless `DEPUTY_LIVE_URL` is set | `DEPUTY_LIVE_URL=http://127.0.0.1:8080 uv run pytest tests/live` |
+
+Tests run in random order (`pytest-randomly`; the seed is printed, reuse it with `-p randomly_seed=N`) and each has a timeout. A bug gets a test that fails before the fix and passes
+after. The benchmark (`deputy bench`) is the regression suite for model behaviour.
 
 Style: small functions with one job, intention-revealing names, no flag arguments that switch
 behaviour, polymorphism instead of long `if` chains, no comments that restate the code. Everything

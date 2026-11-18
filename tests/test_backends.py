@@ -6,10 +6,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from conftest import message
 from deputy import cli
 from deputy.backends import BackendError, ChatClient
 from deputy.config import Backend
+from helpers import message
 
 
 def client_for(handler, **backend_kw) -> ChatClient:  # type: ignore[no-untyped-def]

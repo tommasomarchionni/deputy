@@ -35,6 +35,10 @@ dev = [
     "ruff>=0.17",
     "pyright>=1.1.400",
     "hypothesis>=6.170.15",
+    "pytest-randomly>=5.1.0",
+    "pytest-socket>=0.8.1",
+    "pytest-timeout>=2.4.0",
+    "syrupy>=7.0.2",
 ]
 docs = [
     "mkdocs>=1.6.1,<2",
@@ -66,9 +70,13 @@ ignore = ["PLR2004", "S101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tools/ci"]
-addopts = "-q --strict-markers"
-markers = ["live: needs a real model server (set DEPUTY_LIVE_URL)"]
+pythonpath = ["tools/ci", "tests", "tests/integration"]
+addopts = "-q --strict-markers --disable-socket --allow-unix-socket"
+timeout = 120
+markers = [
+  "live: needs a real model server (set DEPUTY_LIVE_URL)",
+  "integration: crosses a real socket or process (only the model is faked)",
+]
 
 [tool.coverage.run]
 source = ["deputy"]

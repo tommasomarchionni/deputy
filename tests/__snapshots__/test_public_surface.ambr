@@ -1,0 +1,363 @@
+# serializer version: 1
+# name: test_each_command_help_is_stable[bench]
+  '''
+  usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
+                      [--variant VARIANT]
+  
+  options:
+    -h, --help         show this help message and exit
+    --backend BACKEND  backend name (default: the default backend)
+    --runs RUNS        repetitions of the suite
+    --tasks TASKS      comma-separated task names
+    --variant VARIANT  extra setting: NAME=JSON
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[doctor]
+  '''
+  usage: deputy doctor [-h]
+  
+  options:
+    -h, --help  show this help message and exit
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[init]
+  '''
+  usage: deputy init [-h] [--name NAME] [--url URL] [--model MODEL]
+                     [--key-file KEY_FILE] [--force] [--yes]
+  
+  options:
+    -h, --help           show this help message and exit
+    --name NAME
+    --url URL
+    --model MODEL
+    --key-file KEY_FILE
+    --force
+    --yes                never ask; use flags and defaults
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[install]
+  '''
+  usage: deputy install [-h] [--apply] {claude-code,vscode,cursor,codex,generic}
+  
+  positional arguments:
+    {claude-code,vscode,cursor,codex,generic}
+  
+  options:
+    -h, --help            show this help message and exit
+    --apply               do it instead of printing
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[instructions]
+  '''
+  usage: deputy instructions [-h] [--write FILE]
+  
+  options:
+    -h, --help    show this help message and exit
+    --write FILE  insert it in FILE (CLAUDE.md, ...)
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[mcp]
+  '''
+  usage: deputy mcp [-h]
+  
+  options:
+    -h, --help  show this help message and exit
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[tune]
+  '''
+  usage: deputy tune [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
+                     [--apply] [--revert]
+  
+  options:
+    -h, --help         show this help message and exit
+    --backend BACKEND  backend name (default: the default backend)
+    --runs RUNS        repetitions of the suite
+    --tasks TASKS      comma-separated task names
+    --apply            write the winner
+    --revert           undo the last tuning
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[update]
+  '''
+  usage: deputy update [-h] [--check]
+  
+  options:
+    -h, --help  show this help message and exit
+    --check     only look, change nothing
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[workspace]
+  '''
+  usage: deputy workspace [-h] [--repo REPO]
+                          {create,diff,path,remove} name [paths ...]
+  
+  positional arguments:
+    {create,diff,path,remove}
+    name
+    paths                 files or folders to copy (create only)
+  
+  options:
+    -h, --help            show this help message and exit
+    --repo REPO           repository the paths are relative to
+  
+  '''
+# ---
+# name: test_the_benchmark_table_is_stable
+  '''
+  variant         pass  cites  turns  tok out     sec    +-  tok/s  saved*
+  baseline         80%   100%    2.4      912    61.5   7.2   14.8    1530
+  thinking-off     80%   100%    2.2      311    24.0   3.1   13.0    1530
+  * saved: estimated tokens the orchestrator did not have to read (chars / 4)
+  '''
+# ---
+# name: test_the_list_of_commands_is_stable
+  list([
+    'bench',
+    'doctor',
+    'init',
+    'install',
+    'instructions',
+    'mcp',
+    'tune',
+    'update',
+    'workspace',
+  ])
+# ---
+# name: test_the_server_instructions_are_stable
+  'Delegate small, checkable, read-heavy tasks to another model. Use `delegate`.'
+# ---
+# name: test_the_tool_schemas_are_stable
+  '''
+  {
+    "delegate": {
+      "description": "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`.",
+      "input": {
+        "$defs": {
+          "CheckSpec": {
+            "description": "What the orchestrator sends: one flat shape, so the tool schema stays small.\n`type` is contains|excludes|cites_lines|max_chars|file_written|file_contains|command.",
+            "properties": {
+              "argv": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Argv"
+              },
+              "limit": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Limit"
+              },
+              "max": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "min": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "path": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Path"
+              },
+              "type": {
+                "enum": [
+                  "contains",
+                  "excludes",
+                  "cites_lines",
+                  "max_chars",
+                  "file_written",
+                  "file_contains",
+                  "command"
+                ],
+                "title": "Type",
+                "type": "string"
+              },
+              "values": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Values"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "title": "CheckSpec",
+            "type": "object"
+          }
+        },
+        "properties": {
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Backend"
+          },
+          "checks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/CheckSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Checks"
+          },
+          "max_turns": {
+            "default": 8,
+            "title": "Max Turns",
+            "type": "integer"
+          },
+          "profile": {
+            "default": "helper",
+            "title": "Profile",
+            "type": "string"
+          },
+          "task": {
+            "title": "Task",
+            "type": "string"
+          },
+          "workdir": {
+            "title": "Workdir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task",
+          "workdir"
+        ],
+        "title": "delegateArguments",
+        "type": "object"
+      }
+    },
+    "feedback": {
+      "description": "Tell deputy whether a result was good. Improves routing and profiles.",
+      "input": {
+        "properties": {
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "accepted",
+              "rejected"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "verdict"
+        ],
+        "title": "feedbackArguments",
+        "type": "object"
+      }
+    },
+    "profiles": {
+      "description": "Available profiles (name: description).",
+      "input": {
+        "properties": {
+          "workdir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Workdir"
+          }
+        },
+        "title": "profilesArguments",
+        "type": "object"
+      }
+    },
+    "status": {
+      "description": "Configured backends and whether they answer.",
+      "input": {
+        "properties": {},
+        "title": "statusArguments",
+        "type": "object"
+      }
+    }
+  }
+  '''
+# ---
