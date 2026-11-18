@@ -59,6 +59,7 @@ settings and recommends the best one that loses no accuracy.
 ```sh
 deputy bench                 # one pass of the built-in suite, prints a table, saves a model profile
 deputy bench --runs 3        # repeat: you get the spread too, and a fairer comparison
+deputy bench --json          # the same, as JSON for scripts and reports
 deputy tune                  # baseline + candidates; recommends, or applies per `auto_tune`
 deputy tune --apply          # write the winner to tuned.toml now
 deputy tune --revert         # undo the last applied tuning

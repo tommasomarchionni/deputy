@@ -2,7 +2,7 @@
 # name: test_each_command_help_is_stable[bench]
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                      [--variant VARIANT]
+                      [--variant VARIANT] [--json]
   
   options:
     -h, --help         show this help message and exit
@@ -10,6 +10,7 @@
     --runs RUNS        repetitions of the suite
     --tasks TASKS      comma-separated task names
     --variant VARIANT  extra setting: NAME=JSON
+    --json             print JSON, not a table
   
   '''
 # ---

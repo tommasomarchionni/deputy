@@ -92,8 +92,14 @@ def bench(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    profile = save_model_profile(backend, summaries[0], summaries[1:])
+    if args.json:
+        print(
+            json.dumps({"summaries": [s.model_dump() for s in summaries], "profile": str(profile)})
+        )
+        return 0
     print(format_table(summaries))
-    print(f"profile saved: {save_model_profile(backend, summaries[0], summaries[1:])}")
+    print(f"profile saved: {profile}")
     return 0
 
 
@@ -147,6 +153,7 @@ def register(sub: Subparsers) -> None:
         parser.add_argument("--tasks", help="comma-separated task names")
         if name == "bench":
             parser.add_argument("--variant", action="append", help="extra setting: NAME=JSON")
+            parser.add_argument("--json", action="store_true", help="print JSON, not a table")
         else:
             parser.add_argument("--apply", action="store_true", help="write the winner")
             parser.add_argument("--revert", action="store_true", help="undo the last tuning")
