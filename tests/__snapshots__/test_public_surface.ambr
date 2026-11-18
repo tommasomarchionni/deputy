@@ -29,6 +29,21 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[discover]
+  '''
+  usage: deputy discover [-h] [--project PROJECT] [--transcripts TRANSCRIPTS]
+                         [--days DAYS] [--json]
+  
+  options:
+    -h, --help            show this help message and exit
+    --project PROJECT     project folder (default: here)
+    --transcripts TRANSCRIPTS
+                          a folder of session transcripts (*.jsonl)
+    --days DAYS           how far back to look (default 30)
+    --json                print JSON, not a table
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[doctor]
   '''
   usage: deputy doctor [-h]
@@ -229,6 +244,7 @@
 # name: test_the_list_of_commands_is_stable
   list([
     'bench',
+    'discover',
     'doctor',
     'init',
     'install',

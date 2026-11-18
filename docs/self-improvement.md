@@ -171,3 +171,22 @@ Each `[[task]]` has a `name`, the `task` text and optional `checks` (the same fi
 one, so the folder is left as it was. The table shows, per task, the result, turns, seconds and the
 estimated tokens the orchestrator did not have to read; a short task can be negative, which is the
 answer to "should I delegate this". Nothing leaves your machine except the calls to your own backend.
+
+## Where your orchestrator's reading goes: `deputy discover`
+
+```sh
+deputy discover --project /path/to/your/repo --days 30
+```
+
+It reads the Claude Code session transcripts of that folder on your machine (nothing is sent
+anywhere) and sums the text of every tool result, by category: **reads** (file reads, searches,
+listings, and shell commands such as `sed`, `cat`, `grep`), **command output** (git, gh, test
+runners, build tools) and the rest. A result over 4,000 characters (about 1,000 tokens) is counted
+as *large*: that is where a delegation can pay. The last lines give two upper bounds: the large
+reads a delegation could take, and the command output that a command-output compressor such as
+[rtk](https://github.com/rtk-ai/rtk) works on. Images are ignored. These are volumes, not costs:
+prompt caching makes a re-read cheaper, and a read made to edit a file cannot be delegated.
+
+Measured on 11 sessions of one real repository: large reads were 30 % of everything the orchestrator
+read, command output 15 %.
+
