@@ -22,6 +22,53 @@ HINT_BYTES = 8_000
 HOOK_TIMEOUT_S = 5  # the hint must never hold a read for long
 HOOK_COMMAND = "deputy-hook"  # a light entry point: it runs before every read
 _EVENT = "PreToolUse"
+_BINARY_SUFFIXES = frozenset(
+    [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".bmp",
+        ".ico",
+        ".tiff",
+        ".heic",
+        ".pdf",
+        ".zip",
+        ".gz",
+        ".tar",
+        ".tgz",
+        ".bz2",
+        ".xz",
+        ".7z",
+        ".mp3",
+        ".mp4",
+        ".wav",
+        ".mov",
+        ".webm",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".otf",
+        ".so",
+        ".dylib",
+        ".dll",
+        ".exe",
+        ".bin",
+        ".wasm",
+    ]
+)
+
+
+def _is_binary(path: Path) -> bool:
+    """An image, archive or other binary file: the worker reads text only."""
+    if path.suffix.lower() in _BINARY_SUFFIXES:
+        return True
+    try:
+        with path.open("rb") as handle:
+            return b"\0" in handle.read(1024)
+    except OSError:
+        return True
 
 
 def hint(payload: dict[str, Any]) -> str | None:
@@ -41,7 +88,7 @@ def hint(payload: dict[str, Any]) -> str | None:
         size = path.stat().st_size
     except OSError:
         return None
-    if size <= HINT_BYTES or not path.is_file():
+    if size <= HINT_BYTES or not path.is_file() or _is_binary(path):
         return None
     return (
         f"deputy: {path.name} is about {tokens.from_chars(size):,} tokens. If you need facts from "
