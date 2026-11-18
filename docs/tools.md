@@ -105,6 +105,9 @@ prompt (a 27B model on a laptop reads about 50 tokens a second) 70 KB took about
 has a 10 minute budget and says where it stopped. The worker is told to try `grep` first, which is
 fast, and to use `scan_file` only when grep cannot answer. The orchestrator pays nothing for the
 parts: the whole file counts as read on its behalf in `orchestrator_tokens_saved_est`.
+In a git work tree, `grep` skips what git ignores (generated folders, mirrored worktrees) and still
+finds untracked files; elsewhere it searches everything. This only narrows a search: the sandbox's
+own refusals still apply to each file.
 A `grep`, by contrast, counts only the hit lines it returns, because that is all an orchestrator
 searching by itself would read; counting each matching file would inflate the figure (one search of a
 large repository once reported 34 million tokens).
