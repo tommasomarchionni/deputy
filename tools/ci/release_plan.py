@@ -115,21 +115,24 @@ def _commits_since(tag: str | None) -> list[Commit]:
     return [Commit(*[*item.split("\x1f", 1), ""][:2]) for item in items]
 
 
+def green_in(check_runs: list[dict[str, str | None]] | list[dict[str, str]]) -> bool:
+    """The `Required` aggregate check of CI succeeded."""
+    return any(r["name"] == "Required" and r["conclusion"] == "success" for r in check_runs)
+
+
 def _ci_green(sha: str) -> bool:
-    """The `Required` aggregate check of CI succeeded on this exact commit."""
+    """Ask GitHub for the check runs of this exact commit. `--jq` gives one run per line, so the
+    answer does not depend on how paginated responses are concatenated."""
     done = subprocess.run(  # noqa: S603
-        ["gh", "api", f"repos/{os.environ['GH_REPO']}/commits/{sha}/check-runs", "--paginate"],  # noqa: S607
+        [  # noqa: S607
+            "gh", "api", f"repos/{os.environ['GH_REPO']}/commits/{sha}/check-runs",
+            "--paginate", "--jq", ".check_runs[] | {name, conclusion}",
+        ],
         capture_output=True,
         text=True,
         check=True,
-    )
-    runs = [
-        r
-        for page in done.stdout.replace("}{", "}\n{").splitlines()
-        if page
-        for r in json.loads(page)["check_runs"]
-    ]
-    return any(r["name"] == "Required" and r["conclusion"] == "success" for r in runs)
+    )  # fmt: skip
+    return green_in([json.loads(line) for line in done.stdout.splitlines() if line.strip()])
 
 
 def main() -> int:
