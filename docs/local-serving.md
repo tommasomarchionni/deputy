@@ -44,4 +44,3 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.deputy.nightly-bench
 It runs at 03:00, skips (and says so in `skipped.log`) when the backend does not answer, and keeps
 one report per night in `~/.local/state/deputy/nightly/` for 90 days. Reports never block anything:
 compare two nights with `jq`. Remove it with `launchctl bootout gui/$(id -u)/dev.deputy.nightly-bench`.
-
