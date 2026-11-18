@@ -2,24 +2,30 @@
 
 from __future__ import annotations
 
+import os
 import re
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 
 MAX_READ_CHARS = 60_000
+MAX_FILE_BYTES = 5_000_000
 MAX_WRITE_BYTES = 1_000_000
 MAX_GREP_HITS = 50
-_SECRET_NAMES = re.compile(
-    r"(^\.env($|\.)|\.(pem|key|p12|pfx)$|(^|/)id_(rsa|ed25519|ecdsa)(\.pub)?$|^\.npmrc$|^\.netrc$)",
+_SECRET_FILES = re.compile(
+    r"(^\.env($|\.)|\.(pem|key|p12|pfx|keystore)$|^id_(rsa|ed25519|ecdsa|dsa)(\.pub)?$"
+    r"|^\.(npmrc|netrc|pypirc|htpasswd|git-credentials)$|^credentials(\.|$)|^secrets?\.)",
     re.IGNORECASE,
 )
+_SECRET_DIRS = frozenset({".git", ".ssh", ".aws", ".gnupg", ".kube", ".docker"})
 
 
 def is_secret_name(relative_path: str) -> bool:
-    """True for files that look like secrets (by name): never readable, never copied."""
-    return bool(
-        _SECRET_NAMES.search(relative_path) or _SECRET_NAMES.search(Path(relative_path).name)
-    )
+    """True for files that look like secrets (by name or folder): never readable, never copied."""
+    parts = Path(relative_path).parts
+    if any(part.lower() in _SECRET_DIRS for part in parts):
+        return True
+    return bool(parts) and bool(_SECRET_FILES.search(parts[-1]))
 
 
 class SandboxError(Exception):
@@ -59,13 +65,7 @@ class Sandbox:
     def read_file(self, path: str, offset: int = 1, limit: int = 400) -> str:
         """Return lines `offset..offset+limit-1`, each prefixed with its 1-based line number."""
         target = self.resolve(path)
-        if not target.is_file():
-            raise SandboxError("not a file")
-        try:
-            text = target.read_text(encoding="utf-8")
-        except UnicodeDecodeError as exc:
-            raise SandboxError("not a UTF-8 text file") from exc
-        lines = text.splitlines()
+        lines = _read_text(target).splitlines()
         total = len(lines)
         start = max(1, offset)
         end = min(total, start + max(1, limit) - 1)
@@ -90,11 +90,21 @@ class Sandbox:
         if len(content.encode("utf-8")) > MAX_WRITE_BYTES:
             raise SandboxError("content too large")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        _write_text(target, content)
         rel = target.relative_to(self.root).as_posix()
         if rel not in self.files_written:
             self.files_written.append(rel)
         return f"wrote {rel} ({len(content)} chars)"
+
+    def _contained(self, candidate: Path) -> Path | None:
+        """The real path of `candidate` if it is inside the root and not a secret, else None.
+
+        A symlink inside the folder that points outside is skipped here, so a search never reads
+        what `resolve` would refuse."""
+        try:
+            return self.resolve(str(candidate))
+        except SandboxError:
+            return None
 
     def grep(self, pattern: str, path: str = ".") -> str:
         """Regex search, like `grep -rn`, without a shell. Returns `file:line: text` hits."""
@@ -105,15 +115,14 @@ class Sandbox:
         base = self.resolve(path)
         files = [base] if base.is_file() else sorted(p for p in base.rglob("*") if p.is_file())
         hits: list[str] = []
-        for file in files:
+        for candidate in files:
+            file = self._contained(candidate)
+            if file is None or "node_modules" in file.parts:
+                continue
             rel = file.relative_to(self.root).as_posix()
-            if any(part.startswith(".git") or part == "node_modules" for part in file.parts):
-                continue
-            if is_secret_name(rel):
-                continue
             try:
-                lines = file.read_text(encoding="utf-8").splitlines()
-            except (UnicodeDecodeError, OSError):
+                lines = _read_text(file).splitlines()
+            except SandboxError:
                 continue
             counted = False
             for number, line in enumerate(lines, start=1):
@@ -125,3 +134,42 @@ class Sandbox:
                     if len(hits) >= MAX_GREP_HITS:
                         return "\n".join([*hits, f"[stopped at {MAX_GREP_HITS} hits]"])
         return "\n".join(hits) if hits else "no matches"
+
+
+def _open_regular(
+    path: Path, flags: int, *, single_link: bool = False
+) -> tuple[int, os.stat_result]:
+    """Open `path` without following a symlink at the last component and check, on the open file
+    descriptor, that it is a regular file (and, if asked, not hard-linked). The checks are made on
+    the descriptor, so nothing can change between the check and the use. A FIFO or device (which
+    could block) is refused; the descriptor is closed on any refusal."""
+    flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags, 0o644)
+    except OSError as exc:
+        raise SandboxError("cannot open this file") from exc
+    info = os.fstat(descriptor)
+    if not stat.S_ISREG(info.st_mode) or (single_link and info.st_nlink > 1):
+        os.close(descriptor)
+        raise SandboxError("not a plain file (or it is hard-linked)")
+    return descriptor, info
+
+
+def _read_text(path: Path) -> str:
+    """Read a UTF-8 text file; files larger than the cap are refused."""
+    descriptor, info = _open_regular(path, os.O_RDONLY)
+    with os.fdopen(descriptor, "rb") as handle:
+        if info.st_size > MAX_FILE_BYTES:
+            raise SandboxError(f"file too large ({info.st_size} bytes); use grep for a search")
+        try:
+            return handle.read().decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise SandboxError("not a UTF-8 text file") from exc
+
+
+def _write_text(path: Path, content: str) -> None:
+    """Write a file, never through a hard link: a second name for a file that may live outside."""
+    descriptor, _ = _open_regular(path, os.O_WRONLY | os.O_CREAT, single_link=True)
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.truncate(0)
+        handle.write(content.encode("utf-8"))

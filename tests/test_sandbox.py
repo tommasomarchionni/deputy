@@ -1,9 +1,10 @@
 # pyright: basic
+import os
 from pathlib import Path
 
 import pytest
 
-from deputy.sandbox import Sandbox, SandboxError
+from deputy.sandbox import Sandbox, SandboxError, _read_text, _write_text
 
 
 def make(tmp_path: Path) -> Sandbox:
@@ -106,3 +107,92 @@ def test_a_grep_hit_counts_the_whole_file_as_seen_by_the_worker(tmp_path: Path) 
     assert box.chars_read == 0
     box.grep("needle")
     assert box.chars_read >= 999 * 6
+
+
+def test_grep_never_reads_through_a_symlink_that_points_outside(tmp_path: Path) -> None:
+    """Found by the review of issue 23: grep used to follow such a link and leak the file."""
+    box = make(tmp_path)
+    (tmp_path / "outside.txt").write_text("TOP-SECRET-OUTSIDE\n")
+    (box.root / "link.txt").symlink_to(tmp_path / "outside.txt")
+    (box.root / "inside.txt").write_text("a plain line\n")
+    assert box.grep("TOP-SECRET") == "no matches"
+    assert box.grep("plain") == "inside.txt:1: a plain line"
+    with pytest.raises(SandboxError):  # asking for the link itself is refused outright
+        box.grep("TOP-SECRET", "link.txt")
+
+
+def test_a_hard_link_to_an_outside_file_is_never_written_through(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("precious")
+    (box.root / "alias.txt").hardlink_to(outside)
+    with pytest.raises(SandboxError):
+        box.write_file("alias.txt", "overwritten")
+    assert outside.read_text() == "precious"
+
+
+def test_a_symlink_swapped_in_after_the_check_is_not_followed(tmp_path: Path) -> None:
+    """The final open refuses a symlink even if one appears after `resolve` returned."""
+    box = make(tmp_path)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("private")
+    swapped = box.root / "swapped.txt"
+    swapped.symlink_to(outside)
+    with pytest.raises(SandboxError):
+        _read_text(swapped)
+    with pytest.raises(SandboxError):
+        _write_text(swapped, "x")
+    assert outside.read_text() == "private"
+
+
+def test_a_fifo_is_refused_instead_of_blocking(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    os.mkfifo(box.root / "pipe")
+    with pytest.raises(SandboxError):
+        box.read_file("pipe")
+    assert box.grep("anything") == "no matches"
+
+
+def test_a_file_over_the_size_cap_is_refused_and_skipped_by_grep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("deputy.sandbox.MAX_FILE_BYTES", 100)
+    box = make(tmp_path)
+    (box.root / "big.log").write_text("needle\n" * 100)
+    (box.root / "small.log").write_text("needle\n")
+    with pytest.raises(SandboxError, match="too large"):
+        box.read_file("big.log")
+    assert box.grep("needle") == "small.log:1: needle"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        ".git/config",
+        "sub/.ssh/id_rsa",
+        ".aws/credentials",
+        "credentials.json",
+        ".pypirc",
+        "app.keystore",
+        "secrets.yml",
+        "deep/.GIT/HEAD",
+        ".git-credentials",
+    ],
+)
+def test_more_secret_looking_paths_are_never_accessible(tmp_path: Path, name: str) -> None:
+    box = make(tmp_path)
+    target = box.root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("TOKEN=1")
+    with pytest.raises(SandboxError):
+        box.read_file(name)
+    with pytest.raises(SandboxError):
+        box.write_file(name, "x")
+    assert box.grep("TOKEN") == "no matches"
+
+
+def test_ordinary_names_that_resemble_secrets_are_still_readable(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    for name in ("environment.md", "keys.md", "credits.txt", "gitignore.txt", "secretary.md"):
+        (box.root / name).write_text("fine\n")
+        assert "fine" in box.read_file(name)
