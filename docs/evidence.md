@@ -10,21 +10,29 @@ Frontier reference: **Claude Sonnet 5.5** (`claude-sonnet-5-5`).
 ## A real repository
 
 Six read-only tasks on a private multi-app TypeScript and Python repository (about 900 lines of
-CI documentation, several apps and packages), each with checks, run one after another.
+CI documentation, several apps and packages), each with checks, run one after another. First run
+with version 0.11, second with 0.12 (`deputy bench --tasks-file`), which returns a shorter result
+and counts a search by the lines it returns.
 
-| Task | Checks | Tokens the orchestrator did not read | Worker time |
-| --- | --- | ---: | ---: |
-| Inventory of apps and packages, with cited lines | passed | 3,891 | 108 s |
-| Find every file that mentions an identifier | passed | 3,295 | 168 s |
-| Summarise a long CI document, with cited lines | passed | 12,976 | 231 s |
-| List the workflow files with one phrase each | passed | 11,566 | 225 s |
-| List the build targets of one project file | passed | −74 | 12 s |
-| Find the design notes that mention a topic | passed | 1,140 | 33 s |
+| Task | 0.11: checks | 0.11: saved | 0.12: checks | 0.12: saved | 0.12: worker time |
+| --- | --- | ---: | --- | ---: | ---: |
+| Inventory of apps and packages, with cited lines | passed | 3,891 | passed | 4,095 | 88 s |
+| Find every file that mentions an identifier | passed | 3,295 | **failed** | 3,690 | 359 s |
+| Summarise a long CI document, with cited lines | passed | 12,976 | passed | 22,545 | 356 s |
+| List the workflow files with one phrase each | passed | 11,566 | passed | 9,984 | 181 s |
+| List the build targets of one project file | passed | −74 | passed | 3 | 14 s |
+| Find the design notes that mention a topic | passed | 1,140 | passed | 1,275 | 48 s |
+| **Total** | 6 of 6 | 32,794 | 5 of 6 | 41,592 | 1,044 s |
 
-All six passed their checks. The estimated saving is about 32,800 tokens, a mean of about 5,500 a
-task. The smallest task **cost more than it saved** (−74): this is why a class of tasks that does
-not pay is flagged `not_worth_delegating` instead of being delegated. Delegate what is long to
-read; do small lookups yourself.
+"Saved" is the estimated frontier tokens the orchestrator did not have to read, net of what it paid
+for the request and the result. On 0.12 the mean is about 6,900 tokens a task. The smallest task
+saves about nothing (it cost more than it saved on 0.11): delegate what is long to read; do small
+lookups yourself, which is what the `small_input` and `not_worth_delegating` flags say.
+
+The failed search on 0.12 was a real defect: the search stopped at 50 hits, and the identifier had
+66 hits in 29 files, so files past the cap were never seen. Since then a large search lists every
+matching file with its hit count (about 490 tokens for those 29 files), and the task's own check
+caught the incomplete answer, so the orchestrator was told to redo it instead of trusting it.
 
 ## Quality against a frontier model
 

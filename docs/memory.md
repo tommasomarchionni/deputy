@@ -36,9 +36,13 @@ directory keyed by repository id, exportable to reviewed markdown. Built: `deput
 
 ## Rules
 
-- Workers cannot write memory. Entries come from the benchmark or from `deputy_feedback`, and a
-  human can review them (markdown export, diffable).
-- Every entry has provenance and an expiry. No secrets, tokens or personal data.
-- A repository's memory is never injected into another repository's task.
-- **Ablation:** memory stays only while a run with it beats a run without it on the benchmark.
-- Retrieval: BM25 (SQLite FTS5) first; embeddings only if they win on the benchmark.
+- Workers cannot write memory. Model profiles come from the benchmark, lessons from the trace
+  (`deputy learn`), project memory from you (`deputy memory`); all are JSON files in the state
+  directory, and project memory can be exported as markdown to review.
+- Lessons have evidence and an expiry, and their text comes from a fixed catalogue: nothing from a
+  trace or a worker is copied into a prompt. No secrets, tokens or personal data.
+- A repository's memory is never added to another repository's task.
+- **Ablation:** a lesson stays only while a benchmark run with it is not worse than without it
+  (`deputy lessons check`). Project memory has no ablation yet.
+- Selection is simple: lessons by profile and kind of check, project memory by repository, both
+  under a small size budget. No search index; embeddings only if they ever win on the benchmark.

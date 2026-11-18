@@ -167,7 +167,8 @@ use (delete `runs.jsonl` for a clean start).
 ### How the saving is estimated
 
 For each delegation deputy estimates two things with the same yardstick: what the worker read on the
-orchestrator's behalf (`read`: the lines it read, plus every file in which a search found a match),
+orchestrator's behalf (`read`: the lines it read, the hit lines a search returned, and the whole of
+a file summarised by `summarise_log` or scanned by `scan_file`),
 and what the orchestrator paid (`cost`: the request it wrote, serialised, plus the result it reads,
 serialised). The saving is `read - cost`, and **it can be negative**: a task that reads little and
 returns a lot costs more than it spares, and `not_worth_delegating` ([tools](tools.md)) is built on
@@ -177,7 +178,8 @@ The yardstick is the size in UTF-8 bytes divided by four, rounded up. It is the 
 for English prose, and it is wrong by up to about a quarter either way: code and JSON are denser than
 this says, other languages vary. Because both sides use it, the difference is meaningful as an order
 of magnitude and a trend, not as an invoice. Not counted: the tool schemas the orchestrator carries
-on every turn (about 1,200 tokens, a fixed cost with or without delegation), and its own reasoning.
+for the session (about 970 tokens for all five tools, a fixed cost with or without delegation), and
+its own reasoning.
 
 ## The measured model profile
 
