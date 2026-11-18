@@ -205,7 +205,7 @@
       "input": {
         "$defs": {
           "CheckSpec": {
-            "description": "What the orchestrator sends: one flat shape, so the tool schema stays small.\n`type` is contains|excludes|cites_lines|cites_text|max_chars|file_written|file_contains|command.",
+            "description": "One proof run on the answer: `type` picks the kind, the other fields are its arguments.",
             "properties": {
               "argv": {
                 "anyOf": [
@@ -221,6 +221,19 @@
                 ],
                 "default": null,
                 "title": "Argv"
+              },
+              "json_schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Json Schema"
               },
               "limit": {
                 "anyOf": [
@@ -276,6 +289,7 @@
                   "excludes",
                   "cites_lines",
                   "cites_text",
+                  "json_schema",
                   "max_chars",
                   "file_written",
                   "file_contains",
