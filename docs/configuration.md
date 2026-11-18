@@ -60,11 +60,16 @@ argument of `delegate` (default `helper`); the `profiles` tool lists the ones av
 - **What else reaches the worker.** On top of the profile, deputy adds the lessons learned from use
   (`deputy learn`) and the project memory (`deputy memory`), which points to your repository's own
   rule files instead of copying them.
-- **Copies fall behind.** A copy of `helper` (yours, a project's, or one installed by `deputy
-  optimise --apply`) replaces the bundled one, so deputy's later improvements to `helper` (its tool
-  list, its rules) do not reach you. `deputy doctor` says when that happens. Prefer `helper` plus
-  project memory, and write your own profile only for a kind of work `helper` does not cover; keep it
-  short and in step with the template.
+- **Build on a profile instead of copying it.** With `extends: helper` in the front matter, your
+  profile gets the current text of `helper` followed by your own lines, so deputy's later
+  improvements to its tools and rules reach you. Your `description`, `max_turns` and `max_retries`
+  win; what you leave out comes from the parent. A profile may extend its own name (a project's
+  `helper` that adds lines to the bundled one), and chains work. A parent that does not exist, or a
+  loop, is ignored and `deputy doctor` says which profile and why.
+- **Copies fall behind.** A copy of `helper` without `extends` (yours, a project's, or one installed
+  by `deputy optimise --apply`) replaces the bundled one, so deputy's later improvements do not
+  reach you. `deputy doctor` says when that happens. Prefer `helper` plus project memory, and write
+  your own profile only for a kind of work `helper` does not cover.
 
 The front matter can set the profile's limits:
 
@@ -74,6 +79,7 @@ name: strict-reader
 description: Reads and reports, no second chances
 max_turns: 4        # 1 to 50: the most tool turns the worker may take
 max_retries: 0      # 0 to 5: correction rounds after a failed check (default 1)
+extends: helper     # optional: start from the current text of this profile
 ---
 ```
 
