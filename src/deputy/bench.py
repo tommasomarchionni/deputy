@@ -272,6 +272,25 @@ def choose_best(baseline: Summary, candidates: list[Summary]) -> Summary | None:
     return best
 
 
+def _lessons_for(
+    task: BenchTask, profile: str, use_lessons: bool, book: lessons.LessonBook | None
+) -> list[lessons.Lesson]:
+    """The lessons a benchmark run applies: those of `book` if given (an ablation tests exactly
+    the lessons it names), else the saved ones when asked, else none (the raw model)."""
+    if book is not None:
+        return lessons.applicable(profile, task.checks, book=book)
+    return lessons.applicable(profile, task.checks) if use_lessons else []
+
+
+def tasks_with_kind(kind: str, *, run_code: bool = False) -> list[str]:
+    """The benchmark tasks with a check of this kind: those a lesson about it can affect."""
+    return [
+        t.name
+        for t in tasks()
+        if any(check.type == kind for check in t.checks) and (run_code or not t.executes_code)
+    ]
+
+
 ClientFactory = Callable[[Backend], ChatClient]
 CODE_TASK_TIMEOUT_S = 30.0
 
@@ -297,6 +316,7 @@ async def run_suite(  # noqa: PLR0913
     only: list[str] | None = None,
     run_code: bool = False,
     use_lessons: bool = False,
+    lesson_book: lessons.LessonBook | None = None,
     policy: Policy | None = None,
     client_factory: ClientFactory = ChatClient,
     profile: Profile | None = None,
@@ -326,7 +346,7 @@ async def run_suite(  # noqa: PLR0913
                         max_turns=variant.max_turns,
                         max_retries=0,
                         source=BENCH_SOURCE,
-                        lessons=lessons.applicable(chosen.name, task.checks) if use_lessons else [],
+                        lessons=_lessons_for(task, chosen.name, use_lessons, lesson_book),
                     )
                 finally:
                     await client.aclose()

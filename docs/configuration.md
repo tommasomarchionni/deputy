@@ -197,6 +197,8 @@ deputy learn                 # a report: what it would learn, and why
 deputy learn --apply         # save them; from now on they go into the worker prompt
 deputy lessons               # list the active lessons and what you muted
 deputy lessons remove helper:contains   # remove one, and never learn it again
+deputy lessons check         # test each lesson against the benchmark: with it and without it
+deputy lessons check --apply # remove the ones that make the benchmark worse
 deputy bench --lessons       # measure the model with the lessons applied (default: without)
 ```
 
@@ -211,3 +213,24 @@ still holds; workers cannot write lessons. Each run's trace records which lesson
 `[policy] command_wrapper` is an argv prefix that runs every `command` check inside an OS sandbox;
 `deputy init --confine` writes one for your platform and `deputy doctor` reports whether commands
 are confined. Details and what each platform allows: [security](security.md#confining-command-checks).
+
+### Does a lesson help? `deputy lessons check`
+
+A lesson is a bet, so it is tested. For each active lesson, deputy takes the benchmark tasks that
+carry a check of the lesson's kind (a `max_chars` lesson: the tasks with a length limit), runs them
+**without** the lesson and then with **only** that lesson (same model, same settings, `--runs N`
+repetitions on both sides), and compares:
+
+| Verdict | Meaning | What happens |
+| --- | --- | --- |
+| helps | passes more or cites better with it | kept |
+| neutral | no difference the benchmark can see (the suite may simply be too easy for it) | kept |
+| hurts | passes less or cites worse with it (a loss on either counts) | listed; `--apply` removes it and mutes it |
+| untestable | no benchmark task carries that kind of check | kept |
+
+A real run on the local Qwen3.8 27B, a `max_chars` lesson, two repetitions:
+`pass 100% -> 100%, cites 100% -> 100%, tokens out 342 -> 209`. The verdict is neutral (accuracy did
+not change) and the report shows what it did change: 39% fewer output tokens. The report is the
+point: you decide with the numbers in front of you. Use `--runs 3` or more before trusting a close
+call; the benchmark covers the kinds of check of its own tasks, so a lesson tested here is judged on
+those, not on your real work.
