@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -21,6 +21,13 @@ class Reply:
     tokens_in: int
     tokens_out: int
     model: str
+
+
+@dataclass(frozen=True)
+class Probe:
+    ok: bool
+    detail: str
+    models: list[str] = field(default_factory=list[str])
 
 
 class ChatClient:
@@ -62,22 +69,28 @@ class ChatClient:
             model=str(data.get("model") or self.backend.model),
         )
 
-    async def health(self) -> tuple[bool, str]:
-        """Reachability and the model list, as far as the server tells."""
+    async def probe(self) -> Probe:
+        """Is the server reachable, what does it say, and which models does it serve?"""
         base = self.backend.base_url.rstrip("/")
         try:
             response = await self._client.get(f"{base}/v1/models", headers=self._headers())
         except httpx.HTTPError as exc:
-            return False, f"unreachable: {type(exc).__name__}"
+            return Probe(False, f"unreachable: {type(exc).__name__}")
         if response.status_code == 401:
-            return False, "reachable, but the API key was refused"
+            return Probe(False, "reachable, but the API key was refused")
         if response.status_code != 200:
-            return False, f"HTTP {response.status_code}"
+            return Probe(False, f"HTTP {response.status_code}")
         try:
             models = [str(m.get("id")) for m in response.json().get("data", [])]
         except ValueError:
             models = []
-        return True, "ok" + (f", models: {', '.join(models[:3])}" if models else "")
+        detail = "ok" + (f", models: {', '.join(models[:3])}" if models else "")
+        return Probe(True, detail, models)
+
+    async def health(self) -> tuple[bool, str]:
+        """Reachability and the model list, as far as the server tells."""
+        probe = await self.probe()
+        return probe.ok, probe.detail
 
     async def aclose(self) -> None:
         await self._client.aclose()

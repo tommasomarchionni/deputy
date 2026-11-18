@@ -16,10 +16,12 @@ from mcp.client.stdio import stdio_client
 from deputy import runs
 from deputy.agent import run_task
 from deputy.backends import ChatClient
+from deputy.bench import Summary
 from deputy.checks import CitesLines, Contains
 from deputy.config import Backend, Policy, load_config, state_dir
 from deputy.profiles import load_profiles
 from deputy.sandbox import Sandbox
+from deputy.tune import save_model_profile
 from helpers import message, tool_call
 
 
@@ -197,3 +199,33 @@ def test_the_status_tool_names_the_kinds_of_task_that_do_not_pay_off(configured:
 
     status = asyncio.run(go())
     assert "helper:contains: 6 runs, no net token saving" in status["advice"]
+
+
+def test_the_status_tool_says_whether_the_model_was_measured_and_whether_it_changed(
+    configured: FakeModel,
+) -> None:
+    async def status() -> dict:
+        params = StdioServerParameters(
+            command=sys.executable, args=["-m", "deputy", "mcp"], env=dict(os.environ)
+        )
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            return (await session.call_tool("status", {})).structured_content
+
+    assert status_text(asyncio.run(status())) == "never measured: run deputy tune"
+    backend = Backend(name="fake", base_url=configured.base_url, model="fake-model")
+
+    def measured(served: str) -> Summary:
+        return Summary(variant="baseline", runs=3, pass_rate=1.0, citation_rate=1.0, mean_turns=2.0,
+                       mean_tokens_out=1, mean_elapsed_s=1, stdev_elapsed_s=0, tokens_per_s=1,
+                       served_model=served)  # fmt: skip
+
+    save_model_profile(backend, measured("fake-model"), [])
+    assert "now serves" not in status_text(asyncio.run(status()))
+    save_model_profile(backend, measured("another-model"), [])
+    changed = status_text(asyncio.run(status()))
+    assert "now serves fake-model, not another-model" in changed
+
+
+def status_text(status: dict) -> str:
+    return status["fake profile"]

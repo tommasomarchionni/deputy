@@ -29,7 +29,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Self-correction inside a run: checks, one retry with the exact failure, hand back (`needs_frontier`) | **today** |
 | Benchmark of your model on a built-in suite (`deputy bench`, `--json`) | **today** |
 | Tuning of request settings, recommended or applied (`deputy tune`, `auto_tune`, `--revert`) | **today** |
-| Measured model profile written to disk after every benchmark | **today** (written, not yet read) |
+| Measured model profile written after every benchmark, and read back: the turn limit follows it, and `status` says how old it is and whether the model changed | **today** |
 | Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (the report reads it; lessons and routing do not yet) |
 | Advice that a kind of task does not pay off (`not_worth_delegating`), from the trace | **today** (a flag and a line in `status`; the orchestrator decides) |
 | Lessons learned from feedback, with evidence | planned ([#14](https://github.com/tommasomarchionni/deputy/issues/14)) |

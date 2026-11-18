@@ -302,9 +302,16 @@
             "title": "Checks"
           },
           "max_turns": {
-            "default": 8,
-            "title": "Max Turns",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max Turns"
           },
           "profile": {
             "default": "helper",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import statistics
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -168,6 +168,7 @@ class Summary(BaseModel):
     stdev_elapsed_s: float
     tokens_per_s: float
     mean_saved_tokens_est: float = 0.0
+    served_model: str = ""
     failures: dict[str, int] = {}
 
 
@@ -209,8 +210,17 @@ def summarise(variant: str, results: list[tuple[str, Result]]) -> Summary:
         mean_saved_tokens_est=round(
             statistics.fmean(r.orchestrator_tokens_saved_est for _, r in results), 1
         ),
+        served_model=_most_common(r.metrics.model for _, r in results),
         failures=failures,
     )
+
+
+def _most_common(names: Iterable[str]) -> str:
+    counts: dict[str, int] = {}
+    for name in names:
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    return max(counts, key=lambda n: counts[n]) if counts else ""
 
 
 def choose_best(baseline: Summary, candidates: list[Summary]) -> Summary | None:
