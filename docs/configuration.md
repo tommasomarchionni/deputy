@@ -25,6 +25,7 @@ extra_body = { temperature = 0.2 }   # merged into every request
 # Commands a `command` check may run (argv prefixes, no shell). Empty = none.
 allowed_commands = [["node", "--test"], ["python", "-m", "pytest"]]
 command_timeout_s = 120
+run_budget_s = 900                   # the least time one delegation may take; 0 = no limit
 ```
 
 ## Backends
@@ -72,6 +73,13 @@ max_retries: 0      # 0 to 5: correction rounds after a failed check (default 1)
 
 The orchestrator may declare `command` checks, but they only run if the argv starts with an entry
 of `allowed_commands`. The worker model never runs anything.
+
+**Time budget.** A delegation that runs out of time stops with `turn_limit` and the flag
+`time_limit`, so a stuck model never blocks your agent. The budget is meant to stop a hang, not a
+slow model: it is `run_budget_s` (900 s by default) or 20 times the time this model was measured to
+need per task on your machine (`deputy bench`), whichever is larger. A model measured at 300 s per
+task gets 6,000 s. Set `run_budget_s = 0` for no limit. For a slow local model, delegate with
+`wait=false` and `collect` the result later, so your agent keeps working meanwhile.
 
 ## Tuning
 

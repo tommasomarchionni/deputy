@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
-from typing import Any, Literal, cast
+from collections.abc import Coroutine
+from typing import Any, Literal, TypeVar, cast
 
 from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer
 
@@ -125,6 +127,8 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
 ]
+
+_T = TypeVar("_T")
 
 Status = Literal["ok", "checks_failed", "error", "turn_limit", "running", "cancelled"]
 
@@ -298,10 +302,13 @@ class AgentRun:
         self._check_results: list[CheckResult] = []
         self._flags: list[str] = []
         self._status: Status = "turn_limit"
+        self._deadline = 0.0
 
     async def execute(self) -> Result:
         run_id = self._run_id
         started = time.monotonic()
+        budget = self._policy.run_budget_s
+        self._deadline = started + budget if budget > 0 else float("inf")
         try:
             await self._converse()
         except BackendError as exc:
@@ -316,13 +323,29 @@ class AgentRun:
     async def _converse(self) -> None:
         while self._metrics.turns < self._max_turns:
             self._metrics.turns += 1
-            reply = await self._client.chat(self._messages, TOOLS)
-            self._count_usage(reply)
-            if reply.tool_calls:
-                await self._run_tool_calls(reply)
-            elif await self._verify(reply.content.strip()):
+            try:
+                reply = await self._within_budget(self._client.chat(self._messages, TOOLS))
+                self._count_usage(reply)
+                if reply.tool_calls:
+                    await self._run_tool_calls(reply)
+                elif await self._verify(reply.content.strip()):
+                    return
+            except TimeoutError:
+                self._flags.append("time_limit")
+                self._answer = (
+                    f"stopped after {self._policy.run_budget_s:g} s, the time budget of one run; "
+                    "do the task yourself, or delegate it with wait=false"
+                )
                 return
         self._flags.append("turn_limit")
+
+    async def _within_budget(self, work: Coroutine[Any, Any, _T]) -> _T:
+        """Run `work` in the time left for this delegation; TimeoutError when there is none."""
+        left = self._deadline - time.monotonic()
+        if left <= 0:
+            work.close()
+            raise TimeoutError
+        return await asyncio.wait_for(work, timeout=None if left == float("inf") else left)
 
     def _count_usage(self, reply: Reply) -> None:
         self._metrics.tokens_in += reply.tokens_in
@@ -353,8 +376,10 @@ class AgentRun:
             return _execute(self._sandbox, name, raw_args)
         try:
             arguments = json.loads(raw_args or "{}")
-            return await scan.scan_file(
-                self._client, self._sandbox, str(arguments["path"]), str(arguments["question"])
+            return await self._within_budget(
+                scan.scan_file(
+                    self._client, self._sandbox, str(arguments["path"]), str(arguments["question"])
+                )
             )
         except (ValueError, KeyError, TypeError):
             return "ERROR: scan_file needs a path and a question"

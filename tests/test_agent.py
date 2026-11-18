@@ -1,12 +1,14 @@
 # pyright: basic
 import asyncio
 import subprocess as sp
+import time
 from pathlib import Path
 
 from deputy import agent
 from deputy.agent import Result, run_task
+from deputy.backends import Reply
 from deputy.checks import CheckResult, CitesLines, Contains
-from deputy.config import Policy
+from deputy.config import Backend, Policy
 from deputy.profiles import Profile
 from deputy.sandbox import Sandbox
 from helpers import message, tool_call
@@ -190,3 +192,60 @@ def test_the_worker_can_read_git_history(fake_client, tmp_path: Path) -> None:  
     result = go(client, tmp_path, [Contains(values=["add a"])])
     assert result.status == "ok"
     assert result.metrics.tool_calls == 1
+
+
+class _SlowClient:
+    """A model that answers the first `quick` calls at once and then takes `delay` seconds."""
+
+    def __init__(self, delay: float, quick: int = 0) -> None:
+        self.backend = Backend(name="slow", base_url="http://slow", model="slow-model")
+        self.delay, self.quick, self.calls = delay, quick, 0
+
+    async def chat(self, messages, tools):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        if self.calls > self.quick:
+            await asyncio.sleep(self.delay)
+        if self.calls == 1 and self.quick:
+            call = tool_call("read_file", {"path": "a.txt"})
+            return Reply(
+                content="", tool_calls=[call], tokens_in=1, tokens_out=1, model="slow-model"
+            )
+        return Reply(content="done", tool_calls=[], tokens_in=1, tokens_out=1, model="slow-model")
+
+    async def aclose(self) -> None:
+        return None
+
+
+def _run_with_budget(tmp_path: Path, client, budget: float):  # type: ignore[no-untyped-def]
+    (tmp_path / "a.txt").write_text("alpha\n")
+    return asyncio.run(
+        run_task(
+            client=client,  # type: ignore[arg-type]
+            profile=PROFILE,
+            task="summarise a.txt",
+            sandbox=Sandbox(tmp_path),
+            checks=[],
+            policy=Policy(run_budget_s=budget),
+        )
+    )
+
+
+def test_a_model_that_never_answers_in_time_is_stopped_by_the_budget(tmp_path: Path) -> None:
+    started = time.monotonic()
+    result = _run_with_budget(tmp_path, _SlowClient(delay=30), budget=0.3)
+    assert time.monotonic() - started < 5
+    assert result.status == "turn_limit"
+    assert "time_limit" in result.flags
+    assert "wait=false" in result.answer
+
+
+def test_a_model_that_slows_down_on_a_later_turn_is_stopped_too(tmp_path: Path) -> None:
+    result = _run_with_budget(tmp_path, _SlowClient(delay=30, quick=1), budget=0.3)
+    assert "time_limit" in result.flags
+    assert result.metrics.tool_calls == 1
+
+
+def test_a_budget_of_zero_means_no_limit(tmp_path: Path) -> None:
+    result = _run_with_budget(tmp_path, _SlowClient(delay=0.2), budget=0)
+    assert result.status == "ok"
+    assert "time_limit" not in result.flags

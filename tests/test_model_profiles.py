@@ -16,6 +16,7 @@ from deputy.model_profiles import (
     describe,
     load_profile,
     profile_path,
+    run_budget,
     suggested_max_turns,
 )
 from deputy.tune import save_model_profile
@@ -118,3 +119,13 @@ def test_changed_model_names_the_new_model_only_when_it_differs_from_the_measure
     assert changed_model(None, ["llama-70b"]) is None  # never measured: nothing changed
     unknown = ModelProfile("local", "default", "", time.time(), 1.0, 2.0, 10.0)
     assert changed_model(unknown, ["llama-70b"]) is None
+
+
+def test_the_run_budget_grows_with_a_slow_measured_model_and_zero_disables_it() -> None:
+    def measured(seconds: float) -> ModelProfile:
+        return ModelProfile("b", "m", "m", 0.0, 1.0, 2.0, seconds)
+
+    assert run_budget(900, None) == 900
+    assert run_budget(900, measured(20)) == 900  # a fast model keeps the floor
+    assert run_budget(900, measured(300)) == 6000  # a slow one gets 20 times its measured time
+    assert run_budget(0, measured(300)) == 0

@@ -20,7 +20,7 @@ Run a task on a worker model and verify the result.
 Returns: `run_id`, `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs
 `running`, `cancelled`), `answer`, a one-line `checks` summary (`3/3 passed`, or what failed with its
 detail), and, only when there are any, `files_written` and `flags` (`needs_frontier`, `turn_limit`,
-`backend_error`, `setup_error`, `not_worth_delegating`, `small_input`).
+`backend_error`, `setup_error`, `time_limit`, `not_worth_delegating`, `small_input`).
 
 The result is short on purpose. Metrics (turns, tokens, seconds, model) and the saving estimate
 (`orchestrator_tokens_saved_est`, a rough bytes / 4 estimate of what you did not have to read) are
