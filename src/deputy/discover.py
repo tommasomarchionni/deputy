@@ -48,6 +48,12 @@ class Report:
     total: Bucket = field(default_factory=Bucket)
     by_category: dict[str, Bucket] = field(default_factory=dict[str, Bucket])
     by_source: dict[str, Bucket] = field(default_factory=dict[str, Bucket])
+    delegations: int = 0  # calls of deputy's `delegate` tool, to compare with the large reads
+
+
+def is_delegation(source: str) -> bool:
+    """A call of deputy's `delegate` tool, whatever name the agent gave the server."""
+    return "deputy" in source and source.endswith("delegate")
 
 
 def transcripts_dir(project: Path) -> Path:
@@ -136,6 +142,9 @@ def build_report(folder: Path, *, days: float, now: float | None = None) -> Repo
                 _add(report.total, chars)
                 _add(report.by_category[category_of(source)], chars)
                 _add(report.by_source.setdefault(source, Bucket()), chars)
+    report.delegations = sum(
+        b.results for name, b in report.by_source.items() if is_delegation(name)
+    )
     return report
 
 
@@ -176,6 +185,8 @@ def format_report(report: Report, *, top: int = 8) -> str:
         f"rtk works on the ~{output.tokens:,} tokens of command output "
         f"({_share(output.tokens, total.tokens)}).",
         "Upper bounds on volume, not cost: prompt caching makes re-reads cheaper.",
+        f"Delegations to deputy: {report.delegations}; large reads the orchestrator did itself: "
+        f"{reads.large_results}. Compare them over time, before and after the read hint.",
     ]
     return "\n".join(lines)
 

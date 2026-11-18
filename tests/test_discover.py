@@ -99,3 +99,23 @@ def test_the_transcripts_folder_follows_the_claude_code_naming(tmp_path: Path) -
     folder = discover.transcripts_dir(tmp_path / "my.project")
     assert folder.parent.name == "projects"
     assert folder.name.endswith("-my-project")
+
+
+def test_delegations_to_deputy_are_counted_next_to_the_large_reads(tmp_path: Path) -> None:
+    _session(
+        tmp_path,
+        "s",
+        _use("a", "mcp__deputy__delegate", task="summarise docs/big.md"),
+        _result("a", '{"status":"ok"}'),
+        _use("b", "mcp__deputy__delegate", task="list the ADRs"),
+        _result("b", '{"status":"ok"}'),
+        _use("c", "Read", file_path="big.md"),
+        _result("c", "x" * 40_000),
+        _use("d", "mcp__other__delegate_task"),
+        _result("d", "ok"),
+    )
+    report = discover.build_report(tmp_path, days=30)
+    assert report.delegations == 2
+    text = discover.format_report(report)
+    assert "Delegations to deputy: 2; large reads the orchestrator did itself: 1." in text
+    assert json.loads(discover.report_as_json(report))["delegations"] == 2

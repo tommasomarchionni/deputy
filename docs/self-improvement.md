@@ -188,7 +188,9 @@ runners, build tools) and the rest. A result over 4,000 characters (about 1,000 
 as *large*: that is where a delegation can pay. The last lines give two upper bounds: the large
 reads a delegation could take, and the command output that a command-output compressor such as
 [rtk](https://github.com/rtk-ai/rtk) works on. Images are ignored. These are volumes, not costs:
-prompt caching makes a re-read cheaper, and a read made to edit a file cannot be delegated.
+prompt caching makes a re-read cheaper, and a read made to edit a file cannot be delegated. The last line counts
+the calls to deputy's `delegate` next to the large reads the orchestrator still did itself: compare
+them over time to see whether the read hint (`deputy hook`) changes the habit.
 
 Measured on 11 sessions of one real repository: large reads were 30 % of everything the orchestrator
 read, command output 15 %.
