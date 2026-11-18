@@ -1,69 +1,77 @@
 # deputy
 
-> A frontier model orchestrates. Any other model does the legwork, through MCP. Every answer is
-> checked by code, and your frontier tokens are saved.
+> Your frontier model plans. A cheaper model does the long reading. Code checks every answer.
 
 [![CI](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml/badge.svg)](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://tommasomarchionni.github.io/deputy/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Status:** alpha. The server, installer, checks, benchmark and tuning commands work; project
-memory works; background tasks work; routing works. Expect breaking changes.
+deputy is an MCP server. Your coding agent (Claude Code, or any MCP client) hands it a read-heavy
+task, such as "summarise this 900-line document" or "which files mention this setting". deputy runs
+the task on a cheaper model (a local llama.cpp or Ollama model, or any OpenAI-compatible API),
+checks the answer with code, and returns a short result. Your agent reads the answer, not the files.
 
-## Highlights
+**Status: alpha.** It works end to end and is tested; expect breaking changes. Verified with
+Claude Code; GitHub Copilot, Cursor and Codex are configured by the installer but not yet verified.
 
-- **Fewer tokens for the frontier model.** Five tiny tool schemas (about 1,200 tokens), results
-  by reference, checks instead of re-reading, and an estimate of the tokens saved on every run. Measured on a real repository: about 5,500
-  tokens saved per read-heavy task, and none for tiny ones ([evidence](docs/evidence.md)).
-- **Quality you can verify.** The worker has no shell and a confined sandbox; every claim is checked
-  by code (cited lines, required facts, forbidden leaks, files written, allow-listed commands).
-- **Measured, then tuned.** `deputy bench` measures your model and `deputy tune` recommends or, if you
-  allow it, applies better request settings; nothing changes without a measurement. (Learning from
-  feedback and routing are planned; see [how deputy improves](docs/self-improvement.md).)
-- **Works with any agent and any model.** Claude Code, GitHub Copilot, Cursor, Codex; llama.cpp,
-  Ollama, LM Studio, vLLM or any OpenAI-compatible API.
-- **Easy to install and keep current.** One command, no `sudo`, releases with provenance
-  attestations, `deputy update`.
-- **Developed in the open.** Issues, milestones and a public roadmap board; CI, CodeQL and
-  property tests on every change.
+## When it pays, and when it does not
+
+| Delegate | Do it yourself |
+| --- | --- |
+| Long reads: summaries, inventories, cross-references, searches across many files | Tiny lookups in a short file (deputy flags these as `small_input`) |
+| Big logs and test output (`summarise_log`) | Reading code you are about to edit |
+| Questions about git history (`git log`, `diff`, `show`, `blame`) | Anything that needs a shell, the network or credentials |
+
+Measured on a real multi-app repository (6 read-heavy tasks, a local 27B worker, version 0.12):
+about 6,900 frontier tokens saved per task on average, from about 0 on the smallest task to about
+22,500 on a long summary. The checks passed on 5 of 6 tasks; the sixth was caught by its check and
+handed back (a search limit, fixed since).
+These are estimates (bytes / 4), and worker time is not free: minutes for long documents on a
+laptop. Details and limits: [evidence](docs/evidence.md).
 
 ## Quick start
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh
-deputy init                      # your model server: llama.cpp, Ollama, LM Studio, vLLM, ...
-deputy doctor                    # check it answers
-deputy install claude-code --apply   # or: vscode (Copilot), cursor, codex, generic
-deputy instructions --for claude --apply   # teach the agent when to delegate (also: copilot, cursor, agents)
-deputy tune                      # measure your model and get better settings (optional)
+deputy init                               # point it at your model server
+deputy doctor                             # check that it answers
+deputy install claude-code --apply        # once: register the MCP server (or: vscode, cursor, codex, generic)
+deputy instructions --for claude --apply  # in each project folder: a skill that tells the agent when to delegate
 ```
 
-Full documentation: **<https://tommasomarchionni.github.io/deputy/>** (source in `docs/`).
+`install` gives your agent the tools; `instructions` teaches it when to use them. The Claude Code
+skill is loaded only when relevant, so it costs no tokens otherwise.
 
-## What it is
+## How it works
 
-`deputy` is an MCP server plus a set of agent profiles. A *frontier orchestrator* (Claude Code;
-GitHub Copilot, Cursor and Codex are configured but not yet verified in their apps) hands small,
-checkable tasks to *worker models* behind an OpenAI-compatible API (llama.cpp, Ollama, LM Studio,
-vLLM, hosted APIs). The server runs the worker inside a sandbox, verifies the result with checks
-the orchestrator declares, corrects it once when it can, and reports back a structured result with
-evidence and metrics. It records every run and your feedback; using that to improve routing and
-prompts is planned.
+1. Your agent calls `delegate` with a task, a folder and the **checks** the answer must pass (for
+   example: cite line numbers in range, contain these facts, stay under 1,500 characters).
+2. The worker reads files inside that folder only. It has no shell, no network and cannot read
+   secret-looking files.
+3. The server runs the checks. A failing answer gets one correction round; if it still fails, the
+   result says `needs_frontier` and your agent does the task itself.
 
-## Goals, stated so they can be measured
+The result is short: `status`, `answer`, a one-line check summary, and files or flags only when
+there are any.
 
-"Perfect" and "best in the world" are not testable. These are the targets, and the table says
-honestly where each one stands today (see also [how deputy improves](docs/self-improvement.md)):
+**What the worker can use:** `read_file`, `write_file`, `grep` (respects `.gitignore`; groups large
+results by file), read-only `git` (`log`, `show`, `diff`, `blame`), `summarise_log` (a model-free
+summary of a big log that drops only repetition) and `scan_file` (a file larger than the model's
+context, read in parts).
 
-| Goal | Where it stands |
+## Measure it on your own work
+
+| Command | What it tells you |
 | --- | --- |
-| Every claim a worker makes is checked by code, not trusted | **today**, for the claims you declare checks for (`contains`, `cites_lines`, `excludes`, `max_chars`, files, allow-listed commands) |
-| Line citations correct on the benchmark; no writes outside the sandbox | citations are **measured** on a small built-in suite (a larger one is [#6](https://github.com/tommasomarchionni/deputy/issues/6)); the sandbox is covered by tests and a [written review](docs/security.md) |
-| A worker never gets a shell | **today**: it has `read_file`, `write_file`, `grep`; checks run in the server from an allow-list (a `command` check still runs worker-written code with your rights: [#49](https://github.com/tommasomarchionni/deputy/issues/49)) |
-| The orchestrator spends fewer tokens with deputy than without | **estimated today** on every run: what the worker read minus what the orchestrator paid for the request and the result (can be negative); the yardstick is an estimate (bytes / 4), documented in [configuration](docs/configuration.md#how-the-saving-is-estimated) |
-| A task class that does not save tokens is not delegated | **advised today**: after 5 runs a flag (`not_worth_delegating`) and a line in `status` tell the orchestrator to do that kind of task itself; the server does not refuse |
-| The router picks the cheapest path that passes the checks | **today** across your backends: local first, measured to pass, then fastest, with a deterministic fallback and the reason in the trace ([configuration](docs/configuration.md#routing)) |
-| A change ships only if it beats the baseline, variance accounted for | **today** for request settings (`deputy tune`, one pass or `--runs N`); a held-out split is used, and `deputy optimise` proposes profile rewrites you approve |
+| `deputy discover` | where your agent's reading went in past Claude Code sessions, and how much a delegation could take |
+| `deputy bench --tasks-file tasks.toml --workdir .` | your own tasks on your own repository: pass or fail, time, tokens saved |
+| `deputy stats` | what deputy did for you: runs, pass rate, tokens saved, per kind of task |
+| `deputy bench` | your model on the built-in suite; `--compare A.json B.json` compares two runs |
+
+deputy also improves with use: `deputy tune` picks request settings that measure better,
+`deputy learn` turns repeated failures into short lessons for the worker (kept only if they help),
+and `deputy optimise` proposes a better worker profile that you approve. See
+[how deputy improves](docs/self-improvement.md).
 
 ## Documentation
 
@@ -71,26 +79,25 @@ Full site: **<https://tommasomarchionni.github.io/deputy/>** (source in `docs/`)
 
 | Topic | Page |
 | --- | --- |
-| Install, connect Claude Code, Copilot, Cursor, Codex | [install](docs/install.md) |
-| Configuration, tuning, updates | [configuration](docs/configuration.md) |
-| The five tools and the checks | [tools](docs/tools.md) |
+| Install and connect an agent | [install](docs/install.md) |
+| Configuration, backends, routing, updates | [configuration](docs/configuration.md) |
+| The tools, the checks and the flags | [tools](docs/tools.md) |
 | Security model | [security](docs/security.md) |
-| Architecture, memory, self-improvement | [architecture](docs/architecture.md), [memory](docs/memory.md), [self-improvement](docs/self-improvement.md) |
-| Measured speed of a local model | [local serving](docs/local-serving.md) |
+| Measured results | [evidence](docs/evidence.md) |
+| Benchmark, tuning, lessons, optimiser | [self-improvement](docs/self-improvement.md) |
+| Design, memory, local model speed | [architecture](docs/architecture.md), [memory](docs/memory.md), [local serving](docs/local-serving.md) |
 | Roadmap | [roadmap](docs/roadmap.md) and the [project board](https://github.com/users/tommasomarchionni/projects/3) |
 
-## In the repository
+## Works well with rtk
 
-- `src/deputy/` — the server (`delegate`, `status`, `profiles`, `feedback`), sandbox, checks.
-- `src/deputy/profiles/helper.md` — the bundled read-only helper profile.
-- `examples/project-dev.md` — a template for a project-specific developer profile.
-- `docs/local-serving.md` — measured speed of a local model under different server settings.
-- `deputy workspace` — disposable copies of a repository, so a worker never writes in the real one.
+[rtk](https://github.com/rtk-ai/rtk) shortens the output of shell commands your agent runs (git,
+test runners); deputy takes long reads off your agent. They do not overlap, and measured numbers
+for both are on the [evidence](docs/evidence.md) page.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Security
-issues: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report
+security issues privately: [SECURITY.md](SECURITY.md).
 
 ## License
 
