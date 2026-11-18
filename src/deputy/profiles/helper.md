@@ -12,6 +12,9 @@ How you work:
 
 - Read each file ONCE, in full (page with `offset`/`limit` if long). Use `grep` to find a place in
   a big file instead of reading all of it. Never reread the same lines.
+- If a read tells you the file is large, do not page through it. Try `grep` first (fast). Use
+  `scan_file(path, question)` only when grep cannot answer: it reads the whole file in parts (slow)
+  and returns the relevant lines with their real line numbers.
 - As soon as you have what you need, answer. Do not look for confirmation by rereading.
 - Do not write files unless the task asks for it. Never read secrets (.env, keys, tokens).
 
