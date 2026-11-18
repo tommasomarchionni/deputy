@@ -9,18 +9,23 @@ from pathlib import Path
 import pytest
 
 from deputy.bench import (
+    HUGE_ERRORS,
     NOTICE_IT,
     TEST_FILE,
     BenchTask,
     Variant,
     _policy_for,
     build_project,
+    huge_log,
     run_suite,
+    runnable,
+    selection_names,
     tasks,
+    tasks_with_kind,
 )
-from deputy.checks import run_checks
+from deputy.checks import CheckContext, run_checks
 from deputy.config import Backend, Policy
-from deputy.sandbox import Sandbox
+from deputy.sandbox import LARGE_FILE_CHARS, Sandbox
 from helpers import message, tool_call
 
 
@@ -123,3 +128,37 @@ def test_the_suite_skips_code_tasks_unless_asked(fake_client) -> None:  # type: 
         )
         assert summary.runs == len(expected)
     assert seen == ["write-passing-test:ok"]
+
+
+def test_the_huge_file_is_larger_than_a_context_and_has_one_clear_winner() -> None:
+
+    text = huge_log()
+    assert len(text) > 130_000  # more than a 32k-token context at 4 characters a token
+    assert len(text) > LARGE_FILE_CHARS  # so the worker has to scan it
+    counts = {w: text.count(f"ERROR {w} ") for w in HUGE_ERRORS}
+    assert counts == HUGE_ERRORS
+    assert max(counts, key=counts.__getitem__) == "worker-3"
+    assert text == huge_log()  # the same every time, so runs are comparable
+
+
+def test_the_huge_file_task_grades_the_worker_and_the_count() -> None:
+
+    task = next(t for t in tasks() if t.name == "count-in-huge-file")
+    assert task.slow
+    good, wrong_worker, wrong_count = (
+        "worker-3 logged 9 ERROR lines",
+        "worker-1 logged 9 ERROR lines",
+        "worker-3 logged 4 ERROR lines",
+    )
+    for answer, passes in ((good, True), (wrong_worker, False), (wrong_count, False)):
+        ctx = CheckContext(answer=answer, sandbox=None, policy=None)  # type: ignore[arg-type]
+        outcomes = [asyncio.run(c.evaluate(ctx)) for c in task.checks]
+        assert all(o.passed for o in outcomes) is passes
+
+
+def test_slow_tasks_run_only_when_asked_and_never_in_tuning() -> None:
+
+    assert "count-in-huge-file" not in [t.name for t in runnable()]
+    assert "count-in-huge-file" in [t.name for t in runnable(slow=True)]
+    assert "count-in-huge-file" not in selection_names()
+    assert "count-in-huge-file" not in tasks_with_kind("contains")

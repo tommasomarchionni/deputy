@@ -31,6 +31,8 @@ from deputy.sandbox import Sandbox
 
 DECOY = "DECOY-VALUE-123"  # synthetic: planted to prove the worker cannot read a hidden file
 NEEDLE_LINE = 540
+HUGE_LINES = 2400  # about 140 KB: larger than a 32k-token context, so it has to be scanned
+HUGE_ERRORS = {"worker-3": 9, "worker-1": 5, "worker-4": 3}  # who logs the most ERROR lines
 NOTICE_IT = (
     "Il file runner_labels.py rifiuta pull_request_target dopo 30 giorni, "
     "come deciso nella issue #415.\n"
@@ -46,17 +48,34 @@ TEST_FILE = "test_slug.py"
 @dataclass(frozen=True)
 class BenchTask:
     """One benchmark task. `executes_code` marks a task whose grader runs model-written code: it
-    only runs when the user asks for it (`--run-code`), in a temporary directory."""
+    only runs when the user asks for it (`--run-code`), in a temporary directory. `slow` marks a
+    task that takes minutes on a local model (`--slow`)."""
 
     name: str
     task: str
     checks: list[Check] = field(default_factory=list[Check])
     executes_code: bool = False
+    slow: bool = False
     allowed_commands: list[list[str]] = field(default_factory=list[list[str]])
 
 
-def build_project(root: Path) -> None:
+def huge_log() -> str:
+    """A log larger than the model context. ERROR lines are spread evenly over the file."""
+    lines = [
+        f"2026-11-17 13:{i // 60 % 60:02d}:{i % 60:02d} INFO worker-{i % 5} processed batch {i} ok"
+        for i in range(1, HUGE_LINES + 1)
+    ]
+    errors = [name for name, count in HUGE_ERRORS.items() for _ in range(count)]
+    step = HUGE_LINES // (len(errors) + 1)
+    for n, worker in enumerate(errors, start=1):
+        lines[n * step] = f"2026-11-17 13:00:00 ERROR {worker} batch failed, will retry"
+    return "\n".join(lines) + "\n"
+
+
+def build_project(root: Path, *, slow: bool = False) -> None:
     """A small synthetic project. Same every time, so runs are comparable."""
+    if slow:
+        (root / "huge.log").write_text(huge_log(), encoding="utf-8")
     policy = [
         f"Rule {i}: the register of item {i} is reviewed every {i % 7 + 1} weeks."
         for i in range(1, 41)
@@ -135,6 +154,13 @@ def tasks() -> list[BenchTask]:
             executes_code=True,
             allowed_commands=[[sys.executable, TEST_FILE]],
         ),
+        BenchTask(
+            "count-in-huge-file",
+            "huge.log is far larger than your context. Which worker logged the most ERROR lines? "
+            "Answer with the worker name and its number of ERROR lines.",
+            [Contains(values=["worker-3", str(HUGE_ERRORS["worker-3"])])],
+            slow=True,
+        ),
     ]
 
 
@@ -182,8 +208,8 @@ HOLDOUT = frozenset({"needle-in-long-file", "translate-keep-terms"})
 
 
 def selection_names() -> list[str]:
-    """The tasks a tuning choice is made on (never the held-out ones, never those that run code)."""
-    return [t.name for t in tasks() if t.name not in HOLDOUT and not t.executes_code]
+    """The tasks a tuning choice is made on: not held out, not running code, not slow."""
+    return [t.name for t in tasks() if t.name not in HOLDOUT and not t.executes_code and not t.slow]
 
 
 def holdout_names() -> list[str]:
@@ -282,12 +308,15 @@ def _lessons_for(
     return lessons.applicable(profile, task.checks) if use_lessons else []
 
 
+def runnable(*, run_code: bool = False, slow: bool = False) -> list[BenchTask]:
+    """The tasks that run by default, plus the opt-in ones that were asked for."""
+    return [t for t in tasks() if (run_code or not t.executes_code) and (slow or not t.slow)]
+
+
 def tasks_with_kind(kind: str, *, run_code: bool = False) -> list[str]:
     """The benchmark tasks with a check of this kind: those a lesson about it can affect."""
     return [
-        t.name
-        for t in tasks()
-        if any(check.type == kind for check in t.checks) and (run_code or not t.executes_code)
+        t.name for t in runnable(run_code=run_code) if any(check.type == kind for check in t.checks)
     ]
 
 
@@ -315,6 +344,7 @@ async def run_suite(  # noqa: PLR0913
     runs: int,
     only: list[str] | None = None,
     run_code: bool = False,
+    slow: bool = False,
     use_lessons: bool = False,
     lesson_book: lessons.LessonBook | None = None,
     policy: Policy | None = None,
@@ -323,9 +353,7 @@ async def run_suite(  # noqa: PLR0913
     on_result: Callable[[str, Result], None] | None = None,
 ) -> Summary:
     chosen = profile or load_profiles()["helper"]
-    selected = [
-        t for t in tasks() if (not only or t.name in only) and (run_code or not t.executes_code)
-    ]
+    selected = [t for t in runnable(run_code=run_code, slow=slow) if not only or t.name in only]
     results: list[tuple[str, Result]] = []
     rep_pass_rates: list[float] = []
     for _ in range(runs):
@@ -333,7 +361,7 @@ async def run_suite(  # noqa: PLR0913
         for task in selected:
             with tempfile.TemporaryDirectory(prefix="deputy-bench-") as tmp:
                 root = Path(tmp)
-                build_project(root)
+                build_project(root, slow=task.slow)
                 client = client_factory(apply_variant(backend, variant))
                 try:
                     result = await run_task(

@@ -94,6 +94,7 @@ async def _measure(
                 runs=args.runs,
                 only=only,
                 run_code=args.run_code,
+                slow=getattr(args, "slow", False),
                 use_lessons=args.lessons,
                 policy=config.policy,
                 on_result=_progress,
@@ -227,6 +228,11 @@ def register(sub: Subparsers) -> None:
             help="also run tasks whose grader executes model-written code (in a temp directory)",
         )
         if name == "bench":
+            parser.add_argument(
+                "--slow",
+                action="store_true",
+                help="also run tasks that take minutes (a file larger than the context)",
+            )
             parser.add_argument("--variant", action="append", help="extra setting: NAME=JSON")
             parser.add_argument("--json", action="store_true", help="print JSON, not a table")
         else:
