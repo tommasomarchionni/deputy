@@ -135,6 +135,22 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[optimise]
+  '''
+  usage: deputy optimise [-h] [--backend BACKEND] [--profile PROFILE]
+                         [--runs RUNS] [--list] [--apply ID] [--revert ID]
+  
+  options:
+    -h, --help         show this help message and exit
+    --backend BACKEND  backend name (default: the default backend)
+    --profile PROFILE  the profile to improve
+    --runs RUNS        repetitions of each measurement
+    --list             list saved proposals
+    --apply ID         install a confirmed proposal
+    --revert ID        undo an applied proposal
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[stats]
   '''
   usage: deputy stats [-h] [--days DAYS] [--json] [--include-bench]
@@ -213,6 +229,7 @@
     'lessons',
     'mcp',
     'memory',
+    'optimise',
     'stats',
     'tune',
     'update',

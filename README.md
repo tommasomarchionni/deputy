@@ -62,7 +62,7 @@ honestly where each one stands today (see also [how deputy improves](docs/self-i
 | The orchestrator spends fewer tokens with deputy than without | **estimated today** on every run: what the worker read minus what the orchestrator paid for the request and the result (can be negative); the yardstick is an estimate (bytes / 4), documented in [configuration](docs/configuration.md#how-the-saving-is-estimated) |
 | A task class that does not save tokens is not delegated | **advised today**: after 5 runs a flag (`not_worth_delegating`) and a line in `status` tell the orchestrator to do that kind of task itself; the server does not refuse |
 | The router picks the cheapest path that passes the checks | **today** across your backends: local first, measured to pass, then fastest, with a deterministic fallback and the reason in the trace ([configuration](docs/configuration.md#routing)) |
-| A change ships only if it beats the baseline, variance accounted for | **today** for request settings (`deputy tune`, one pass or `--runs N`); a held-out split and prompt or profile changes are planned ([#6](https://github.com/tommasomarchionni/deputy/issues/6), [#21](https://github.com/tommasomarchionni/deputy/issues/21)) |
+| A change ships only if it beats the baseline, variance accounted for | **today** for request settings (`deputy tune`, one pass or `--runs N`); a held-out split is used, and `deputy optimise` proposes profile rewrites you approve |
 
 ## Documentation
 
