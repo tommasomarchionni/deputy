@@ -3,6 +3,35 @@
 Thanks for helping. deputy is early: the most useful contributions today are **ideas with
 evidence** (a failing case, a measurement) and **review of the design** in `docs/`.
 
+## How the project is run
+
+- **Issue first.** Work starts from an issue, from a form (bug, idea or task). A direct request
+  gets an issue too, written before the code. Urgent fixes to a broken `main` get theirs right after.
+- **Labels** (`.github/labels.json`, applied by a workflow): `type:` (feature, bug, task, docs,
+  security, decision, verification), `area:` (server, sandbox, checks, bench, cli, installer, memory,
+  router, docs, ci), `priority:` (p0 drop everything, p1 next, p2 planned, p3 nice to have) and
+  `status:` (needs-triage, ready, blocked, needs-decision). Forms set type, area and priority; a new
+  issue starts as `status: needs-triage`. Work only on `status: ready` issues.
+- **Milestones** M1 to M7 match the [roadmap](docs/roadmap.md); each has an exit criterion in its
+  description. The current milestone is the first one with open issues; inside it, p0 first, then
+  p1, p2, p3, lowest number first. Moving an issue or changing its priority needs a comment with
+  the reason.
+- **Project.** The [Roadmap board](https://github.com/users/tommasomarchionni/projects/3) groups the
+  issues; the project's own "auto-add" workflow puts new issues on it.
+- **Pull requests.** One issue, one pull request; branch `<type>/<N>-<slug>`; the title is a
+  Conventional Commit with the area as scope (`fix(checks): ...`) and the body says `Closes #N`
+  (or `Refs #N` if partial). `feat`, `fix` and `perf` must change the product (`src/deputy/` or
+  `install.sh`); tests, docs, CI and tooling use `test`, `docs`, `ci`, `chore` or `build`.
+  A `feat` or `fix` also carries a test, or the line `Regression: none - <reason>` (at least 20
+  characters). Automation adds the area labels, copies type, priority and milestone from the issue
+  and assigns the author; the `PR title` check enforces the rest.
+- **Evidence in the pull request**, not in files: what was run, what passed, what was not checked.
+  Acceptance criteria of the issue are ticked one by one with their proof.
+- **After the merge** the issue closes with `Closes #N`; check that its criteria are ticked and that
+  the milestone moved. A red `main` is a `priority: p0` issue and comes first.
+- **A rule changes with a pull request** that changes it here, in the same delivery as the code or
+  workflow that enforces it (`tools/ci/` has tests).
+
 ## Ground rules
 
 - **Measure before you change.** A change to behaviour, prompts or parameters comes with benchmark
@@ -41,7 +70,7 @@ behaviour, polymorphism instead of long `if` chains, no comments that restate th
 Releases are tags, and the version lives in `pyproject.toml`.
 
 1. Open a pull request "chore: release vX.Y.Z" that runs `uv version X.Y.Z` (this also updates
-   `uv.lock`), and merge it once CI is green.
+   `uv.lock`); merge it once CI is green.
 2. Tag the merge commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. The `Release` workflow checks that the tag matches the version, runs the tests, builds the wheel
    and the sdist, attests their provenance, and publishes a GitHub release with generated notes.
