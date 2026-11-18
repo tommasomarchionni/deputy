@@ -135,3 +135,17 @@ def test_the_hook_entry_has_a_short_timeout_and_on_upgrades_an_old_entry(tmp_pat
         {"matcher": "Read", "hooks": [{"type": "command", "command": "deputy-hook", "timeout": 5}]}
     ]
     assert "already on" in hook.enable(settings)
+
+
+@pytest.mark.parametrize("name", ["studio-1440-light.png", "report.PDF", "bundle.tar.gz"])
+def test_no_hint_for_a_file_the_worker_cannot_read(tmp_path: Path, name: str) -> None:
+    # The real case: a screenshot was announced as "about 73,534 tokens" to delegate.
+    file = tmp_path / name
+    file.write_bytes(b"x" * 40_000)
+    assert hook.hint(_read(file)) is None
+
+
+def test_no_hint_for_binary_content_under_a_text_name(tmp_path: Path) -> None:
+    file = tmp_path / "data.txt"
+    file.write_bytes(b"abc\0" * 10_000)
+    assert hook.hint(_read(file)) is None

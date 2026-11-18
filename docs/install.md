@@ -59,7 +59,8 @@ Restart the agent (or reload its MCP servers) afterwards.
 **The read hint (Claude Code, on by default).** `deputy install claude-code --apply` also adds a
 hook to `~/.claude/settings.json`: before Claude Code reads a whole file larger than about 8 KB
 (about 2,000 tokens), it adds one line to the model's context with the file's size and a reminder
-that deputy can read it instead. It never blocks a read, says nothing for a partial or small read,
+that deputy can read it instead. Images, PDFs and other binary files get no hint: the worker reads
+text only. It never blocks a read, says nothing for a partial or small read,
 and stays silent on any error. In real sessions such reads were about 1.5 % of all reads but held
 about 18 % of what was read. Turn it off with `deputy hook off` (on again with `deputy hook on`,
 state with `deputy hook status`), or install without it: `deputy install claude-code --apply --no-hook`.
