@@ -18,6 +18,8 @@ def run(_: argparse.Namespace) -> int:
         print(f"deputy: {report}", file=sys.stderr)  # stdout belongs to the MCP protocol
     if install.refresh_user_skill():
         print("deputy: refreshed the user-level skill to this version's guide", file=sys.stderr)
+    if install.refresh_codex_guide():
+        print("deputy: refreshed the guide in Codex's AGENTS.md", file=sys.stderr)
     build_server().run("stdio")
     return 0
 

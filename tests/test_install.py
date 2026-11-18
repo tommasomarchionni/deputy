@@ -39,9 +39,9 @@ def test_apply_refuses_to_overwrite_invalid_json(tmp_path: Path) -> None:
     assert path.read_text() == "{not json"
 
 
-def test_apply_is_not_supported_for_codex(tmp_path: Path) -> None:
+def test_apply_is_not_supported_for_generic(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="not supported"):
-        install.apply("codex", tmp_path)
+        install.apply("generic", tmp_path)
 
 
 def test_instructions_are_inserted_then_refreshed_in_place(tmp_path: Path) -> None:
@@ -201,16 +201,22 @@ def test_the_user_skill_is_refreshed_only_when_it_exists_and_is_stale(tmp_path: 
     assert install.refresh_user_skill(skill) is False  # already current
 
 
-def test_doctor_names_a_stale_project_copy_of_the_skill(tmp_path: Path) -> None:
-    assert install.stale_project_skill(tmp_path) is None
-    copy = tmp_path / ".claude" / "skills" / "deputy" / "SKILL.md"
-    copy.parent.mkdir(parents=True)
-    copy.write_text(install.render_instructions("claude"))
-    assert install.stale_project_skill(tmp_path) is None  # current: fine
-    copy.write_text("an old guide\n")
-    warning = install.stale_project_skill(tmp_path)
-    assert warning is not None
-    assert "older copy of the delegation guide" in warning
+def test_doctor_names_every_stale_copy_of_the_guide_in_a_project(tmp_path: Path) -> None:
+    assert install.stale_guide_copies(tmp_path) == []
+    skill = tmp_path / ".claude" / "skills" / "deputy" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(install.render_instructions("claude"))
+    install.write_instructions(tmp_path / "AGENTS.md")
+    (tmp_path / "CLAUDE.md").write_text("# my notes, no deputy block\n")
+    assert install.stale_guide_copies(tmp_path) == []  # current copies, and a file without a block
+    skill.write_text("an old guide\n")
+    agents = tmp_path / "AGENTS.md"
+    agents.write_text("# mine\n<!-- deputy:start -->\nold guide\n<!-- deputy:end -->\n")
+    warnings = install.stale_guide_copies(tmp_path)
+    assert len(warnings) == 2
+    assert any("--for claude --apply` (or delete it" in w for w in warnings)
+    assert any("AGENTS.md is an older copy" in w and "--for agents --apply`" in w for w in warnings)
+    assert agents.read_text().startswith("# mine")  # never rewritten by the check
 
 
 def test_re_running_install_on_a_registered_machine_still_installs_skill_and_hint(
@@ -234,3 +240,28 @@ def test_any_other_registration_failure_still_stops(
     (tmp_path / "bin" / "claude").write_text("#!/bin/sh\necho 'permission denied' >&2\nexit 1\n")
     with pytest.raises(RuntimeError, match="permission denied"):
         install.apply("claude-code", tmp_path)
+
+
+def test_installing_for_codex_writes_its_user_level_guide_and_keeps_it_current(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    guide = tmp_path / "codex" / "AGENTS.md"
+    guide.parent.mkdir()
+    guide.write_text("# my own Codex rules\n")
+    report = install.apply("codex", tmp_path)
+    assert "config.toml yourself" in report
+    assert "# my own Codex rules" in guide.read_text()
+    assert install.refresh_codex_guide() is False  # current
+    guide.write_text("# my own Codex rules\n<!-- deputy:start -->\nold\n<!-- deputy:end -->\n")
+    assert install.refresh_codex_guide() is True
+    assert "# my own Codex rules" in guide.read_text()
+    assert install.stale_guide_copies(tmp_path / "codex") == []  # AGENTS.md block is current again
+
+
+def test_the_codex_guide_is_never_added_by_a_refresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    assert install.refresh_codex_guide() is False
+    assert not (tmp_path / "codex" / "AGENTS.md").exists()

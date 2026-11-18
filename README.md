@@ -45,8 +45,10 @@ deputy install claude-code --apply        # once: the MCP server, the skill and 
 For Claude Code that one command does everything, for every project: it registers the MCP server,
 installs the skill that teaches the agent when to delegate (`~/.claude/skills/deputy/`, loaded only
 when relevant, kept current by deputy on each update), and adds a one-line hint before a large read
-(`deputy hook off` turns it off). For other agents: `deputy install vscode|cursor|codex|generic`,
-then `deputy instructions --for <agent> --apply` in each project.
+(`deputy hook off` turns it off). Codex: `deputy install codex --apply` keeps its guide current too.
+Copilot and Cursor read the guide from files in the project: `deputy install vscode|cursor --apply`,
+then `deputy instructions --for copilot|cursor --apply` in each project (`deputy doctor` says when a
+copy needs refreshing).
 
 deputy keeps itself current: a newer compatible release is installed when the server starts, only
 after its build provenance is verified, never a new major version or a release marked as breaking
