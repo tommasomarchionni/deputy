@@ -225,12 +225,32 @@
 # name: test_the_tool_schemas_are_stable
   '''
   {
+    "collect": {
+      "description": "Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it.",
+      "input": {
+        "properties": {
+          "cancel": {
+            "default": false,
+            "title": "Cancel",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "collectArguments",
+        "type": "object"
+      }
+    },
     "delegate": {
-      "description": "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`.",
+      "description": "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`.\nWith wait=False it returns at once; get the result with `collect`.",
       "input": {
         "$defs": {
           "CheckSpec": {
-            "description": "One proof run on the answer: `type` picks the kind, the other fields are its arguments.",
             "properties": {
               "argv": {
                 "anyOf": [
@@ -244,8 +264,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Argv"
+                "default": null
               },
               "json_schema": {
                 "anyOf": [
@@ -257,8 +276,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Json Schema"
+                "default": null
               },
               "limit": {
                 "anyOf": [
@@ -269,8 +287,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Limit"
+                "default": null
               },
               "max": {
                 "anyOf": [
@@ -281,8 +298,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Max"
+                "default": null
               },
               "min": {
                 "anyOf": [
@@ -293,8 +309,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Min"
+                "default": null
               },
               "path": {
                 "anyOf": [
@@ -305,8 +320,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Path"
+                "default": null
               },
               "type": {
                 "enum": [
@@ -320,7 +334,6 @@
                   "file_contains",
                   "command"
                 ],
-                "title": "Type",
                 "type": "string"
               },
               "values": {
@@ -335,8 +348,7 @@
                     "type": "null"
                   }
                 ],
-                "default": null,
-                "title": "Values"
+                "default": null
               }
             },
             "required": [
@@ -394,6 +406,11 @@
           "task": {
             "title": "Task",
             "type": "string"
+          },
+          "wait": {
+            "default": true,
+            "title": "Wait",
+            "type": "boolean"
           },
           "workdir": {
             "title": "Workdir",
