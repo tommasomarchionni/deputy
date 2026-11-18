@@ -69,6 +69,22 @@ fixed cost per session. So:
   not pay is flagged `not_worth_delegating`. A task that names only small files is flagged
   `small_input` at once.
 
+## External tools
+
+The worker's tools are pure Python inside the sandbox; deputy requires no external program to do its
+work. Decided on 2026-11-18 ([#111](https://github.com/tommasomarchionni/deputy/issues/111)):
+
+- An external tool (ripgrep, ast-grep, a command-output compressor) may be added only as an optional
+  accelerator: used when installed, with identical results, and only after a benchmark shows a gain.
+  A missing tool never changes an answer.
+- The worker never gets a shell, the network or credentials. Anything that needs them (for example
+  `gh` to fetch a CI log) stays with the orchestrator, which saves the output to a file for the worker.
+- [rtk](https://github.com/rtk-ai/rtk) compresses the shell output your agent reads; it complements
+  deputy on the orchestrator's side and is documented, not wrapped
+  ([evidence](evidence.md#where-an-agents-reading-goes-and-rtk)).
+- `git` is the one program the worker can reach, read-only and through an allow-list
+  ([security](security.md)).
+
 ## Stack
 
 - Python 3.11+, `uv`; the official MCP SDK; pydantic v2; httpx. Transport: stdio.
