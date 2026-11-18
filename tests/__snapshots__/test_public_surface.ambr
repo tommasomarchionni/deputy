@@ -54,11 +54,22 @@
 # ---
 # name: test_each_command_help_is_stable[instructions]
   '''
-  usage: deputy instructions [-h] [--write FILE]
+  usage: deputy instructions [-h]
+                             [--for {agents,claude,claude-md,copilot,copilot-repo,cursor}]
+                             [--apply] [--write FILE]
   
   options:
-    -h, --help    show this help message and exit
-    --write FILE  insert it in FILE (CLAUDE.md, ...)
+    -h, --help            show this help message and exit
+    --for {agents,claude,claude-md,copilot,copilot-repo,cursor}
+                          the format of this agent: claude: a Claude Code skill:
+                          loaded only when relevant, so it costs no tokens
+                          otherwise; claude-md: always loaded by Claude Code;
+                          copilot: a GitHub Copilot instructions file; copilot-
+                          repo: GitHub Copilot repository instructions; cursor:
+                          a Cursor rule the agent attaches when relevant;
+                          agents: read by Codex, Copilot and many other agents
+    --apply               with --for: write it where the agent reads it
+    --write FILE          insert the guide as a marked block in FILE
   
   '''
 # ---

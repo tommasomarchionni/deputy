@@ -57,16 +57,33 @@ Restart the agent (or reload its MCP servers) afterwards.
 
 ## 4. Teach the agent when to delegate
 
-Delegation only saves tokens if the orchestrator uses it on the right work. One command adds a
-short guide to the file your agent already reads:
+Delegation only saves tokens if the agent uses it on the right work. One command writes a short guide
+in the format each agent reads:
 
 ```sh
-deputy instructions --write CLAUDE.md                      # Claude Code
-deputy instructions --write .github/copilot-instructions.md   # GitHub Copilot
-deputy instructions --write AGENTS.md                      # Codex and others
+deputy instructions --for claude --apply        # Claude Code skill: loaded only when relevant
+deputy instructions --for copilot --apply       # GitHub Copilot: .github/instructions/deputy.instructions.md
+deputy instructions --for cursor --apply        # Cursor rule
+deputy instructions --for agents --apply        # AGENTS.md (Codex, Copilot and many others)
 ```
 
-It is idempotent (re-running refreshes the block between its markers) and about 200 tokens.
+| `--for` | File written (in the current project) | Kind |
+| --- | --- | --- |
+| `claude` | `.claude/skills/deputy/SKILL.md` | owned by deputy; a skill costs no tokens until it is relevant |
+| `claude-md` | `CLAUDE.md` | a marked block; always loaded |
+| `copilot` | `.github/instructions/deputy.instructions.md` | owned; `applyTo: "**"` |
+| `copilot-repo` | `.github/copilot-instructions.md` | a marked block |
+| `cursor` | `.cursor/rules/deputy.mdc` | owned; attached when relevant |
+| `agents` | `AGENTS.md` | a marked block |
+
+Without `--apply` the command only prints what it would write. Files deputy owns are rewritten each
+time; in shared files only the block between the `deputy:start` and `deputy:end` markers is touched,
+so your own text is safe. Prefer `claude` over `claude-md`: a skill is loaded on demand, a
+`CLAUDE.md` block on every turn.
+
+The guide is short on purpose (about 300 tokens). It says what to delegate and what not, how to write
+`checks`, what to trust (`status: ok`) and what to do yourself, to review worker output, and to send
+`feedback`.
 
 ## 5. Try it
 
