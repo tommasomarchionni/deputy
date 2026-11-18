@@ -155,3 +155,9 @@ an answer or a file; at most 3 lessons are added to a prompt, only for the profi
 checks the task asks for; a lesson expires after 14 days and is re-derived only while the evidence
 still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
 `deputy stats` and the benchmark can tell whether they help.
+
+## Confinement of command checks
+
+`[policy] command_wrapper` is an argv prefix that runs every `command` check inside an OS sandbox;
+`deputy init --confine` writes one for your platform and `deputy doctor` reports whether commands
+are confined. Details and what each platform allows: [security](security.md#confining-command-checks).
