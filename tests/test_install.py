@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from deputy import cli, install
+from deputy import cli, install, tokens
 from deputy.config import config_path
 
 
@@ -121,3 +121,10 @@ def test_the_cli_prints_applies_and_keeps_the_legacy_write(
     assert install.MARK_START in (tmp_path / "NOTES.md").read_text()
     assert cli.main(["instructions"]) == 0
     assert "Delegating to deputy" in capsys.readouterr().out
+
+
+def test_the_delegation_guide_states_the_measured_rules_and_stays_short() -> None:
+    guide = (Path(__file__).parents[1] / "src/deputy/instructions.md").read_text()
+    for rule in ("more than about 4 KB", "do not read it first", "none of your context", "lookup"):
+        assert rule in guide
+    assert tokens.estimate(guide) <= 500  # the frontier model pays for it whenever it is loaded
