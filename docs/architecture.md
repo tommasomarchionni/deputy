@@ -13,13 +13,14 @@
 
 | Tool | Purpose |
 | --- | --- |
+| `digest` | Ask a question about named files; deputy writes the task and proves every citation. |
 | `delegate` | Run one task: `task`, `workdir`, `profile`, `checks`, optional `backend`, `max_turns`, and `wait` (false returns at once). Returns `run_id`, `status`, `answer`, a one-line `checks` summary, and `files_written` and `flags` when there are any. |
 | `collect` | The result of a background `delegate`, waiting up to 20 s; `cancel` stops it and puts written files back. |
 | `status` | The backends and whether they answer, the measured model profile, a week of usage, and advice on kinds of task that do not pay. |
 | `profiles` | The worker profiles available for a folder. |
 | `feedback` | The orchestrator says `accepted` or `rejected`, and why; recorded in the trace. |
 
-Five tools with short descriptions: their schemas (bytes / 4, compact JSON) cost the orchestrator about 970 tokens per
+Six tools with short descriptions: their schemas (bytes / 4, compact JSON) cost the orchestrator about 1143 770 tokens per
 session. Details of each field, check and flag: [tools](tools.md).
 
 ## What happens in one delegation
@@ -62,7 +63,8 @@ fixed cost per session. So:
 
 - **Short schemas** (about 970 tokens for the whole tool list, about 680 for what the model sees) and a **short result** (the answer, a
   one-line check summary, nothing empty).
-- **Checks replace re-reading:** if the checks passed, the orchestrator does not reread the files.
+- **Checks replace most re-reading:** if the checks passed, the orchestrator does not reread the
+  files; before it acts on a fact, it reads that one cited line.
 - **The task names files; it does not paste them.** Standing rules live in the profile.
 - **Delegate input-heavy, output-light work.** Every run records what the worker read and what the
   orchestrator paid; `deputy stats` reports the net saving per kind of task, and a kind that does

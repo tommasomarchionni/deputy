@@ -1,12 +1,36 @@
 # Tools
 
-Five tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
-tool list is about 970 tokens (bytes / 4, compact JSON); the part a model sees (names, descriptions,
-arguments) about 680. A test keeps the list under 5,000 characters, about 1,250 tokens.
+Six tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
+tool list is about 1143 770 tokens (bytes / 4, compact JSON); the part a model sees (names, descriptions,
+arguments) about . A test keeps the list under 5,000 characters, about 1,250 tokens.
+
+## `digest`
+
+Ask a question about files instead of reading them. deputy writes the worker's task and its checks,
+so this is the shortest way to delegate.
+
+| Argument | Meaning |
+| --- | --- |
+| `files` | One to eight text files inside `workdir`. |
+| `question` | What you want to know. |
+| `workdir` | Absolute path the worker is confined to. |
+
+Every line of the answer must carry its source, in the form `- the fact (docs/a.md:12 "exact words")`.
+The status is `ok` only when each line states a fact, each citation names one of the files and a
+real line of it, the quoted words are on that line, no line stands without a source, and the answer
+is at most 2,000 characters.
+Anything else, including an answer the files do not contain, comes back as `checks_failed`: read
+the files yourself. Missing, empty, binary, secret-looking or outside paths are refused before any
+model is called. The result has the same fields as `delegate`.
+
+**What `ok` proves.** The sources are real: the quoted words are on the cited lines. It does not
+prove the worker understood them, so a fact can be misread with a true citation. Read the cited line
+before you act on a fact; that costs one line instead of the whole file.
 
 ## `delegate`
 
-Run a task on a worker model and verify the result.
+Run a task on a worker model and verify the result. Use it when you need your own checks, or work
+other than answering a question about files.
 
 | Argument | Meaning |
 | --- | --- |

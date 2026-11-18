@@ -211,6 +211,103 @@ class CitesText(BaseModel):
         return _result(name, "; ".join(wrong))
 
 
+_NAMED_CITATION = re.compile(
+    r"(?<![\w/.:@-])(?P<name>[A-Za-z_.][\w./-]*\.[A-Za-z0-9]+):(?P<first>\d+)(?:[-\u2013](?P<last>\d+))?"
+)
+
+
+def _matching(name: str, paths: list[str]) -> list[str]:
+    """The listed paths a cited name can mean: the path itself, or its ending."""
+    exact = [p for p in paths if p == name]
+    return exact or [p for p in paths if p.endswith(f"/{name}")]
+
+
+_TRAILING_QUOTE = re.compile(r'^[\s,:)\-\u2013]*"(?P<words>.+)"\s*\)?[.,;]?\s*$')
+_MIN_QUOTE_CHARS = 8
+_MIN_FACT_WORDS = 2
+
+
+def _quote_near(answer: str, start: int, end: int) -> str | None:
+    """The quoted words after a citation (they may hold quotes themselves), or right before it."""
+    rest = answer[end:].split("\n", 1)[0]
+    closing = _TRAILING_QUOTE.match(rest)
+    if closing:
+        return closing["words"] if len(closing["words"]) >= _MIN_QUOTE_CHARS else None
+    before = answer[max(0, start - 240) : start].rstrip(" ,:(-\u2013")
+    preceding = [q for q in _QUOTE.finditer(before) if q.end() == len(before)]
+    return next(g for g in preceding[-1].groups() if g) if preceding else None
+
+
+def _loose(text: str) -> str:
+    """Compare quotes as a reader would, and forgive the backslashes of an escaped quote."""
+    return _normal(text.replace("\\", ""))
+
+
+def _quote_is_on(quote: str, text: list[str], first: int, last: int) -> bool:
+    """The words are on the cited lines; they may run on to the line before or after (wrapped
+    text), but words found only on a neighbouring line do not count."""
+    before = _loose(text[first - 2]) if first > 1 else ""
+    cited = _loose(" ".join(text[first - 1 : last]))
+    after = _loose(text[last]) if last < len(text) else ""
+    whole = f"{before} {cited} {after}"
+    words = _loose(quote)
+    start = len(before) + 1
+    found = whole.find(words)
+    while found >= 0:
+        if found < start + len(cited) and found + len(words) > start:
+            return True
+        found = whole.find(words, found + 1)
+    return False
+
+
+class CitesFiles(BaseModel):
+    """Every line of the answer states a fact and cites a listed file and a real line of it, with
+    words quoted from that line. Nothing stands without its source, and no source without a fact."""
+
+    type: Literal["cites_files"] = "cites_files"
+    paths: list[str]
+
+    def _problem(self, answer: str, match: re.Match[str], lines: dict[str, list[str]]) -> str:
+        cited = match["name"]
+        found = _matching(cited, self.paths)
+        if len(found) != 1:
+            return f"{cited} is not one of the files" if not found else f"{cited} is ambiguous"
+        first = int(match["first"])
+        last = int(match["last"] or first)
+        text = lines[found[0]]
+        if not 1 <= first <= last <= len(text):
+            return f"{cited}:{first} is outside the file ({len(text)} lines)"
+        quote = _quote_near(answer, match.start(), match.end())
+        if quote is None:
+            return f'{cited}:{first} has no quoted words (expected: {cited}:{first} "exact words")'
+        if not _quote_is_on(quote, text, first, last):
+            return f"{cited}:{first} does not contain {quote[:40]!r}"
+        return ""
+
+    async def evaluate(self, ctx: CheckContext) -> CheckResult:
+        try:
+            lines = {p: read_lines(ctx.sandbox.resolve(p)) for p in self.paths}
+        except SandboxError as exc:
+            return _result("cites_files", f"cannot read: {exc}")
+        cited = list(_NAMED_CITATION.finditer(ctx.answer))
+        if not cited:
+            return _result("cites_files", 'no citation (expected: file.md:12 "the exact words")')
+        problems = [p for m in cited if (p := self._problem(ctx.answer, m, lines))]
+        bare = [
+            line.strip()[:40]
+            for line in ctx.answer.splitlines()
+            if line.strip() and not _NAMED_CITATION.search(line)
+        ]
+        problems += [f"no source for: {line!r}" for line in bare]
+        problems += [
+            f"no fact before the source: {line.strip()[:40]!r}"
+            for line in ctx.answer.splitlines()
+            if (found := _NAMED_CITATION.search(line))
+            and len(re.findall(r"\w+", _QUOTE.sub("", line[: found.start()]))) < _MIN_FACT_WORDS
+        ]
+        return _result("cites_files", "; ".join(problems[:5]))
+
+
 _FENCE = re.compile(r"```(?:json)?\s*\n(?P<body>.*?)```", re.DOTALL | re.IGNORECASE)
 _MAX_SCHEMA_ERRORS = 5
 
@@ -375,6 +472,7 @@ Check = Annotated[
     Contains
     | CitesLines
     | CitesText
+    | CitesFiles
     | JsonSchema
     | MaxChars
     | FileWritten

@@ -279,7 +279,7 @@
   ])
 # ---
 # name: test_the_server_instructions_are_stable
-  'Delegate small, checkable, read-heavy tasks to another model. Use `delegate`.'
+  'Saves your context: a cheaper model reads files for you. Before you read a file over about 8 KB, or several files, to answer a question, summarise, compare or find facts, call `digest` with the files and the question instead of reading them. If its status is ok, work from the answer: deputy proved that each quoted source is on its line, not that the model understood it, so read the cited line before you act on a fact. If the status is not ok, read the files yourself. Read directly a file you are about to edit, a short file, or what one search answers. For other work with your own checks, use `delegate`.'
 # ---
 # name: test_the_tool_schemas_are_stable
   '''
@@ -306,7 +306,7 @@
       }
     },
     "delegate": {
-      "description": "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`. With wait=False it returns at once; get the result with `collect`.",
+      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False returns at once; then use `collect`.",
       "input": {
         "$defs": {
           "CheckSpec": {
@@ -484,8 +484,37 @@
         "type": "object"
       }
     },
+    "digest": {
+      "description": "Ask about files in the absolute `workdir` instead of reading them: a short answer, every line citing a proven file line.",
+      "input": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "workdir": {
+            "title": "Workdir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "files",
+          "question",
+          "workdir"
+        ],
+        "title": "digestArguments",
+        "type": "object"
+      }
+    },
     "feedback": {
-      "description": "Tell deputy whether a result was good. Improves routing and profiles.",
+      "description": "Report whether a result was good.",
       "input": {
         "properties": {
           "reason": {
@@ -536,7 +565,7 @@
       }
     },
     "status": {
-      "description": "Configured backends and whether they answer.",
+      "description": "Backends and whether they answer.",
       "input": {
         "properties": {},
         "title": "statusArguments",

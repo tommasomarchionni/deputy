@@ -123,6 +123,26 @@ commands print; deputy takes long reads off the orchestrator, and its worker nev
 - Answers are only as checked as their checks; Claude Opus 5.5 reviewed every answer of both runs
   against the files they were given.
 
+**`digest` on real files.** 17 questions on two real repositories, asked twice (34 runs), on a local
+Qwen3.8 27B (Q4_K_M). Claude Opus 5.5 checked every passing answer against the source lines.
+
+| Result | Runs |
+| --- | ---: |
+| Answerable questions | 30 |
+| Passed the checks | 24 (80 %) |
+| Passed and fully correct | 20 |
+| Passed with one wrong detail | 3 |
+| Passed but incomplete | 1 |
+| Handed back to the orchestrator | 6 |
+| Questions the files cannot answer | 4 |
+| Of those, an invented answer that passed | 0 |
+
+- **Saving:** the 24 passing answers replaced about 103,500 tokens of files with about 6,500 tokens
+  of answers, about 4,000 tokens each (bytes / 4).
+- **Limit:** a passing answer proves its sources, not its reading. Three of 24 had a true citation
+  and a wrong detail, so read the cited line before you act on a fact.
+- **Time:** a median of 109 seconds per question on this laptop.
+
 **Where to start measuring your own use.** `deputy discover` on 30 days of real sessions of one
 repository: 768 large file reads (about 1.45 million tokens), of which 660 were not followed by an
 edit of the file (about 1.24 million tokens), against 17 delegations: an adoption of 2.5 %. About

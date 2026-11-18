@@ -56,7 +56,8 @@ after its build provenance is verified, never a new major version or a release m
 
 ## How it works
 
-1. Your agent calls `delegate` with a task, a folder and the **checks** the answer must pass (for
+1. Your agent calls `digest` with files and a question, where deputy adds the checks itself, or
+   `delegate` with a task, a folder and the **checks** the answer must pass (for
    example: cite line numbers in range, contain these facts, stay under 1,500 characters).
 2. The worker reads files inside that folder only. It has no shell, no network and cannot read
    secret-looking files.
