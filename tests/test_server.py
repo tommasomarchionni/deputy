@@ -291,3 +291,23 @@ def test_a_delegation_naming_only_a_short_file_carries_the_small_input_flag(
     )
     flags = structured(out)["flags"]
     assert any(flag.startswith("small_input") for flag in flags)
+
+
+def test_a_passing_result_sent_over_the_tool_call_has_no_empty_fields(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client([message("beta")]))
+    out = asyncio.run(
+        build_server().call_tool(
+            "delegate",
+            {
+                "task": "find beta",
+                "workdir": str(tmp_path),
+                "checks": [{"type": "contains", "values": ["beta"]}],
+            },
+        )
+    )
+    assert set(structured(out)) == {"run_id", "status", "answer", "checks"}
