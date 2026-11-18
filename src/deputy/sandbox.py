@@ -5,13 +5,20 @@ from __future__ import annotations
 import os
 import re
 import stat
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import regex
 
 MAX_READ_CHARS = 60_000
 MAX_FILE_BYTES = 5_000_000
 MAX_WRITE_BYTES = 1_000_000
 MAX_GREP_HITS = 50
+MAX_PATTERN_CHARS = 200
+MAX_LINE_CHARS = 2_000  # a line is cut here before matching: a long line must not become a bomb
+MATCH_TIMEOUT_S = 0.05  # one line may take this long (a catastrophic pattern is abandoned)
+GREP_BUDGET_S = 5.0  # one whole search may take this long
 _SECRET_FILES = re.compile(
     r"(^\.env($|\.)|\.(pem|key|p12|pfx|keystore)$|^id_(rsa|ed25519|ecdsa|dsa)(\.pub)?$"
     r"|^\.(npmrc|netrc|pypirc|htpasswd|git-credentials)$|^credentials(\.|$)|^secrets?\.)",
@@ -108,10 +115,13 @@ class Sandbox:
 
     def grep(self, pattern: str, path: str = ".") -> str:
         """Regex search, like `grep -rn`, without a shell. Returns `file:line: text` hits."""
+        if len(pattern) > MAX_PATTERN_CHARS:
+            raise SandboxError(f"pattern too long (over {MAX_PATTERN_CHARS} characters)")
         try:
-            regex = re.compile(pattern)
-        except re.error as exc:
+            compiled = regex.compile(pattern)
+        except regex.error as exc:
             raise SandboxError(f"invalid pattern: {exc}") from exc
+        deadline = time.monotonic() + GREP_BUDGET_S
         base = self.resolve(path)
         files = [base] if base.is_file() else sorted(p for p in base.rglob("*") if p.is_file())
         hits: list[str] = []
@@ -126,7 +136,9 @@ class Sandbox:
                 continue
             counted = False
             for number, line in enumerate(lines, start=1):
-                if regex.search(line):
+                if time.monotonic() > deadline:
+                    return "\n".join([*hits, "[search stopped: its time budget was used up]"])
+                if _matches(compiled, line):
                     if not counted:  # the orchestrator would have had to read this file
                         self.chars_read += sum(len(row) + 1 for row in lines)
                         counted = True
@@ -173,3 +185,13 @@ def _write_text(path: Path, content: str) -> None:
     with os.fdopen(descriptor, "wb") as handle:
         handle.truncate(0)
         handle.write(content.encode("utf-8"))
+
+
+def _matches(compiled: regex.Pattern[str], line: str) -> bool:
+    """Whether the pattern matches the (cut) line; a pattern that takes too long is refused."""
+    try:
+        return compiled.search(line[:MAX_LINE_CHARS], timeout=MATCH_TIMEOUT_S) is not None
+    except TimeoutError as exc:
+        raise SandboxError(
+            "this pattern is too slow on this file (catastrophic backtracking); use a simpler one"
+        ) from exc
