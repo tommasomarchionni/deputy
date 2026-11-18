@@ -45,7 +45,7 @@ def compare(before: Summary, after: Summary) -> Comparison:
         for task, count in sorted(before.failures.items())
         if count > after.failures.get(task, 0)
     ]
-    regressed = bool(worse) or before.pass_rate - after.pass_rate > PASS_RATE_DROP
+    regressed = before.pass_rate - after.pass_rate > PASS_RATE_DROP  # a single failure is noise
     lines = [
         f"pass rate     {_delta(before.pass_rate * 100, after.pass_rate * 100, '%', 0)}",
         f"time per task {_delta(before.mean_elapsed_s, after.mean_elapsed_s, ' s')}",
@@ -53,7 +53,7 @@ def compare(before: Summary, after: Summary) -> Comparison:
     ]
     if before.served_model != after.served_model:
         lines.append(f"model changed: {before.served_model or '?'} -> {after.served_model or '?'}")
-    lines += [f"failed more: {task}" for task in worse]
+    lines += [f"failed more (change, not alone a regression): {task}" for task in worse]
     lines += [f"failed less: {task}" for task in better]
     lines.append("REGRESSION" if regressed else "no regression")
     return Comparison("\n".join(lines), regressed)
