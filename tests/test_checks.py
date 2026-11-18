@@ -1,5 +1,6 @@
 # pyright: basic
 import asyncio
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -9,6 +10,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from deputy.checks import (
+    CheckSpec,
     CitesLines,
     CitesText,
     Command,
@@ -16,10 +18,12 @@ from deputy.checks import (
     Excludes,
     FileContains,
     FileWritten,
+    JsonSchema,
     MaxChars,
     cited_numbers,
     quoted_citations,
     run_checks,
+    to_check,
 )
 from deputy.config import Policy
 from deputy.sandbox import Sandbox
@@ -210,3 +214,99 @@ def test_a_quote_copied_from_a_line_always_verifies_on_that_line_and_not_elsewhe
         assert cites_text(f'line {index + 1}: "{quote}"', box, "f.txt").passed
         other = (index + 1) % len(lines) + 1
         assert not cites_text(f'line {other}: "{quote}"', box, "f.txt").passed
+
+
+ITEMS = {
+    "type": "object",
+    "required": ["items"],
+    "properties": {
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["id", "name"],
+                "properties": {"id": {"type": "integer"}, "name": {"type": "string"}},
+            },
+        }
+    },
+}
+
+
+def json_schema(answer: str, box: Sandbox, schema: dict | None = None, path: str | None = None):  # type: ignore[no-untyped-def]
+    return run([JsonSchema(json_schema=schema or ITEMS, path=path)], answer, box)[0]
+
+
+def test_json_that_matches_the_schema_passes_with_or_without_a_code_fence(tmp_path: Path) -> None:
+    box = Sandbox(tmp_path)
+    document = '{"items": [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]}'
+    assert json_schema(document, box).passed
+    assert json_schema(f"Here it is:\n```json\n{document}\n```\nDone.", box).passed
+
+
+def test_a_mismatch_is_reported_with_the_path_inside_the_document(tmp_path: Path) -> None:
+    box = Sandbox(tmp_path)
+    result = json_schema('{"items": [{"id": 1, "name": "a"}, {"id": "x", "name": "b"}]}', box)
+    assert not result.passed
+    assert "$.items[1].id: 'x' is not of type 'integer'" in result.detail
+    missing = json_schema('{"items": [{"id": 1}]}', box)
+    assert "$.items[0]: 'name' is a required property" in missing.detail
+    assert "'items' is a required property" in json_schema("{}", box).detail
+
+
+def test_text_that_is_not_json_says_where_it_stopped_making_sense(tmp_path: Path) -> None:
+    result = json_schema("not json at all", Sandbox(tmp_path))
+    assert not result.passed
+    assert "not valid JSON" in result.detail
+    assert "line 1 column" in result.detail
+
+
+def test_many_errors_are_cut_to_the_first_few_and_counted(tmp_path: Path) -> None:
+    bad = ", ".join('{"id": "x", "name": 1}' for _ in range(5))
+    result = json_schema(f'{{"items": [{bad}]}}', Sandbox(tmp_path))
+    assert "and 5 more" in result.detail
+    assert result.detail.count("is not of type") == 5
+
+
+def test_the_schema_can_validate_a_file_the_worker_wrote(tmp_path: Path) -> None:
+    box = Sandbox(tmp_path)
+    (tmp_path / "out.json").write_text('{"items": []}')
+    assert json_schema("ignored answer", box, path="out.json").passed
+    (tmp_path / "out.json").write_text('{"items": [{"id": 1}]}')
+    assert not json_schema("", box, path="out.json").passed
+    assert "cannot read" in json_schema("", box, path="missing.json").detail
+    assert "cannot read" in json_schema("", box, path="../x.json").detail
+
+
+def test_a_schema_that_is_not_a_schema_is_refused_before_any_work_starts() -> None:
+    with pytest.raises(ValueError, match="not a valid JSON schema"):
+        JsonSchema(json_schema={"type": "nonsense"})
+
+
+def test_a_reference_to_the_network_fails_cleanly_and_never_touches_the_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """jsonschema downloads a `$ref` to a URL by itself unless it is given an empty registry."""
+    lookups: list[object] = []
+    monkeypatch.setattr("socket.getaddrinfo", lambda *args, **kw: lookups.append(args))
+    schema = {"$ref": "http://example.invalid/schema.json"}
+    result = json_schema('{"a": 1}', Sandbox(tmp_path), schema)
+    assert not result.passed
+    assert "unavailable" in result.detail
+    assert lookups == []
+
+
+def test_the_flat_spec_carries_the_schema_through_to_a_strict_check() -> None:
+    spec = CheckSpec(type="json_schema", json_schema={"type": "array"})
+    assert isinstance(to_check(spec), JsonSchema)
+    with pytest.raises(ValueError, match="not a valid JSON schema"):
+        to_check(CheckSpec(type="json_schema", json_schema={"type": "nonsense"}))
+
+
+@given(st.lists(st.integers(), max_size=20), st.integers(0, 20))
+def test_a_list_of_integers_validates_and_one_stray_string_never_does(numbers, position) -> None:  # type: ignore[no-untyped-def]
+    schema = {"type": "array", "items": {"type": "integer"}}
+    with tempfile.TemporaryDirectory() as folder:
+        box = Sandbox(Path(folder))
+        assert json_schema(json.dumps(numbers), box, schema).passed
+        spoiled = [*numbers[:position], "stray", *numbers[position:]]
+        assert not json_schema(json.dumps(spoiled), box, schema).passed

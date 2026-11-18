@@ -41,6 +41,10 @@ CATALOGUE: dict[str, str] = {
         "Your quotes often were not on the line you cited. Quote the exact words of the line, "
         "next to its number, and copy them from what you read."
     ),
+    "json_schema": (
+        "Your JSON often did not match the required schema. Use exactly the field names and types "
+        "the task gives, include every required field, and answer with JSON only."
+    ),
     "max_chars": (
         "Your answers were often too long. Keep the final answer within the length asked: no "
         "preamble, no restating the task."
