@@ -1,5 +1,6 @@
 # pyright: basic
 import asyncio
+import json
 import tomllib
 from pathlib import Path
 
@@ -233,3 +234,19 @@ def test_the_saving_for_the_orchestrator_is_summarised_and_shown() -> None:
     s = summarise("v", [("a", cheap), ("b", big)])
     assert s.mean_saved_tokens_est == 600
     assert "saved*" in format_table([s])
+
+
+def test_bench_json_prints_machine_readable_summaries(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
+
+    async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
+        return summary(variant.name)
+
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
+    assert cli.main(["bench", "--json", "--variant", 'cool={"max_tokens":512}']) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert [s["variant"] for s in data["summaries"]] == ["baseline", "cool"]
+    assert data["summaries"][0]["pass_rate"] == 1.0
+    assert data["profile"].endswith(".json")
