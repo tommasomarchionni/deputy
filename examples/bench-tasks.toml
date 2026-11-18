@@ -1,0 +1,21 @@
+# deputy bench --tasks-file examples/bench-tasks.toml --workdir /path/to/your/repo
+# Read-only questions about your own repository. Adapt the names to files that exist there.
+# Whatever the worker writes is rolled back after each task.
+
+[[task]]
+name = "readme-summary"
+task = "Summarise README.md in at most 5 bullet points. Cite line numbers."
+checks = [
+  { type = "cites_lines", min = 1, max = 400, path = "README.md" },
+  { type = "max_chars", limit = 1500 },
+]
+
+[[task]]
+name = "find-todos"
+task = "Find every TODO comment in the repository and list file and line."
+checks = [{ type = "max_chars", limit = 3000 }]
+
+[[task]]
+name = "tiny-lookup"
+task = "What is the license named in LICENSE?"
+checks = [{ type = "contains", values = ["License"] }]
