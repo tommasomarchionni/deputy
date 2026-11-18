@@ -52,6 +52,9 @@ class Sandbox:
     chars_read: int = 0
     files_read: set[str] = field(default_factory=set[str])
     files_written: list[str] = field(default_factory=list[str])
+    # What each written file held before (None: it did not exist), so a cancelled run can be undone.
+    _before: dict[str, bytes | None] = field(default_factory=dict[str, bytes | None])
+    _made_dirs: list[Path] = field(default_factory=list[Path])
 
     def __post_init__(self) -> None:
         self.root = self.root.resolve()
@@ -107,12 +110,45 @@ class Sandbox:
         target = self.resolve(path)
         if len(content.encode("utf-8")) > MAX_WRITE_BYTES:
             raise SandboxError("content too large")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        _write_text(target, content)
         rel = target.relative_to(self.root).as_posix()
+        if rel not in self._before:
+            self._before[rel] = _snapshot(target)
+        self._make_dirs(target.parent)
+        _write_text(target, content)
         if rel not in self.files_written:
             self.files_written.append(rel)
         return f"wrote {rel} ({len(content)} chars)"
+
+    def _make_dirs(self, folder: Path) -> None:
+        """Create `folder`, remembering the folders that did not exist before."""
+        missing = [
+            p for p in (folder, *folder.parents) if not p.exists() and self.root in p.parents
+        ]
+        folder.mkdir(parents=True, exist_ok=True)
+        self._made_dirs.extend(reversed(missing))
+
+    def rollback(self) -> int:
+        """Put every file the worker wrote back as it was (or remove it); returns how many."""
+        undone = 0
+        for rel, before in self._before.items():
+            target = self.root / rel
+            try:
+                if before is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    target.write_bytes(before)
+                undone += 1
+            except OSError:
+                continue
+        for folder in reversed(self._made_dirs):
+            try:
+                folder.rmdir()  # only if empty: anything else in it is not ours to remove
+            except OSError:
+                continue
+        self._before.clear()
+        self._made_dirs.clear()
+        self.files_written.clear()
+        return undone
 
     def _contained(self, candidate: Path) -> Path | None:
         """The real path of `candidate` if it is inside the root and not a secret, else None.
@@ -193,6 +229,17 @@ def _read_text(path: Path) -> str:
             return handle.read().decode("utf-8")
         except UnicodeDecodeError as exc:
             raise SandboxError("not a UTF-8 text file") from exc
+
+
+def _snapshot(path: Path) -> bytes | None:
+    """The current bytes of a file about to be overwritten, or None if there is no such file."""
+    if not path.exists():
+        return None
+    descriptor, info = _open_regular(path, os.O_RDONLY, single_link=True)
+    with os.fdopen(descriptor, "rb") as handle:
+        if info.st_size > MAX_FILE_BYTES:
+            raise SandboxError(f"file too large to overwrite ({info.st_size} bytes)")
+        return handle.read()
 
 
 def _write_text(path: Path, content: str) -> None:

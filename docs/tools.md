@@ -1,6 +1,6 @@
 # Tools
 
-Four tools, short on purpose: the orchestrator pays for their schemas on every turn. A test keeps
+Five tools, short on purpose: the orchestrator pays for their schemas on every turn. A test keeps
 the total under about 1,500 tokens.
 
 ## `delegate`
@@ -15,12 +15,23 @@ Run a task on a worker model and verify the result.
 | `checks` | Proofs the server runs on the answer (below). |
 | `backend` | A configured backend; default is `default_backend`. |
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
+| `wait` | `true` by default. With `false` it returns at once with `status: running`; get the result with `collect`. |
 
-Returns: `status` (`ok`, `checks_failed`, `turn_limit`, `error`), `answer`, `files_written`,
+Returns: `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs `running`, `cancelled`), `answer`, `files_written`,
 `checks` (pass or fail each), `flags` (`needs_frontier`, `turn_limit`, `backend_error`,
 `setup_error`, `not_worth_delegating`), `metrics` (turns, tokens, seconds, model), `run_id`, and
 `orchestrator_tokens_saved_est` (a rough chars/4 estimate of what you did not have to read).
 The worker always answers in English (the bundled profile says so), unless asked to translate.
+
+## `collect`
+
+The result of a `wait=False` delegation, by its `run_id` (the same id the result and `feedback` use).
+It waits up to 20 seconds, so polling costs few tokens: if the job is still going you get
+`status: running` and call it again. `cancel=true` stops the worker (the request to the model
+server is dropped and a running command check is killed) and puts back every file the worker
+wrote, so the workspace is as it was. A result can be collected once. At most 3 jobs run at once.
+
+Jobs live in the memory of the running server: if the server exits, they are gone.
 
 ### Checks
 

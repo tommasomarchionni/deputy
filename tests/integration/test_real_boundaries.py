@@ -122,7 +122,7 @@ def test_the_mcp_server_speaks_the_protocol_end_to_end(
         async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
             await session.initialize()
             names = sorted(t.name for t in (await session.list_tools()).tools)
-            assert names == ["delegate", "feedback", "profiles", "status"]
+            assert names == ["collect", "delegate", "feedback", "profiles", "status"]
             status = await session.call_tool("status", {})
             assert status.structured_content["fake"].startswith("up")
             reply = await session.call_tool(

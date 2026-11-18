@@ -11,7 +11,18 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import lessons, model_profiles, project_memory, runs, stats, tokens, updates
+from deputy import (
+    jobs as background,
+)
+from deputy import (
+    lessons,
+    model_profiles,
+    project_memory,
+    runs,
+    stats,
+    tokens,
+    updates,
+)
 from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
@@ -75,7 +86,7 @@ def _turn_limit(prepared: _Delegation, explicit: int | None) -> int:
 
 
 async def _delegate(
-    prepared: _Delegation, task: str, max_turns: int | None, request_tokens: int
+    prepared: _Delegation, task: str, max_turns: int | None, request_tokens: int, run_id: str
 ) -> Result:
     """Run the task, and flag a kind of task that has not paid off in past runs."""
     advice = stats.advice_for_class(task_class(prepared.profile.name, prepared.checks))
@@ -94,6 +105,7 @@ async def _delegate(
             lessons=lessons.applicable(prepared.profile.name, prepared.checks),
             request_tokens=request_tokens,
             notes=prepared.notes,
+            run_id=run_id,
         )
     finally:
         await prepared.client.aclose()
@@ -129,8 +141,14 @@ async def _backend_status(config: Config) -> dict[str, str]:
 
 def build_server() -> MCPServer:
     server = MCPServer("deputy", instructions=INSTRUCTIONS)
+    pending = background.Jobs()
 
-    @server.tool()
+    @server.tool(
+        description=(
+            "Run a task on a worker model in `workdir` (absolute path). Verified by `checks`. "
+            "With wait=False it returns at once; get the result with `collect`."
+        )
+    )
     async def delegate(  # noqa: PLR0913, PLR0917
         task: str,
         workdir: str,
@@ -138,8 +156,8 @@ def build_server() -> MCPServer:
         checks: list[CheckSpec] | None = None,
         backend: str | None = None,
         max_turns: int | None = None,
+        wait: bool = True,
     ) -> Result:
-        """Run a task on a worker model in `workdir` (absolute path). Verified by `checks`."""
         run_id = runs.new_run_id()
         try:
             prepared = _prepare(workdir, profile, checks, backend)
@@ -156,7 +174,19 @@ def build_server() -> MCPServer:
             "max_turns": max_turns,
             "checks": [c.model_dump(exclude_none=True) for c in checks or []],
         }
-        return await _delegate(prepared, task, max_turns, tokens.estimate_value(request))
+        work = _delegate(prepared, task, max_turns, tokens.estimate_value(request), run_id)
+        if wait:
+            return await work
+        if not pending.has_room():
+            await prepared.client.aclose()
+            work.close()
+            return _setup_error(run_id, f"{background.MAX_ACTIVE} jobs are already running")
+        return pending.submit(run_id, prepared.sandbox, work)
+
+    @server.tool(structured_output=False)  # the result shape is already described by `delegate`
+    async def collect(run_id: str, cancel: bool = False) -> Result:
+        """Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it."""
+        return await pending.collect(run_id, cancel=cancel)
 
     @server.tool()
     async def status() -> dict[str, str]:
