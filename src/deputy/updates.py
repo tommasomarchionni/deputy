@@ -12,14 +12,17 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import cast
 
 import httpx
 
 from deputy.config import state_dir
-from deputy.version import current_version, is_compatible, is_newer
+from deputy.version import current_version, is_compatible, is_newer, parse_version
 
 REPO = "tommasomarchionni/deputy"
 RELEASE_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
+RELEASES_URL = f"https://api.github.com/repos/{REPO}/releases?per_page=50"
+BREAKING_MARK = "BREAKING CHANGE"  # the release workflow puts it in the notes of a breaking release
 WHEEL_URL = (
     "https://github.com/{repo}/releases/download/v{version}/deputy-{version}-py3-none-any.whl"
 )
@@ -35,6 +38,7 @@ class UpdateError(Exception):
 class UpdateInfo:
     current: str
     latest: str | None
+    breaking: bool = True  # unknown counts as breaking: then only a patch is applied alone
 
     @property
     def available(self) -> bool:
@@ -42,30 +46,40 @@ class UpdateInfo:
 
     @property
     def compatible(self) -> bool:
-        """A newer version that may be applied without asking (see `is_compatible`)."""
-        return (
-            self.available and self.latest is not None and is_compatible(self.latest, self.current)
-        )
+        """A newer version that may be applied without asking: a patch, or (while the major is 0)
+        a new minor when no release between the two is marked as breaking."""
+        if not self.available or self.latest is None:
+            return False
+        if is_compatible(self.latest, self.current):
+            return True
+        same_major = parse_version(self.latest)[0] == parse_version(self.current)[0]
+        return same_major and parse_version(self.current)[0] == 0 and not self.breaking
 
 
 def _cache_file() -> Path:
     return state_dir() / "update-check.json"
 
 
-def _read_cache(now: float) -> tuple[bool, str | None]:
-    """(is_fresh, latest). A stale or unreadable cache is not fresh."""
+def _read_cache(now: float) -> tuple[bool, str | None, bool]:
+    """(is_fresh, latest, breaking). A stale or unreadable cache is not fresh."""
     try:
         data = json.loads(_cache_file().read_text(encoding="utf-8"))
         ttl = SUCCESS_TTL_S if data.get("ok") else FAILURE_TTL_S
-        return now - float(data["checked_at"]) < ttl, data.get("latest")
+        fresh = now - float(data["checked_at"]) < ttl
+        return fresh, data.get("latest"), bool(data.get("breaking", True))
     except (OSError, ValueError, KeyError, TypeError):
-        return False, None
+        return False, None, True
 
 
-def _write_cache(now: float, latest: str | None) -> None:
+def _write_cache(now: float, latest: str | None, breaking: bool) -> None:
     try:
         state_dir().mkdir(parents=True, exist_ok=True)
-        payload = {"checked_at": now, "latest": latest, "ok": latest is not None}
+        payload = {
+            "checked_at": now,
+            "latest": latest,
+            "ok": latest is not None,
+            "breaking": breaking,
+        }
         _cache_file().write_text(json.dumps(payload), encoding="utf-8")
     except OSError:
         return
@@ -83,6 +97,30 @@ def _fetch_latest(client: httpx.Client) -> str | None:
     return tag.removeprefix("v")
 
 
+def _breaking_between(client: httpx.Client, current: str, latest: str) -> bool:
+    """Whether any release after `current` up to `latest` is marked as breaking. If the list
+    cannot be read, assume it is (so only a patch would be applied without asking)."""
+    try:
+        response = client.get(
+            RELEASES_URL, headers={"Accept": "application/vnd.github+json", "User-Agent": "deputy"}
+        )
+        response.raise_for_status()
+        items: object = response.json()
+    except (httpx.HTTPError, ValueError):
+        return True
+    if not isinstance(items, list):
+        return True
+    for raw in cast("list[object]", items):
+        if not isinstance(raw, dict):
+            return True
+        item = cast("dict[str, object]", raw)
+        tag = str(item.get("tag_name", "")).removeprefix("v")
+        between = is_newer(tag, current) and not is_newer(tag, latest)
+        if between and BREAKING_MARK in str(item.get("body") or ""):
+            return True
+    return False
+
+
 def check(
     *,
     force: bool = False,
@@ -92,18 +130,23 @@ def check(
     """The installed and the latest released version, from a daily cache unless `force`."""
     installed = current_version()
     moment = now()
-    fresh, cached = _read_cache(moment)
+    fresh, cached, cached_breaking = _read_cache(moment)
     if fresh and not force:
-        return UpdateInfo(installed, cached)
+        return UpdateInfo(installed, cached, cached_breaking)
     owned = client is None
     http = client or httpx.Client(timeout=3.0)
     try:
         latest = _fetch_latest(http)
+        breaking = (
+            _breaking_between(http, installed, latest)
+            if latest and is_newer(latest, installed)
+            else cached_breaking
+        )
     finally:
         if owned:
             http.close()
-    _write_cache(moment, latest or cached)
-    return UpdateInfo(installed, latest or cached)
+    _write_cache(moment, latest or cached, breaking)
+    return UpdateInfo(installed, latest or cached, breaking)
 
 
 Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]

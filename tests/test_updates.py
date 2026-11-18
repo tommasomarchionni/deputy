@@ -248,3 +248,44 @@ def test_the_update_command_checks_and_upgrades(
 def test_the_cache_lives_in_the_state_directory() -> None:
     updates.check(client=release_client("0.2.0"))
     assert Path(state_dir(), "update-check.json").is_file()
+
+
+def releases_client(latest: str, releases: list[dict] | None) -> httpx.Client:
+    """`latest` answers the latest-release call; `releases` the list (None: the list fails)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/releases/latest"):
+            return httpx.Response(200, json={"tag_name": latest})
+        if releases is None:
+            return httpx.Response(500, json={})
+        return httpx.Response(200, json=releases)
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_a_new_0x_minor_is_applied_alone_when_no_release_in_between_is_breaking() -> None:
+    releases = [{"tag_name": "v0.3.0", "body": "feat: more"}, {"tag_name": "v0.2.0", "body": "fix"}]
+    info = updates.check(force=True, client=releases_client("v0.3.0", releases))
+    assert info.breaking is False
+    assert info.compatible is True
+
+
+def test_a_breaking_release_in_between_means_asking_first() -> None:
+    releases = [
+        {"tag_name": "v0.3.0", "body": "feat: more"},
+        {"tag_name": "v0.2.0", "body": "**BREAKING CHANGE**: config renamed"},
+        {"tag_name": "v0.1.0", "body": "BREAKING CHANGE: old, already installed"},
+    ]
+    info = updates.check(force=True, client=releases_client("v0.3.0", releases))
+    assert info.breaking is True
+    assert info.compatible is False
+
+
+def test_when_the_list_cannot_be_read_only_a_patch_is_applied_alone() -> None:
+    assert updates.check(force=True, client=releases_client("v0.2.0", None)).compatible is False
+    assert updates.check(force=True, client=releases_client("v0.1.5", None)).compatible is True
+
+
+def test_a_new_major_is_never_applied_alone() -> None:
+    assert updates.UpdateInfo("1.4.0", "2.0.0", breaking=False).compatible is False
+    assert updates.UpdateInfo("0.9.0", "1.0.0", breaking=False).compatible is False

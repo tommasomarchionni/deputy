@@ -8,7 +8,7 @@
 ```toml
 default_backend = "local"
 auto_tune = "propose"                # off | propose | apply, see "Tuning" below
-auto_update = "notify"               # off | notify | apply, see "Updates" below
+auto_update = "apply"                # apply | notify | off, see "Updates" below
 routing = "auto"                     # off | auto, see "Routing" below
 
 [[backends]]
@@ -139,12 +139,15 @@ the bundled `helper` profile makes the worker answer in English. A custom profil
 deputy never phones home with your data. The only request it makes is a GET of the public "latest
 release" of this repository, at most once a day (cached; one hour after a failure).
 
-- `auto_update = "notify"` (default): `deputy doctor` and the `status` tool say when a newer release
-  exists. Nothing is installed.
+- `auto_update = "apply"` (default): at server start, a newer **compatible** release is installed,
+  and only after its build provenance is verified. Compatible means the same major version and no
+  release since yours marked `BREAKING CHANGE` in its notes (the release workflow marks every
+  release that contains a breaking change; if the list of releases cannot be read, only a patch is
+  installed). A new major version is never installed without you. The new version runs from the
+  next start, and the user-level skill is refreshed then.
+- `auto_update = "notify"`: `deputy doctor` and the `status` tool say when a newer release exists.
+  Nothing is installed.
 - `auto_update = "off"`: no request at all.
-- `auto_update = "apply"`: at server start, a newer **compatible** release is installed (same major
-  version; while the major is 0, the same minor too, because a new 0.x minor may break things).
-  A new major version is never installed without you. The new version runs from the next start.
 
 `deputy update --check` only looks; `deputy update` upgrades now.
 

@@ -48,6 +48,10 @@ when relevant, kept current by deputy on each update), and adds a one-line hint 
 (`deputy hook off` turns it off). For other agents: `deputy install vscode|cursor|codex|generic`,
 then `deputy instructions --for <agent> --apply` in each project.
 
+deputy keeps itself current: a newer compatible release is installed when the server starts, only
+after its build provenance is verified, never a new major version or a release marked as breaking
+(`auto_update` in the [configuration](docs/configuration.md#updates); `notify` or `off` to opt out).
+
 ## How it works
 
 1. Your agent calls `delegate` with a task, a folder and the **checks** the answer must pass (for
