@@ -21,6 +21,7 @@ CONFIG_TEMPLATE = """# deputy configuration. No secrets here: use a key file (mo
 default_backend = "{name}"
 # auto_tune = "propose"      # off | propose | apply (see docs/configuration.md)
 # auto_update = "notify"     # off | notify | apply
+# routing = "auto"           # off | auto: choose among backends (see docs/configuration.md)
 
 [[backends]]
 name = "{name}"

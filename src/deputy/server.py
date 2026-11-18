@@ -1,4 +1,4 @@
-"""The MCP server: four small tools. Schemas are paid by the orchestrator on every turn, so they
+"""The MCP server: five small tools. Schemas are paid by the orchestrator on every turn, so they
 are kept short on purpose."""
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from deputy import (
     lessons,
     model_profiles,
     project_memory,
+    router,
     runs,
     stats,
     tokens,
@@ -26,7 +27,7 @@ from deputy import (
 from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
-from deputy.config import Config, ConfigError, load_config
+from deputy.config import Backend, Config, ConfigError, load_config
 from deputy.model_profiles import ModelProfile
 from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
@@ -42,9 +43,8 @@ class _Delegation:
     config: Config
     profile: Profile
     sandbox: Sandbox
-    client: ChatClient
+    routes: list[router.Candidate]  # the backends to try, best first
     checks: list[Check]
-    measured: ModelProfile | None
     notes: str
 
 
@@ -57,58 +57,103 @@ def _prepare(
     chosen = profiles.get(profile)
     if chosen is None:
         raise ConfigError(f"unknown profile '{profile}'; known: {', '.join(profiles)}")
-    chosen_backend = config.backend(backend)
     return _Delegation(
         config=config,
         profile=chosen,
         sandbox=Sandbox(Path(workdir)),
-        client=ChatClient(chosen_backend),
+        routes=_routes(config, backend),
         checks=[to_check(c) for c in checks or []],
-        measured=model_profiles.load_profile(chosen_backend),
         notes=project_memory.prompt_notes(
             project_memory.load(project_memory.repo_root(Path(workdir)))
         ),
     )
 
 
+def _routes(config: Config, backend: str | None) -> list[router.Candidate]:
+    """One backend when it is named or routing is off; otherwise the router's order."""
+    if backend:
+        return [router.Candidate(config.backend(backend), f"{backend} (named by the caller)")]
+    if config.routing == "off":
+        default = config.backend()
+        return [router.Candidate(default, f"{default.name} (routing is off)")]
+    return router.candidates(config, model_profiles.load_profile)
+
+
 def _setup_error(run_id: str, message: str) -> Result:
     return Result(run_id=run_id, status="error", answer=message, flags=["setup_error"])
 
 
-def _turn_limit(prepared: _Delegation, explicit: int | None) -> int:
+def _turn_limit(prepared: _Delegation, explicit: int | None, measured: ModelProfile | None) -> int:
     """The turn limit: what the caller asked for, else the profile's, else what was measured for
     this model, else the default."""
-    return (
-        explicit
-        or prepared.profile.max_turns
-        or model_profiles.suggested_max_turns(prepared.measured)
-    )
+    return explicit or prepared.profile.max_turns or model_profiles.suggested_max_turns(measured)
 
 
-async def _delegate(
-    prepared: _Delegation, task: str, max_turns: int | None, request_tokens: int, run_id: str
-) -> Result:
-    """Run the task, and flag a kind of task that has not paid off in past runs."""
-    advice = stats.advice_for_class(task_class(prepared.profile.name, prepared.checks))
+async def _answers(backend: Backend) -> bool:
+    """Whether the backend answers a quick probe (a down backend is skipped, not waited for)."""
+    quick = backend.model_copy(update={"timeout_s": router.PROBE_TIMEOUT_S})
+    client = ChatClient(quick)
     try:
-        result = await run_task(
-            client=prepared.client,
+        return (await client.probe()).ok
+    except ConfigError:
+        return False
+    finally:
+        await client.aclose()
+
+
+@dataclass(frozen=True)
+class _Request:
+    task: str
+    max_turns: int | None
+    request_tokens: int
+    run_id: str
+
+
+async def _run_on(
+    prepared: _Delegation, candidate: router.Candidate, route: str, args: _Request
+) -> Result:
+    backend = candidate.backend
+    client = ChatClient(backend)
+    try:
+        return await run_task(
+            client=client,
             profile=prepared.profile,
-            task=task,
+            task=args.task,
             sandbox=prepared.sandbox,
             checks=prepared.checks,
             policy=prepared.config.policy,
-            max_turns=_turn_limit(prepared, max_turns),
+            max_turns=_turn_limit(prepared, args.max_turns, model_profiles.load_profile(backend)),
             max_retries=DEFAULT_RETRIES
             if prepared.profile.max_retries is None
             else prepared.profile.max_retries,
             lessons=lessons.applicable(prepared.profile.name, prepared.checks),
-            request_tokens=request_tokens,
+            request_tokens=args.request_tokens,
             notes=prepared.notes,
-            run_id=run_id,
+            run_id=args.run_id,
+            route=route,
         )
     finally:
-        await prepared.client.aclose()
+        await client.aclose()
+
+
+async def _delegate(prepared: _Delegation, args: _Request) -> Result:
+    """Run the task on the first backend that answers (a backend error moves on to the next one),
+    and flag a kind of task that has not paid off in past runs."""
+    advice = stats.advice_for_class(task_class(prepared.profile.name, prepared.checks))
+    several = len(prepared.routes) > 1
+    skipped: list[str] = []
+    result: Result | None = None
+    for candidate in prepared.routes:
+        if several and not await _answers(candidate.backend):
+            skipped.append(f"{candidate.backend.name} not answering")
+            continue
+        route = "; ".join([*skipped, f"chose {candidate.why}"])
+        result = await _run_on(prepared, candidate, route, args)
+        if "backend_error" not in result.flags:
+            break
+        skipped.append(f"{candidate.backend.name} backend error")
+    if result is None:
+        return _setup_error(args.run_id, "no backend answers: " + "; ".join(skipped))
     if advice:
         result.flags.append(stats.ADVICE_FLAG)
     return result
@@ -174,11 +219,12 @@ def build_server() -> MCPServer:
             "max_turns": max_turns,
             "checks": [c.model_dump(exclude_none=True) for c in checks or []],
         }
-        work = _delegate(prepared, task, max_turns, tokens.estimate_value(request), run_id)
+        work = _delegate(
+            prepared, _Request(task, max_turns, tokens.estimate_value(request), run_id)
+        )
         if wait:
             return await work
         if not pending.has_room():
-            await prepared.client.aclose()
             work.close()
             return _setup_error(run_id, f"{background.MAX_ACTIVE} jobs are already running")
         return pending.submit(run_id, prepared.sandbox, work)

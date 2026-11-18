@@ -10,7 +10,7 @@ use into lessons that go into the worker prompt, and `deputy tune` changes reque
 they win; neither runs on its own, you run them (or see the issues for automating them). Today it improves when a measurement says so:
 `deputy bench` measures your model and `deputy tune` changes request settings only if they win. While
 it runs, deputy records a trace of every run and your `feedback`, but nothing reads them yet
-(lessons and routing are planned: [#13](https://github.com/tommasomarchionni/deputy/issues/13),
+(per task class routing is planned: [#13](https://github.com/tommasomarchionni/deputy/issues/13),
 [#14](https://github.com/tommasomarchionni/deputy/issues/14),
 [#18](https://github.com/tommasomarchionni/deputy/issues/18)).
 
@@ -36,7 +36,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Advice that a kind of task does not pay off (`not_worth_delegating`), from the trace | **today** (a flag and a line in `status`; the orchestrator decides) |
 | Lessons learned from real use (`deputy learn`): short reminders in the worker prompt where a kind of check keeps failing, with evidence and expiry | **today** (derived from the trace) |
 | Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
-| Profiles read by routing; choose model and settings per task | planned ([#13](https://github.com/tommasomarchionni/deputy/issues/13), [#18](https://github.com/tommasomarchionni/deputy/issues/18)) |
+| Measured profiles read by routing: the backend is chosen per task by pass rate and speed | **today** ([configuration](configuration.md#routing)); per task class is planned |
 | Offline optimiser that proposes profile and parameter changes | planned ([#21](https://github.com/tommasomarchionni/deputy/issues/21)) |
 | Nightly benchmark on a machine with a local model | planned, needs a decision ([#22](https://github.com/tommasomarchionni/deputy/issues/22)) |
 

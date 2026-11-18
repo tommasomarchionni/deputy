@@ -3,7 +3,7 @@
 !!! note "What exists today"
     Built and tested: the five tools, background tasks, the execution loop with sandbox, checks and one correction round,
     OpenAI-compatible backends, the benchmark and tuning commands, workspaces, install and update.
-    Planned: routing by measured profile, memory, a second adapter family
+    Routing by measured profile and project memory are built too. Planned: a second adapter family
     (see the [roadmap](roadmap.md)). Sections below that describe planned work say so.
 
 ## Roles
@@ -45,11 +45,14 @@ Results are structured (JSON schema), not free text: the orchestrator can act on
    splitting a task, depth <= 2, inside the same budget.)
 6. **Record:** trace and metrics, always; memory only through the reviewed path.
 
-## Routing (planned)
+## Routing
 
-By task class, size, latency and cost budget, using **measured** model profiles (tokens/s, context
-that really works, tool-call reliability, best reasoning budget per class), with deterministic
-fallback. Local first when the checks pass; hosted only when allowed by the project policy.
+With several backends configured, `delegate` picks one by the rules in `router.py`: local
+before hosted, measured to pass before not measured, faster measured time first, then the default,
+then the configuration order. It never goes to a more expensive or less private kind than the
+default. Backends are probed in that order, a silent one is skipped, a run that ends in a backend
+error moves on to the next, and the reason is written to the trace (`route`). Planned: routing by
+task class and cost budget.
 
 ## Security
 
