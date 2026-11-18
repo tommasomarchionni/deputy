@@ -105,6 +105,7 @@ file content, no answers, no secrets). `deputy stats` turns it into a report:
 deputy stats                 # the last 30 days
 deputy stats --days 7        # a different window
 deputy stats --json          # for scripts
+deputy stats --include-bench # also the synthetic benchmark runs
 ```
 
 It shows runs, the share that passed their checks (`ok`), how many were handed back to the
@@ -112,6 +113,10 @@ orchestrator (`esc`), how many needed a retry, the acceptance rate from your `fe
 estimated tokens saved (total and per run), for everything, by profile, and by **task class** (the
 profile and the kinds of checks asked for, for example `helper:cites_lines+contains`). The `status`
 tool carries a one-line version of the last 7 days.
+
+Runs started by `deputy bench` and `deputy tune` are tagged `source: bench` in the trace and left out
+of the report by default, so it describes real work; older trace lines without a source count as real
+use (delete `runs.jsonl` for a clean start).
 
 The saving is an estimate (characters divided by four, of the files the worker read minus the task
 and the answer); treat it as an order of magnitude.

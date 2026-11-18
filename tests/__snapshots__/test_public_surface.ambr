@@ -86,12 +86,13 @@
 # ---
 # name: test_each_command_help_is_stable[stats]
   '''
-  usage: deputy stats [-h] [--days DAYS] [--json]
+  usage: deputy stats [-h] [--days DAYS] [--json] [--include-bench]
   
   options:
-    -h, --help   show this help message and exit
-    --days DAYS  how far back to look (default 30)
-    --json       print JSON, not a table
+    -h, --help       show this help message and exit
+    --days DAYS      how far back to look (default 30)
+    --json           print JSON, not a table
+    --include-bench  also count benchmark runs (synthetic)
   
   '''
 # ---
