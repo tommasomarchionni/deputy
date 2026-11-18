@@ -20,6 +20,7 @@ from deputy.model_profiles import ModelProfile
 from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
 
+DEFAULT_RETRIES = 1  # one correction round with the exact failure
 INSTRUCTIONS = "Delegate small, checkable, read-heavy tasks to another model. Use `delegate`."
 
 
@@ -59,6 +60,16 @@ def _setup_error(run_id: str, message: str) -> Result:
     return Result(run_id=run_id, status="error", answer=message, flags=["setup_error"])
 
 
+def _turn_limit(prepared: _Delegation, explicit: int | None) -> int:
+    """The turn limit: what the caller asked for, else the profile's, else what was measured for
+    this model, else the default."""
+    return (
+        explicit
+        or prepared.profile.max_turns
+        or model_profiles.suggested_max_turns(prepared.measured)
+    )
+
+
 async def _delegate(
     prepared: _Delegation, task: str, max_turns: int | None, request_tokens: int
 ) -> Result:
@@ -72,7 +83,10 @@ async def _delegate(
             sandbox=prepared.sandbox,
             checks=prepared.checks,
             policy=prepared.config.policy,
-            max_turns=max_turns or model_profiles.suggested_max_turns(prepared.measured),
+            max_turns=_turn_limit(prepared, max_turns),
+            max_retries=DEFAULT_RETRIES
+            if prepared.profile.max_retries is None
+            else prepared.profile.max_retries,
             lessons=lessons.applicable(prepared.profile.name, prepared.checks),
             request_tokens=request_tokens,
         )
