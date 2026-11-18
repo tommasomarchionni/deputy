@@ -1,105 +1,84 @@
 # Architecture
 
-!!! note "What exists today"
-    Built and tested: the five tools, background tasks, the execution loop with sandbox, checks and one correction round,
-    OpenAI-compatible backends, the benchmark and tuning commands, workspaces, install and update.
-    Routing by measured profile and project memory are built too. Planned: a second adapter family
-    (see the [roadmap](roadmap.md)). Sections below that describe planned work say so.
-
 ## Roles
 
-- **Orchestrator** (frontier model, in an agent such as Claude Code or Copilot): plans, splits the
-  work, decides what to delegate, checks the result, owns every decision that touches the real
-  repository.
-- **deputy** (this MCP server): runs tasks on workers, enforces the sandbox, verifies, retries
-  within a budget, records measurements.
-- **Worker** (any model behind an adapter): does a bounded task. It never decides scope and never
-  has a shell.
+- **Orchestrator**: the frontier model in your agent (Claude Code or another MCP client). It plans,
+  decides what to delegate, declares the checks, and owns every change to the real repository.
+- **deputy**: this MCP server. It runs the task on a worker, keeps the worker inside a sandbox,
+  runs the checks, gives one correction round, and records what happened.
+- **Worker**: any model behind an OpenAI-compatible API. It does one bounded task. It never has a
+  shell, the network or credentials.
 
-## Tools exposed over MCP (small, named for the job)
+## Tools exposed over MCP
 
 | Tool | Purpose |
 | --- | --- |
-| `deputy_delegate` | Run one task. Inputs: task, profile, sandbox or workdir, budget (time, tokens), `checks`. Output: `status`, `answer`, `artifacts`, `evidence`, `metrics`, `flags`. |
-| `collect` | The result of a background `delegate` (`wait=false`), waiting up to 20 s; `cancel` stops it and puts the files back. Built as a plain tool, not MCP tasks, because clients do not support those yet. |
-| `deputy_status` | Backends, loaded models, health, queue. |
-| `deputy_profiles` | Profiles and model profiles known to the server. |
-| `deputy_feedback` | The orchestrator says accepted / rejected and why; this feeds memory and the benchmark. |
-| `deputy_memory_*` | Read and propose memory entries (see `memory.md`). Writes are reviewed. |
+| `delegate` | Run one task: `task`, `workdir`, `profile`, `checks`, optional `backend`, `max_turns`, and `wait` (false returns at once). Returns `run_id`, `status`, `answer`, a one-line `checks` summary, and `files_written` and `flags` when there are any. |
+| `collect` | The result of a background `delegate`, waiting up to 20 s; `cancel` stops it and puts written files back. |
+| `status` | The backends and whether they answer, the measured model profile, a week of usage, and advice on kinds of task that do not pay. |
+| `profiles` | The worker profiles available for a folder. |
+| `feedback` | The orchestrator says `accepted` or `rejected`, and why; recorded in the trace. |
 
-Results are structured (JSON schema), not free text: the orchestrator can act on `flags` such as
-`needs_frontier`, `checks_failed`, `truncated`, `low_confidence`.
+Five tools with short descriptions: their schemas cost the orchestrator about 970 tokens per
+session. Details of each field, check and flag: [tools](tools.md).
 
-## Execution loop (in the server, not in the model)
+## What happens in one delegation
 
-1. **Plan the call:** classify the task, pick a model and parameters from measured model profiles,
-   budget the context (chunk or map-reduce a file that does not fit).
-2. **Run the worker** with only `read_file` and `write_file`, confined to the sandbox (real-path
-   check, no symlink escape), no network except to the model endpoint.
-3. **Verify with `checks`:** declared by the orchestrator, run by the server from an allow-list
-   (for example: every quoted line number contains the quoted text; `node --test <file>` in the
-   sandbox; a JSON schema; a required-facts list). The worker never runs commands.
-4. **Correct:** on failure, one or two retries with the precise failure, within the budget.
-5. **Escalate:** still failing: return `needs_frontier` with the evidence so the orchestrator takes
-   over. (Planned: low-confidence detection, and delegating again from inside a run only for
-   splitting a task, depth <= 2, inside the same budget.)
-6. **Record:** trace and metrics, always; memory only through the reviewed path.
+1. **Prepare:** load the profile, validate the checks, choose a backend (see Routing), and add the
+   project memory and any lessons that apply to this kind of task.
+2. **Run the worker** with its tools, all confined to `workdir`: `read_file`, `write_file`, `grep`,
+   read-only `git`, `summarise_log` and `scan_file`. The turn limit comes from the measured model
+   profile unless the call or the profile sets one.
+3. **Verify:** the server runs the declared checks on the answer and on written files. A `command`
+   check runs only an allow-listed argv, without a shell.
+4. **Correct:** if a check fails, the worker gets the exact failures and one more try (a profile
+   can set none or more).
+5. **Hand back:** still failing, the result says `checks_failed` with the flag `needs_frontier`,
+   and the answer is cut to a short excerpt, because the orchestrator will redo the task.
+6. **Record:** one line in the trace (`runs.jsonl`): metadata, check outcomes, metrics and the
+   saving estimate; never file contents or answers.
 
 ## Routing
 
-With several backends configured, `delegate` picks one by the rules in `router.py`: local
-before hosted, measured to pass before not measured, faster measured time first, then the default,
-then the configuration order. It never goes to a more expensive or less private kind than the
-default. Backends are probed in that order, a silent one is skipped, a run that ends in a backend
-error moves on to the next, and the reason is written to the trace (`route`). Planned: routing by
-task class and cost budget.
+With several backends configured, `delegate` picks one by the rules in `router.py`: local before
+hosted, measured to pass before not measured, faster measured time first, then the default, then
+the configuration order. It never goes to a more expensive or less private kind than the default.
+A backend that does not answer is skipped, a backend error moves on to the next, and the reason is
+written to the trace (`route`).
 
-## Security
+## Where state lives
 
-- Treat file contents and model output as data, never as instructions to the server.
-- Sandbox confinement, write only inside it; the real repository is changed by the orchestrator
-  after review, never by a worker.
-- Redact secrets before a prompt leaves the process; never log a key; keys come from files with
-  mode 600 or the OS keychain, not from the command line.
-- Per-project policy file: allowed paths, allowed checks, allowed backends, budgets.
-- Audit log of every run (who asked, which model, which files, which checks, outcome).
+All on your machine, in the state directory (`~/.local/state/deputy`): the trace (`runs.jsonl`),
+measured model profiles, lessons, project memory (keyed by repository, outside the repository),
+optimiser proposals and nightly benchmark reports, as JSON files. Configuration is in
+`~/.config/deputy/config.toml`; API keys come from a mode-600 file or an environment variable,
+never from the configuration file or the command line.
 
-## Stack (choices to confirm with measurements, not dogma)
+## Token economy of the orchestrator
 
-- Python 3.12+, `uv`; the official MCP SDK / FastMCP; pydantic v2; httpx.
-- Transports: stdio first (works in Claude Code and VS Code/Copilot), streamable HTTP later.
-- One adapter today: the OpenAI-compatible chat API (llama.cpp, Ollama, LM Studio, vLLM, hosted
-  APIs). Other adapter families are possible behind the same interface but are not built.
-- SQLite (WAL, FTS5) for memory, traces and benchmark results; `sqlite-vec` only if the benchmark
-  shows retrieval by meaning beats keyword search.
-- OpenTelemetry-shaped JSONL traces.
-- Quality: `ruff`, `pyright --strict`, `pytest` with `hypothesis` for the sandbox and parsers,
-  contract tests shared by every adapter, CI on GitHub Actions with actions pinned to a full SHA.
+Delegation makes sense only if your frontier model spends fewer tokens than doing the work itself.
+Its cost per delegation is the task text it writes and the result it reads; the tool schemas are a
+fixed cost per session. So:
 
-## Token economy of the orchestrator (the reason this exists)
+- **Short schemas** (about 970 tokens for all five tools) and a **short result** (the answer, a
+  one-line check summary, nothing empty).
+- **Checks replace re-reading:** if the checks passed, the orchestrator does not reread the files.
+- **The task names files; it does not paste them.** Standing rules live in the profile.
+- **Delegate input-heavy, output-light work.** Every run records what the worker read and what the
+  orchestrator paid; `deputy stats` reports the net saving per kind of task, and a kind that does
+  not pay is flagged `not_worth_delegating`. A task that names only small files is flagged
+  `small_input` at once.
 
-Delegation only makes sense if the frontier model spends **fewer** tokens than doing the work
-itself. Its cost per delegation is: the tool schemas it carries on every turn, the task text it
-writes, and the result it reads. So:
+## Stack
 
-- **Few, short tool schemas.** Six tools, one-line descriptions, no prose manual. Tool definitions
-  are paid on every turn of every conversation, delegated or not. (Measured on the tool this project grew from: 16 tools, 22,050 characters of definitions,
-  about 5,500 tokens by a rough chars/4 estimate, in Spanish and verbose. Target here: under 1,500.)
-- **Results by reference.** The result carries a compact `answer` (a few hundred tokens at most),
-  `artifacts` as sandbox paths, and `evidence` as pass/fail per check, not the content. The
-  orchestrator reads an artifact only if it decides to.
-- **Checks replace re-reading.** If the server ran the declared checks and they passed, the
-  orchestrator does not reread the file to confirm. A `verified: true` is worth more than a summary.
-- **Task text by reference.** The task names files and a profile; it does not paste them. Profiles
-  carry the standing rules, so they are not repeated in every call.
-- **Delegate input-heavy, output-light work:** read a 12k-token file and return 15 lines. Do not
-  delegate what the orchestrator can answer in one short turn; the benchmark finds the break-even.
-- **Measure it.** Every run records `orchestrator_tokens` (task + result + schema share) and a
-  `baseline_tokens` estimate of doing the work in the orchestrator. The benchmark reports
-  `tokens_saved` per task class, and a class with no saving is routed away from delegation.
+- Python 3.11+, `uv`; the official MCP SDK; pydantic v2; httpx. Transport: stdio.
+- One adapter family: the OpenAI-compatible chat API (llama.cpp, Ollama, LM Studio, vLLM, hosted
+  APIs).
+- Quality: `ruff`, `pyright --strict`, `pytest` with `hypothesis` and snapshot tests, CI on GitHub
+  Actions with actions pinned to a full SHA, CodeQL, releases with provenance attestations.
 
 ## Cross-agent use
 
-An agent integration is one MCP config plus one short instruction file (for Copilot:
-`.github/instructions/*.md`; for Claude Code: a skill). The protocol is the same, so a benchmark
-run through the Copilot path must give the same results as through Claude Code.
+An agent integration is one MCP configuration (`deputy install`) plus one short instruction file
+(`deputy instructions`). The protocol is the same for every agent; only Claude Code is verified in
+its app so far.

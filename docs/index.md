@@ -1,35 +1,37 @@
 # deputy
 
-**A frontier model orchestrates. Any other model does the legwork, through MCP. Every answer is
-checked by code, and your frontier tokens are saved.**
+**Your frontier model plans. A cheaper model does the long reading. Code checks every answer.**
 
-deputy is an MCP server. Your agent (Claude Code, GitHub Copilot, Cursor, Codex, anything that
-speaks MCP) hands small, checkable, read-heavy tasks to a cheaper model (a local llama.cpp or Ollama
-model, or any OpenAI-compatible API). The server runs the worker inside a sandbox, verifies the
-answer with checks you declare, corrects it when it can, and tells the agent exactly what it can
-trust.
+deputy is an MCP server. Your coding agent (Claude Code, or any MCP client) hands it a read-heavy
+task, such as "summarise this 900-line document" or "which files mention this setting". deputy runs
+it on a cheaper model (a local llama.cpp or Ollama model, or any OpenAI-compatible API), checks the
+answer with code, and returns a short result. Your agent reads the answer, not the files.
 
-## Why
+## When it pays
 
-| Goal | How |
+| Delegate | Do it yourself |
 | --- | --- |
-| **Fewer tokens for the frontier model** | Five tiny tool schemas (about 1,200 tokens), results by reference, checks instead of re-reading, and a measured saving estimate for every run (`deputy stats`). |
-| **Quality you can verify** | The worker has no shell and a confined sandbox. Every claim is checked by code: cited lines, required facts, forbidden leaks, files written, allow-listed commands. |
-| **Measured, then tuned** | `deputy bench` measures your model on a built-in suite; `deputy tune` recommends (or applies, if you allow it) request settings. Nothing changes without a measurement. Learning from feedback is planned: [how deputy improves](self-improvement.md). |
+| Long reads: summaries, inventories, cross-references, searches across many files | Tiny lookups in a short file (flagged `small_input`) |
+| Big logs and test output | Reading code you are about to edit |
+| Questions about git history | Anything that needs a shell, the network or credentials |
+
+On a real multi-app repository a read-heavy task saved about 6,900 frontier tokens on average
+(estimated), and a tiny one about nothing: see [evidence](evidence.md).
 
 ## Get started
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh
-deputy init
-deputy doctor
-deputy install claude-code --apply     # or: vscode, cursor, codex, generic
-deputy instructions --for claude --apply
+deputy init                               # point it at your model server
+deputy doctor                             # check that it answers
+deputy install claude-code --apply        # once: register the MCP server
+deputy instructions --for claude --apply  # in each project: teach the agent when to delegate
 ```
 
 Then read [Install and connect an agent](install.md).
 
 ## Status
 
-Alpha. The server, installer, checks, benchmark and tuning commands work and are tested; `deputy optimise` proposes better profiles; the next work is real-app verification: see the [roadmap](roadmap.md) and
-[how deputy improves](self-improvement.md) for what exists today.
+Alpha: it works end to end and is tested; expect breaking changes. Verified with Claude Code;
+GitHub Copilot, Cursor and Codex are configured by the installer but not yet verified. What is
+done and what is next: [roadmap](roadmap.md).

@@ -5,14 +5,12 @@ not do yet, and how to watch it work.
 
 ## The short answers
 
-**Does it improve by itself as it runs?** Partly. `deputy learn` turns what keeps failing in your real
-use into lessons that go into the worker prompt, and `deputy tune` changes request settings only if
-they win; neither runs on its own, you run them (or see the issues for automating them). Today it improves when a measurement says so:
-`deputy bench` measures your model and `deputy tune` changes request settings only if they win. While
-it runs, deputy records a trace of every run and your `feedback`, but nothing reads them yet
-(per task class routing is planned: [#13](https://github.com/tommasomarchionni/deputy/issues/13),
-[#14](https://github.com/tommasomarchionni/deputy/issues/14),
-[#18](https://github.com/tommasomarchionni/deputy/issues/18)).
+**Does it improve by itself as it runs?** Partly, and only where a measurement says so. While it
+runs, every delegation gets one correction round, and each run is recorded in a trace with your
+`feedback`. From that trace, deputy flags kinds of task that do not pay (`not_worth_delegating`) and
+`deputy learn` turns repeated failures into short lessons for the worker. `deputy tune` changes
+request settings only if they win. You run `learn`, `tune` and `optimise`; the nightly benchmark
+can run on its own.
 
 **Does it improve its own code?** No, and it will never do so unattended. Code changes are made by
 people (or by an agent working through the normal issue and pull-request process), and the benchmark
@@ -32,7 +30,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Benchmark of your model on a built-in suite (`deputy bench`, `--json`) | **today** |
 | Tuning of request settings, recommended or applied (`deputy tune`, `auto_tune`, `--revert`) | **today** |
 | Measured model profile written after every benchmark, and read back: the turn limit follows it, and `status` says how old it is and whether the model changed | **today** |
-| Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (the report reads it; lessons and routing do not yet) |
+| Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (read by `stats`, the advice flags and `deputy learn`) |
 | Advice that a kind of task does not pay off (`not_worth_delegating`), from the trace | **today** (a flag and a line in `status`; the orchestrator decides) |
 | Lessons learned from real use (`deputy learn`): short reminders in the worker prompt where a kind of check keeps failing, with evidence and expiry | **today** (derived from the trace) |
 | Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
@@ -122,8 +120,9 @@ data in the benchmark.
 ## The benchmark design
 
 The suite covers extraction, paging, writing, refusing, summarising, translating and writing a
-test, with repetitions, a spread for every metric and a held-out split (below). A frontier baseline
-is planned ([#8](https://github.com/tommasomarchionni/deputy/issues/8)). The design:
+test, reading git history and a log larger than the context, with repetitions, a spread for every
+metric and a held-out split (below). A frontier model was run once on the same tasks as a reference
+([evidence](evidence.md)). The design:
 
 - Tasks from real work: cited extraction, required-facts coverage, code that must pass a test,
   translation with terms and numbers preserved, a file larger than the context, a task that must
