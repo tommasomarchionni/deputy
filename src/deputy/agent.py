@@ -158,7 +158,9 @@ class AgentRun:
         request_tokens: int,
         notes: str,
         run_id: str | None,
+        route: str,
     ) -> None:
+        self._route = route
         self._run_id = run_id or runs.new_run_id()
         self._request_tokens = request_tokens
         self._notes = notes
@@ -289,6 +291,7 @@ class AgentRun:
                 "source": self._source,
                 "lessons": [lesson.id for lesson in self._lessons],
                 "memory": bool(self._notes),
+                "route": self._route,
                 "task_class": task_class(self._profile.name, self._checks),
                 "status": result.status,
                 "flags": result.flags,
@@ -316,6 +319,7 @@ async def run_task(  # noqa: PLR0913
     request_tokens: int | None = None,
     notes: str = "",
     run_id: str | None = None,
+    route: str = "",
 ) -> Result:
     """Delegate `task` to the worker behind `client` and return the verified result.
 
@@ -335,4 +339,5 @@ async def run_task(  # noqa: PLR0913
         request_tokens=tokens.estimate(task) if request_tokens is None else request_tokens,
         notes=notes,
         run_id=run_id,
+        route=route,
     ).execute()
