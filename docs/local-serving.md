@@ -43,4 +43,10 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.deputy.nightly-bench
 
 It runs at 03:00, skips (and says so in `skipped.log`) when the backend does not answer, and keeps
 one report per night in `~/.local/state/deputy/nightly/` for 90 days. Reports never block anything:
-compare two nights with `jq`. Remove it with `launchctl bootout gui/$(id -u)/dev.deputy.nightly-bench`.
+compare two nights with `deputy bench --compare BEFORE.json AFTER.json`. Remove it with `launchctl bootout gui/$(id -u)/dev.deputy.nightly-bench`.
+
+Comparing prints the pass rate, time per task and estimated saving of both reports, names the tasks
+that failed more (or less) and says if the served model changed. It exits 0 unless you add
+`--fail-on-regression`, so a cron job can alert on it. A task that failed more times, or a pass rate
+that fell by more than 5 points, counts as a regression; per-task detail is limited to failure counts
+because a report keeps no per-task pass rate.
