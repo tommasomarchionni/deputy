@@ -6,7 +6,7 @@
 name = "readme-summary"
 task = "Summarise README.md in at most 5 bullet points. Cite line numbers."
 checks = [
-  { type = "cites_lines", min = 1, max = 400, path = "README.md" },
+  { type = "cites_lines", path = "README.md" },  # the bound is the file's current length
   { type = "max_chars", limit = 1500 },
 ]
 
