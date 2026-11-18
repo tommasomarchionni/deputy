@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from conftest import message, tool_call
 from deputy import cli, server
 from deputy.config import state_dir
 from deputy.server import build_server
+from helpers import message, tool_call
 
 SCHEMA_BUDGET_CHARS = 5_000  # about 1,250 tokens: what the orchestrator carries on every turn
 
