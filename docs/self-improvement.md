@@ -61,6 +61,7 @@ the orchestrator does the task. Bounded retries, bounded turns.
   | `short-with-facts` | a short answer that still holds the facts | `contains`, `max_chars` |
   | `translate-keep-terms` | translates and keeps numbers and identifiers | `file_written`, `file_contains` |
   | `write-passing-test` | writes a test that really passes (opt-in, runs code) | `file_contains`, `command` |
+  | `triage-ci` | finds the failing job, test and reason in a 1,000-line CI log | `contains` |
   | `list-and-pick` | lists a folder and picks a file by size | `contains` |
   | `explain-a-change` | reads git history: which commit changed a rule, the old value and why | `contains` |
   | `count-in-huge-file` | aggregates over a 140 KB log, larger than the context (opt-in, slow) | `contains` |

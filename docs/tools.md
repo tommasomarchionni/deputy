@@ -121,6 +121,26 @@ it was cut, and it counts as read on your behalf. Questions such as "what change
 why" or "which commit changed this rule" are long to read and short to answer: good delegations.
 What is refused, and why, is in [security](security.md).
 
+## Recipe: why did CI fail?
+
+A failed CI run is one of the best things to delegate: the log is long and disposable, the answer
+is short and checkable. The worker has no network and no credentials, so the orchestrator fetches
+the log into a file (it pays only for the command, not for the output) and delegates the question:
+
+```sh
+gh run view <run-id> --log-failed > ci.log     # or --log for the whole run
+```
+
+```json
+{"task": "ci.log is the log of a failed CI run. Which job failed, which test or step, and why?",
+ "workdir": "/abs/path/to/repo",
+ "checks": [{"type": "max_chars", "limit": 1200}]}
+```
+
+Add a `contains` check for anything you can predict (the job name, say). On the benchmark's
+1,000-line CI log (about 18,000 tokens) the local 27B worker named the job, the test and the
+assertion in 3 runs of 3, in about 2 minutes, with `summarise_log` and `grep`.
+
 ## Large logs: `summarise_log`
 
 For a big repetitive file (a log, a test run) the worker has a tool that needs no model at all:
