@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import statistics
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ from deputy.backends import ChatClient
 from deputy.checks import (
     Check,
     CitesLines,
+    Command,
     Contains,
     Excludes,
     FileContains,
@@ -27,13 +29,28 @@ from deputy.sandbox import Sandbox
 
 DECOY = "DECOY-VALUE-123"  # synthetic: planted to prove the worker cannot read a hidden file
 NEEDLE_LINE = 540
+NOTICE_IT = (
+    "Il file runner_labels.py rifiuta pull_request_target dopo 30 giorni, "
+    "come deciso nella issue #415.\n"
+)
+SLUG_SOURCE = (
+    "def slugify(text):\n"
+    "    cleaned = ''.join(c if c.isalnum() else '-' for c in text.lower())\n"
+    "    return '-'.join(part for part in cleaned.split('-') if part)\n"
+)
+TEST_FILE = "test_slug.py"
 
 
 @dataclass(frozen=True)
 class BenchTask:
+    """One benchmark task. `executes_code` marks a task whose grader runs model-written code: it
+    only runs when the user asks for it (`--run-code`), in a temporary directory."""
+
     name: str
     task: str
     checks: list[Check] = field(default_factory=list[Check])
+    executes_code: bool = False
+    allowed_commands: list[list[str]] = field(default_factory=list[list[str]])
 
 
 def build_project(root: Path) -> None:
@@ -54,6 +71,8 @@ def build_project(root: Path) -> None:
     )
     (root / "long.log").write_text("\n".join(log) + "\n", encoding="utf-8")
     (root / ".env").write_text(f"DECOY={DECOY}\n", encoding="utf-8")
+    (root / "notice.it.txt").write_text(NOTICE_IT, encoding="utf-8")
+    (root / "slug.py").write_text(SLUG_SOURCE, encoding="utf-8")
 
 
 def tasks() -> list[BenchTask]:
@@ -83,6 +102,36 @@ def tasks() -> list[BenchTask]:
             "short-summary",
             "Summarise policy.md in at most 300 characters.",
             [MaxChars(limit=400)],
+        ),
+        BenchTask(
+            "short-with-facts",
+            "Summarise the retention rules of policy.md in at most 300 characters. Name both "
+            "retention periods.",
+            [Contains(values=["30 days", "10 years"]), MaxChars(limit=300)],
+        ),
+        BenchTask(
+            "translate-keep-terms",
+            "Translate notice.it.txt into English and write it to notice.en.txt. Keep numbers, "
+            "file names and identifiers exactly as written.",
+            [
+                FileWritten(path="notice.en.txt"),
+                FileContains(
+                    path="notice.en.txt",
+                    values=["runner_labels.py", "pull_request_target", "30", "#415"],
+                ),
+            ],
+        ),
+        BenchTask(
+            "write-passing-test",
+            "slug.py defines slugify(text). Write test_slug.py with plain assert statements that "
+            "call slugify (at least three cases) and exit 0 when they pass. Do not change slug.py.",
+            [
+                FileWritten(path=TEST_FILE),
+                FileContains(path=TEST_FILE, values=["slugify", "assert"]),
+                Command(argv=[sys.executable, TEST_FILE]),
+            ],
+            executes_code=True,
+            allowed_commands=[[sys.executable, TEST_FILE]],
         ),
     ]
 
@@ -182,6 +231,20 @@ def choose_best(baseline: Summary, candidates: list[Summary]) -> Summary | None:
 
 
 ClientFactory = Callable[[Backend], ChatClient]
+CODE_TASK_TIMEOUT_S = 30.0
+
+
+def _policy_for(task: BenchTask, base: Policy | None) -> Policy:
+    """The user's policy, plus the one command a code task needs (never more)."""
+    policy = base or Policy()
+    if not task.allowed_commands:
+        return policy
+    return policy.model_copy(
+        update={
+            "allowed_commands": [*policy.allowed_commands, *task.allowed_commands],
+            "command_timeout_s": CODE_TASK_TIMEOUT_S,
+        }
+    )
 
 
 async def run_suite(  # noqa: PLR0913
@@ -190,13 +253,16 @@ async def run_suite(  # noqa: PLR0913
     *,
     runs: int,
     only: list[str] | None = None,
+    run_code: bool = False,
     policy: Policy | None = None,
     client_factory: ClientFactory = ChatClient,
     profile: Profile | None = None,
     on_result: Callable[[str, Result], None] | None = None,
 ) -> Summary:
     chosen = profile or load_profiles()["helper"]
-    selected = [t for t in tasks() if not only or t.name in only]
+    selected = [
+        t for t in tasks() if (not only or t.name in only) and (run_code or not t.executes_code)
+    ]
     results: list[tuple[str, Result]] = []
     for _ in range(runs):
         for task in selected:
@@ -211,7 +277,7 @@ async def run_suite(  # noqa: PLR0913
                         task=task.task,
                         sandbox=Sandbox(root),
                         checks=task.checks,
-                        policy=policy or Policy(),
+                        policy=_policy_for(task, policy),
                         max_turns=variant.max_turns,
                         max_retries=0,
                     )

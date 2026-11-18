@@ -77,6 +77,7 @@ async def _measure(
                 variant,
                 runs=args.runs,
                 only=only,
+                run_code=args.run_code,
                 policy=config.policy,
                 on_result=_progress,
             )
@@ -151,6 +152,11 @@ def register(sub: Subparsers) -> None:
         parser.add_argument("--backend", help="backend name (default: the default backend)")
         parser.add_argument("--runs", type=int, default=1, help="repetitions of the suite")
         parser.add_argument("--tasks", help="comma-separated task names")
+        parser.add_argument(
+            "--run-code",
+            action="store_true",
+            help="also run tasks whose grader executes model-written code (in a temp directory)",
+        )
         if name == "bench":
             parser.add_argument("--variant", action="append", help="extra setting: NAME=JSON")
             parser.add_argument("--json", action="store_true", help="print JSON, not a table")

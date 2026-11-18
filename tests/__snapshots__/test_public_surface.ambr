@@ -2,13 +2,15 @@
 # name: test_each_command_help_is_stable[bench]
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                      [--variant VARIANT] [--json]
+                      [--run-code] [--variant VARIANT] [--json]
   
   options:
     -h, --help         show this help message and exit
     --backend BACKEND  backend name (default: the default backend)
     --runs RUNS        repetitions of the suite
     --tasks TASKS      comma-separated task names
+    --run-code         also run tasks whose grader executes model-written code
+                       (in a temp directory)
     --variant VARIANT  extra setting: NAME=JSON
     --json             print JSON, not a table
   
@@ -85,13 +87,15 @@
 # name: test_each_command_help_is_stable[tune]
   '''
   usage: deputy tune [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                     [--apply] [--revert]
+                     [--run-code] [--apply] [--revert]
   
   options:
     -h, --help         show this help message and exit
     --backend BACKEND  backend name (default: the default backend)
     --runs RUNS        repetitions of the suite
     --tasks TASKS      comma-separated task names
+    --run-code         also run tasks whose grader executes model-written code
+                       (in a temp directory)
     --apply            write the winner
     --revert           undo the last tuning
   
