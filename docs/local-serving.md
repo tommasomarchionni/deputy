@@ -47,6 +47,7 @@ compare two nights with `deputy bench --compare BEFORE.json AFTER.json`. Remove 
 
 Comparing prints the pass rate, time per task and estimated saving of both reports, names the tasks
 that failed more (or less) and says if the served model changed. It exits 0 unless you add
-`--fail-on-regression`, so a cron job can alert on it. A task that failed more times, or a pass rate
-that fell by more than 5 points, counts as a regression; per-task detail is limited to failure counts
+`--fail-on-regression`, so a cron job can alert on it. Only a pass rate that fell by more than 5
+points counts as a regression (one extra failure among three repetitions is noise); tasks that failed
+more or less are listed as changes; per-task detail is limited to failure counts
 because a report keeps no per-task pass rate.
