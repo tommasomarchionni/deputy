@@ -239,8 +239,8 @@ def _quote_near(answer: str, start: int, end: int) -> str | None:
 
 
 def _loose(text: str) -> str:
-    """Compare quotes as a reader would, and forgive the backslashes of an escaped quote."""
-    return _normal(text.replace("\\", ""))
+    """Compare quotes as a reader would: escapes and Markdown markers are not words."""
+    return _normal(text.replace("\\", "").replace("`", "").replace("**", ""))
 
 
 def _quote_is_on(quote: str, text: list[str], first: int, last: int) -> bool:

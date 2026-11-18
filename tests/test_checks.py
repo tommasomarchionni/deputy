@@ -380,6 +380,7 @@ def test_cites_lines_needs_a_max_or_a_path() -> None:
 TEXT = (
     "alpha line one\nbeta is the second letter\ngamma closes the file\n"
     'names = {".git", ".ssh"}\nlast line of this text\n'
+    "the text of `helper` comes **before** yours\n"
 )
 
 
@@ -404,6 +405,8 @@ def _files_check(tmp_path: Path, answer: str, paths: tuple[str, ...] = ("docs/a.
         'beta is second, "the second letter" docs/a.md:2',
         '- it opens (docs/a.md:1 "alpha line one")\n\n- it ends (docs/a.md:3 "gamma closes the")',
         '- wrapped text (docs/a.md:2 "line one beta is the second")',
+        '- no markers (docs/a.md:6 "the text of helper comes before yours")',
+        '- with markers (docs/a.md:6 "the text of `helper` comes **before** yours")',
         '- wrapped text (docs/a.md:2 "the second letter gamma closes")',
         '- the names (docs/a.md:4 "names = {".git", ".ssh"}")',
         '- the names (docs/a.md:4 "names = {\\".git\\", \\".ssh\\"}")',
@@ -424,6 +427,7 @@ def test_cites_files_accepts_quotes_found_on_the_cited_line(tmp_path: Path, answ
         ("", "no citation"),
         ('- x (docs/a.md:1 "beta is the second letter")', "does not contain"),
         ('- x (docs/a.md:3 "beta is the second letter")', "does not contain"),
+        ('- x (docs/a.md:6 "the text of deputy comes before yours")', "does not contain"),
         ('- x (docs/a.md:9 "beta is the second letter")', "outside the file"),
         ('- x (docs/a.md:2 "beta")', "no quoted words"),
         ('- x (docs/a.md:0 "beta is the second letter")', "outside the file"),
