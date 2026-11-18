@@ -1,71 +1,111 @@
 name: Release
 
-# Tag-driven: push a tag vX.Y.Z (after bumping the version in a pull request) and this builds the
-# package, attests its provenance, and publishes a GitHub release with generated notes.
+# Automatic and on demand. A release is cut when 10 releasable changes (feat, fix, perf) have piled
+# up, or, on the 12-hour schedule, when at least 12 hours have passed since the last one, and only
+# if `main` is green. "Run workflow" with `force` skips the thresholds, never the green check.
+# The version comes from the git tag (hatch-vcs): no version commit, so no pull request to release.
+# Everything happens in one run: tags pushed with the default token do not trigger other workflows.
 
 on:
-  push:
-    tags: ["v*.*.*"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "17 */12 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Release now even if the thresholds are not met (main must still be green)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  build:
-    name: Build
+  plan:
+    name: Plan
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
+      - id: plan
+        name: Decide
+        env:
+          EVENT: ${{ github.event_name }}
+          FORCE: ${{ inputs.force }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python3 tools/ci/release_plan.py | tee -a "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Release ${{ needs.plan.outputs.version }}
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: the tag must match the package version
-        id: version
+      - name: tag the commit that CI approved, locally first (nothing is published until the build works)
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          version="$(uv version --short)"
-          test "v${version}" = "${GITHUB_REF_NAME}" || { echo "tag ${GITHUB_REF_NAME} != version ${version}"; exit 1; }
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${VERSION}" -m "deputy ${VERSION}"
       - run: uv sync --locked
       - run: uv run pytest -q
       - run: uv build
+      - name: the wheel must carry the version that was planned
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: test -f "dist/deputy-${VERSION}-py3-none-any.whl"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+      - name: publish the tag and the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          git push origin "v${VERSION}"
+          gh release create "v${VERSION}" dist/* --title "v${VERSION}" --generate-notes --verify-tag
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
           if-no-files-found: error
 
-  github-release:
-    name: GitHub release
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: dist
-          path: dist/
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: dist/*
-      - name: create the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --title "${GITHUB_REF_NAME}" --generate-notes --verify-tag
-
   pypi:
     name: Publish to PyPI
     # Opt-in: set the repository variable PYPI_PUBLISH=true after configuring trusted publishing
     # for this repository on pypi.org (environment "pypi"). Nothing is published until you do.
-    if: vars.PYPI_PUBLISH == 'true'
-    needs: build
+    if: needs.plan.outputs.release == 'true' && vars.PYPI_PUBLISH == 'true'
+    needs: [plan, release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: pypi

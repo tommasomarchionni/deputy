@@ -67,18 +67,24 @@ behaviour, polymorphism instead of long `if` chains, no comments that restate th
 
 ## Releasing
 
-Releases are tags, and the version lives in `pyproject.toml`.
+Releases are automatic and can be forced by hand. The version comes from the git tag, so there is
+no version commit and no release pull request.
 
-1. Open a pull request "chore: release vX.Y.Z" that runs `uv version X.Y.Z` (this also updates
-   `uv.lock`); merge it once CI is green.
-2. Tag the merge commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The `Release` workflow checks that the tag matches the version, runs the tests, builds the wheel
-   and the sdist, attests their provenance, and publishes a GitHub release with generated notes.
-   `deputy update` and the installer pick the new release up.
-4. PyPI publishing is off until you set the repository variable `PYPI_PUBLISH=true` and configure
-   trusted publishing for the `pypi` environment on pypi.org.
+- **When:** after CI succeeds on `main`, a release is cut if 10 releasable changes (`feat`, `fix`,
+  `perf`; or any breaking change) have piled up since the last tag. On the 12-hour schedule it is
+  also cut if at least 12 hours have passed since the last release and there is something to release.
+- **Which version:** while the major is 0, a feature or a breaking change bumps the minor and
+  anything else the patch; from 1.0, a breaking change bumps the major.
+- **By hand:** Actions, "Release", "Run workflow". `force` skips the thresholds. Nothing skips the
+  safety checks: `main` must be green and there must be at least one releasable change.
+- **What it does:** tags the commit, runs the tests, builds the wheel and the sdist, attests their
+  provenance, and publishes a GitHub release with generated notes. `install.sh` and `deputy update`
+  install that wheel.
+- **PyPI** stays off until you set the repository variable `PYPI_PUBLISH=true` and configure trusted
+  publishing for the `pypi` environment on pypi.org.
 
-Versioning: while the major is 0, a new minor may break things; patches never should.
+The rules are in `tools/ci/release_plan.py` and are tested (`tests/ci/test_release_plan.py`); a
+change to the cadence is a pull request that changes them there and here.
 
 ## Pull requests
 

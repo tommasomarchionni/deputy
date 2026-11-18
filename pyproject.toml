@@ -1,10 +1,10 @@
 [project]
 name = "deputy"
-version = "0.1.0"
 description = "MCP server: a frontier model orchestrates, any other model does the legwork."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+dynamic = ["version"]
 requires-python = ">=3.11"
 authors = [{ name = "Tommaso Marchionni" }]
 keywords = ["mcp", "llm", "agents", "delegation", "llama.cpp"]
@@ -42,8 +42,11 @@ docs = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/deputy"]
