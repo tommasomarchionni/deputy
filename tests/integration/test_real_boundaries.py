@@ -12,6 +12,7 @@ from fake_model import FakeModel
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from deputy import runs
 from deputy.agent import run_task
 from deputy.backends import ChatClient
 from deputy.checks import CitesLines, Contains
@@ -141,3 +142,29 @@ def test_the_mcp_server_speaks_the_protocol_end_to_end(
     events = [json.loads(line) for line in (state_dir() / "runs.jsonl").read_text().splitlines()]
     assert [e["event"] for e in events] == ["run", "feedback"]
     assert load_config().backend().name == "fake"
+
+
+def test_the_status_tool_shows_the_usage_line_over_the_real_protocol(configured: FakeModel) -> None:
+    runs.record(
+        {
+            "event": "run",
+            "run_id": "r1",
+            "profile": "helper",
+            "status": "ok",
+            "metrics": {},
+            "saved_est": 640,
+        }
+    )
+
+    async def go() -> dict:
+        params = StdioServerParameters(
+            command=sys.executable, args=["-m", "deputy", "mcp"], env=dict(os.environ)
+        )
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            return (await session.call_tool("status", {})).structured_content
+
+    status = asyncio.run(go())
+    assert status["fake"].startswith("up")
+    assert "1 runs" in status["usage"]
+    assert "~640 tokens saved" in status["usage"]
