@@ -1,6 +1,7 @@
 # pyright: basic
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -89,3 +90,55 @@ def test_an_invalid_check_is_reported_before_any_work_starts(tmp_path: Path) -> 
     data = structured(out)
     assert data["status"] == "error"
     assert "invalid check" in data["answer"]
+
+
+def _delegate_with_history(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,
+    history_saved: int,  # type: ignore[no-untyped-def]
+) -> dict[str, Any]:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    now = time.time()
+    path = state_dir() / "runs.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    past = [
+        {
+            "event": "run", "run_id": f"h{i}", "ts": now, "profile": "helper",
+            "task_class": "helper:contains", "status": "ok", "flags": [], "metrics": {},
+            "saved_est": history_saved,
+        }
+        for i in range(6)
+    ]  # fmt: skip
+    path.write_text("\n".join(json.dumps(line) for line in past) + "\n")
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client([message("beta")]))
+    out = asyncio.run(
+        build_server().call_tool(
+            "delegate",
+            {
+                "task": "find beta",
+                "workdir": str(tmp_path),
+                "checks": [{"type": "contains", "values": ["beta"]}],
+            },
+        )
+    )
+    return structured(out)
+
+
+def test_a_delegation_is_flagged_when_that_kind_of_task_has_not_paid_off(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    data = _delegate_with_history(tmp_path, fake_client, monkeypatch, history_saved=0)
+    assert data["status"] == "ok"
+    assert "not_worth_delegating" in data["flags"]
+
+
+def test_a_delegation_is_not_flagged_when_that_kind_of_task_pays_off(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    data = _delegate_with_history(tmp_path, fake_client, monkeypatch, history_saved=900)
+    assert "not_worth_delegating" not in data["flags"]

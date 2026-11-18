@@ -181,6 +181,65 @@ def format_report(report: Report) -> str:
     return "\n".join(lines)
 
 
+MIN_RUNS_FOR_ADVICE = 5
+MAX_ESCALATION_RATE = 0.5
+ADVICE_FLAG = "not_worth_delegating"
+_TRACE_TAIL_LINES = 5_000
+
+
+@dataclass(frozen=True)
+class Advice:
+    """Why a kind of task is better done by the orchestrator itself."""
+
+    task_class: str
+    runs: int
+    mean_saved: float
+    escalation_rate: float
+    reason: str
+
+
+def advice_for(group: Group) -> Advice | None:
+    """A task class that has been tried enough and does not pay: no net token saving, or most
+    runs handed back. Too few runs say nothing, so there is no advice yet."""
+    if group.runs < MIN_RUNS_FOR_ADVICE:
+        return None
+    rate = group.escalated / group.runs
+    if group.mean_saved <= 0:
+        reason = f"no net token saving (mean {group.mean_saved:.0f} per run)"
+    elif rate > MAX_ESCALATION_RATE:
+        reason = f"{rate:.0%} of runs were handed back to the orchestrator"
+    else:
+        return None
+    return Advice(group.key, group.runs, group.mean_saved, rate, reason)
+
+
+def delegation_advice(report: Report) -> list[Advice]:
+    """Every task class of the report that is not worth delegating."""
+    return [a for g in report.by_class if (a := advice_for(g))]
+
+
+def _recent_events() -> tuple[list[dict[str, Any]], int]:
+    """The trace, but only its tail: advice runs on every delegation and must stay cheap."""
+    events, unreadable = read_trace()
+    return events[-_TRACE_TAIL_LINES:], unreadable
+
+
+def advice_for_class(task_class: str, *, days: float = 30) -> Advice | None:
+    events, unreadable = _recent_events()
+    report = build_report(events, days=days, unreadable=unreadable)
+    return next((a for a in delegation_advice(report) if a.task_class == task_class), None)
+
+
+def advice_lines(*, days: float = 30, limit: int = 3) -> list[str]:
+    """One sentence per task class that is not worth delegating, for the `status` tool."""
+    events, unreadable = _recent_events()
+    report = build_report(events, days=days, unreadable=unreadable)
+    return [
+        f"{a.task_class}: {a.runs} runs, {a.reason}; do these yourself"
+        for a in delegation_advice(report)[:limit]
+    ]
+
+
 def usage_line(days: float = 7) -> str | None:
     """A one-line summary for the `status` tool, or None when there is nothing to say."""
     events, unreadable = read_trace()
