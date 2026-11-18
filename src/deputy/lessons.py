@@ -37,6 +37,10 @@ CATALOGUE: dict[str, str] = {
         "Your answers sometimes contained text that must not appear. Never repeat secrets, tokens "
         "or file contents you were not asked for."
     ),
+    "cites_text": (
+        "Your quotes often were not on the line you cited. Quote the exact words of the line, "
+        "next to its number, and copy them from what you read."
+    ),
     "max_chars": (
         "Your answers were often too long. Keep the final answer within the length asked: no "
         "preamble, no restating the task."
