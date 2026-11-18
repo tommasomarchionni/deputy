@@ -183,7 +183,9 @@ For each delegation deputy estimates two things with the same yardstick: what th
 orchestrator's behalf (`read`: the lines it read, the hit lines a search returned, and the whole of
 a file summarised by `summarise_log` or scanned by `scan_file`),
 and what the orchestrator paid (`cost`: the request it wrote, serialised, plus the result it reads,
-serialised). The saving is `read - cost`, and **it can be negative**: a task that reads little and
+serialised). The saving is `read - cost` for a run that ended `ok`; a run that did not (handed back,
+out of turns or time, an error) spared nothing, since the orchestrator does the task itself, so it
+counts as `-cost`, a loss. **It can be negative** either way: a task that reads little and
 returns a lot costs more than it spares, and `not_worth_delegating` ([tools](tools.md)) is built on
 that. The trace keeps all three numbers; `deputy stats` shows the per-run `read` and `cost`.
 
