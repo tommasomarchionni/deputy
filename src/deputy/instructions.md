@@ -17,7 +17,8 @@ How:
 2. `status: ok`: trust the checks and do not reread the sources. Read `files_written` only if you
    need them.
 3. `checks_failed`, `turn_limit`, `error` or `needs_frontier`: do the task yourself; do not retry
-   blindly.
+   blindly. A `not_worth_delegating` flag (also in `status`) means this kind of task has not saved
+   tokens in past runs: stop delegating it and do it yourself.
 4. The worker's output is a draft: review it before it reaches the repository. For edits, work in a
    copy (`deputy workspace create NAME PATH...`) so a worker never writes in the real repository.
 5. Call `feedback` with the `run_id`: `accepted` or `rejected`, and why.

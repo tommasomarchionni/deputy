@@ -4,6 +4,7 @@ are kept short on purpose."""
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -11,14 +12,89 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
 from deputy import runs, stats, updates
-from deputy.agent import Result, run_task
+from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
-from deputy.checks import CheckSpec, to_check
-from deputy.config import ConfigError, load_config
-from deputy.profiles import load_profiles
+from deputy.checks import Check, CheckSpec, to_check
+from deputy.config import Config, ConfigError, load_config
+from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
 
 INSTRUCTIONS = "Delegate small, checkable, read-heavy tasks to another model. Use `delegate`."
+
+
+@dataclass(frozen=True)
+class _Delegation:
+    """Everything one delegation needs, validated before any work starts."""
+
+    config: Config
+    profile: Profile
+    sandbox: Sandbox
+    client: ChatClient
+    checks: list[Check]
+
+
+def _prepare(
+    workdir: str, profile: str, checks: list[CheckSpec] | None, backend: str | None
+) -> _Delegation:
+    """Raises ConfigError, SandboxError or ValidationError with a message fit for the caller."""
+    config = load_config()
+    profiles = load_profiles(Path(workdir))
+    chosen = profiles.get(profile)
+    if chosen is None:
+        raise ConfigError(f"unknown profile '{profile}'; known: {', '.join(profiles)}")
+    return _Delegation(
+        config=config,
+        profile=chosen,
+        sandbox=Sandbox(Path(workdir)),
+        client=ChatClient(config.backend(backend)),
+        checks=[to_check(c) for c in checks or []],
+    )
+
+
+def _setup_error(run_id: str, message: str) -> Result:
+    return Result(run_id=run_id, status="error", answer=message, flags=["setup_error"])
+
+
+async def _delegate(prepared: _Delegation, task: str, max_turns: int) -> Result:
+    """Run the task, and flag a kind of task that has not paid off in past runs."""
+    advice = stats.advice_for_class(task_class(prepared.profile.name, prepared.checks))
+    try:
+        result = await run_task(
+            client=prepared.client,
+            profile=prepared.profile,
+            task=task,
+            sandbox=prepared.sandbox,
+            checks=prepared.checks,
+            policy=prepared.config.policy,
+            max_turns=max_turns,
+        )
+    finally:
+        await prepared.client.aclose()
+    if advice:
+        result.flags.append(stats.ADVICE_FLAG)
+    return result
+
+
+async def _backend_status(config: Config) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for backend in config.backends:
+        client = ChatClient(backend)
+        try:
+            ok, detail = await client.health()
+        finally:
+            await client.aclose()
+        out[backend.name] = ("up: " if ok else "down: ") + detail
+    usage = stats.usage_line()
+    if usage:
+        out["usage"] = usage
+    advice = stats.advice_lines()
+    if advice:
+        out["advice"] = " | ".join(advice)
+    if config.auto_update != "off":
+        info = await asyncio.to_thread(updates.check)
+        if info.available:
+            out["update"] = f"{info.latest} available (installed {info.current}): deputy update"
+    return out
 
 
 def build_server() -> MCPServer:
@@ -36,60 +112,21 @@ def build_server() -> MCPServer:
         """Run a task on a worker model in `workdir` (absolute path). Verified by `checks`."""
         run_id = runs.new_run_id()
         try:
-            config = load_config()
-            profiles = load_profiles(Path(workdir))
-            chosen = profiles.get(profile)
-            if chosen is None:
-                raise ConfigError(f"unknown profile '{profile}'; known: {', '.join(profiles)}")
-            sandbox = Sandbox(Path(workdir))
-            client = ChatClient(config.backend(backend))
-            strict_checks = [to_check(c) for c in checks or []]
+            prepared = _prepare(workdir, profile, checks, backend)
         except ValidationError as exc:
             detail = "; ".join(str(e["msg"]) for e in exc.errors())
-            return Result(
-                run_id=run_id,
-                status="error",
-                answer=f"invalid check: {detail}",
-                flags=["setup_error"],
-            )
+            return _setup_error(run_id, f"invalid check: {detail}")
         except (ConfigError, SandboxError) as exc:
-            return Result(run_id=run_id, status="error", answer=str(exc), flags=["setup_error"])
-        try:
-            return await run_task(
-                client=client,
-                profile=chosen,
-                task=task,
-                sandbox=sandbox,
-                checks=strict_checks,
-                policy=config.policy,
-                max_turns=max_turns,
-            )
-        finally:
-            await client.aclose()
+            return _setup_error(run_id, str(exc))
+        return await _delegate(prepared, task, max_turns)
 
     @server.tool()
     async def status() -> dict[str, str]:
         """Configured backends and whether they answer."""
         try:
-            config = load_config()
+            return await _backend_status(load_config())
         except ConfigError as exc:
             return {"error": str(exc)}
-        out: dict[str, str] = {}
-        for backend in config.backends:
-            client = ChatClient(backend)
-            try:
-                ok, detail = await client.health()
-            finally:
-                await client.aclose()
-            out[backend.name] = ("up: " if ok else "down: ") + detail
-        usage = stats.usage_line()
-        if usage:
-            out["usage"] = usage
-        if config.auto_update != "off":
-            info = await asyncio.to_thread(updates.check)
-            if info.available:
-                out["update"] = f"{info.latest} available (installed {info.current}): deputy update"
-        return out
 
     @server.tool()
     def profiles(workdir: str | None = None) -> dict[str, str]:
