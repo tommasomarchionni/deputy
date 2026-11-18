@@ -64,6 +64,24 @@ class BenchTask:
 
 
 FAILED_TEST = "test_parse_dates_keeps_the_timezone"
+PUBLIC_FUNCTIONS = ("create_invoice", "cancel_invoice", "send_reminder", "export_ledger")
+
+
+def service_source() -> str:
+    """A 400-line Python module: four public functions among private helpers and long bodies."""
+    parts = ['"""Billing service."""', "", "import datetime", ""]
+    for index, name in enumerate(PUBLIC_FUNCTIONS):
+        for helper in range(3):
+            parts += [
+                f"def _step_{index}_{helper}(value):",
+                f'    """Helper {helper} of {name}."""',
+            ]
+            parts += [f"    value = value + {k}  # adjust {k}" for k in range(8)]
+            parts += ["    return value", ""]
+        parts += [f"def {name}(record):", f'    """Public: {name.replace("_", " ")}."""']
+        parts += [f"    record = _step_{index}_{k % 3}(record)" for k in range(30)]
+        parts += ["    return record", ""]
+    return "\n".join(parts) + "\n"
 
 
 def ci_log() -> str:
@@ -142,6 +160,7 @@ def build_project(root: Path, *, slow: bool = False) -> None:
     (root / "notice.it.txt").write_text(NOTICE_IT, encoding="utf-8")
     (root / "slug.py").write_text(SLUG_SOURCE, encoding="utf-8")
     (root / "ci.log").write_text(ci_log(), encoding="utf-8")
+    (root / "service.py").write_text(service_source(), encoding="utf-8")
     notes = root / "notes"
     notes.mkdir()
     for i in range(1, 8):  # note-05.md is the largest; nothing in the text says so
@@ -231,6 +250,12 @@ def tasks() -> list[BenchTask]:
             ],
             executes_code=True,
             allowed_commands=[[sys.executable, TEST_FILE]],
+        ),
+        BenchTask(
+            "code-outline",
+            "List the public functions (no leading underscore) defined in service.py, each with "
+            "the line where it starts.",
+            [Contains(values=[*PUBLIC_FUNCTIONS, "41", "111", "181", "251"])],
         ),
         BenchTask(
             "triage-ci",
