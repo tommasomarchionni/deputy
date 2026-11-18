@@ -38,6 +38,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
 | Measured profiles read by routing: the backend is chosen per task by pass rate and speed | **today** ([configuration](configuration.md#routing)); per task class is planned |
 | Offline optimiser that proposes a better worker profile, judged on the benchmark and confirmed on held-out tasks, applied only on your approval, with rollback (`deputy optimise`) | **today** for the profile text; other parameters are covered by `tune` |
+| Benchmark on your own folder with your own tasks, from a TOML file (`deputy bench --tasks-file`), writes rolled back | **today** |
 | Nightly benchmark on the machine that serves your model, one JSON report per night (`examples/nightly-bench.sh`, scheduled with launchd) | **today**, opt-in |
 
 ## How it works today
@@ -155,3 +156,18 @@ then confirms it on tasks the choice never saw (`needle-in-long-file` and `trans
 fixed in the code). A setting that merely suits the tasks it was judged on fails the confirmation
 and the recommendation is withdrawn, so it is never applied. If you narrow the run with `--tasks`
 so that no held-out task is left, the recommendation says it was not confirmed.
+
+## Measuring on your own repository
+
+The built-in suite is synthetic. To see whether delegation pays for *your* work, write the tasks you
+actually give an agent in a TOML file and run them on your folder:
+
+```sh
+deputy bench --tasks-file examples/bench-tasks.toml --workdir /path/to/your/repo
+```
+
+Each `[[task]]` has a `name`, the `task` text and optional `checks` (the same fields as the
+`delegate` tool). Tasks run one after another; whatever the worker writes is rolled back after each
+one, so the folder is left as it was. The table shows, per task, the result, turns, seconds and the
+estimated tokens the orchestrator did not have to read; a short task can be negative, which is the
+answer to "should I delegate this". Nothing leaves your machine except the calls to your own backend.

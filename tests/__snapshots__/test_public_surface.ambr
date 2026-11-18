@@ -3,21 +3,24 @@
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
                       [--lessons] [--run-code] [--slow] [--variant VARIANT]
-                      [--json]
+                      [--tasks-file TASKS_FILE] [--workdir WORKDIR] [--json]
   
   options:
-    -h, --help         show this help message and exit
-    --backend BACKEND  backend name (default: the default backend)
-    --runs RUNS        repetitions of the suite
-    --tasks TASKS      comma-separated task names
-    --lessons          apply the learned lessons (by default the benchmark
-                       measures the raw model)
-    --run-code         also run tasks whose grader executes model-written code
-                       (in a temp directory)
-    --slow             also run tasks that take minutes (a file larger than the
-                       context)
-    --variant VARIANT  extra setting: NAME=JSON
-    --json             print JSON, not a table
+    -h, --help            show this help message and exit
+    --backend BACKEND     backend name (default: the default backend)
+    --runs RUNS           repetitions of the suite
+    --tasks TASKS         comma-separated task names
+    --lessons             apply the learned lessons (by default the benchmark
+                          measures the raw model)
+    --run-code            also run tasks whose grader executes model-written
+                          code (in a temp directory)
+    --slow                also run tasks that take minutes (a file larger than
+                          the context)
+    --variant VARIANT     extra setting: NAME=JSON
+    --tasks-file TASKS_FILE
+                          run the tasks of this TOML file on your own folder
+    --workdir WORKDIR     folder for --tasks-file
+    --json                print JSON, not a table
   
   '''
 # ---
