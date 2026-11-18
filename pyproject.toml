@@ -29,6 +29,7 @@ Issues = "https://github.com/tommasomarchionni/deputy/issues"
 
 [project.scripts]
 deputy = "deputy.cli:main"
+deputy-hook = "deputy.hook:main"  # the read hint; imports almost nothing, it runs on every read
 
 [dependency-groups]
 dev = [

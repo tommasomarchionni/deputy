@@ -10,6 +10,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from deputy import hook
+
 AGENTS = ("claude-code", "vscode", "cursor", "codex", "generic")
 COMMAND = "deputy"
 MARK_START = "<!-- deputy:start -->"
@@ -117,8 +119,10 @@ def _merge_json(path: Path, key: str, with_type: bool) -> str:
     return f"added to {path}"
 
 
-def apply(agent: str, project: Path) -> str:
-    """Register deputy with `agent`. Returns a one-line report; raises RuntimeError on failure."""
+def apply(agent: str, project: Path, *, read_hint: bool = True) -> str:
+    """Register deputy with `agent`. Returns a one-line report; raises RuntimeError on failure.
+
+    For Claude Code it also turns on the read hint (`deputy hook`), unless `read_hint` is False."""
     if agent == "claude-code":
         claude = shutil.which("claude")
         if claude is None:
@@ -131,7 +135,13 @@ def apply(agent: str, project: Path) -> str:
         )
         if done.returncode != 0:
             raise RuntimeError((done.stderr or done.stdout).strip() or "claude mcp add failed")
-        return "registered with Claude Code (user scope)"
+        report = "registered with Claude Code (user scope)"
+        if read_hint:
+            try:
+                report += "\n" + hook.enable()
+            except (ValueError, OSError) as exc:
+                report += f"\nread hint not installed: {exc}"
+        return report
     if agent == "vscode":
         return _merge_json(project / ".vscode" / "mcp.json", "servers", with_type=True)
     if agent == "cursor":

@@ -16,7 +16,7 @@ def install(args: argparse.Namespace) -> int:
         print("\n(printed only; add --apply to do it for you)")
         return 0
     try:
-        print(installer.apply(args.agent, Path.cwd()))
+        print(installer.apply(args.agent, Path.cwd(), read_hint=not args.no_hook))
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -39,6 +39,11 @@ def register(sub: Subparsers) -> None:
     install_parser = sub.add_parser("install", help="connect deputy to an agent")
     install_parser.add_argument("agent", choices=installer.AGENTS)
     install_parser.add_argument("--apply", action="store_true", help="do it instead of printing")
+    install_parser.add_argument(
+        "--no-hook",
+        action="store_true",
+        help="claude-code: do not add the hint that suggests delegating large reads",
+    )
     install_parser.set_defaults(func=install)
 
     guide = sub.add_parser("instructions", help="print or write the delegation guide for agents")

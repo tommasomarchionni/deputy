@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from deputy import cli, install, tokens
+from deputy import cli, hook, install, tokens
 from deputy.config import config_path
 
 
@@ -148,3 +148,32 @@ def test_the_installer_refuses_a_uv_installer_that_does_not_match_its_checksum(
     assert done.returncode != 0
     assert "does not match its pinned SHA-256" in done.stderr
     assert not (tmp_path / "ran.txt").exists()
+
+
+def _fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "claude"
+    fake.write_text("#!/bin/sh\nexit 0\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    return tmp_path / "claude" / "settings.json"
+
+
+def test_installing_for_claude_code_turns_the_read_hint_on_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _fake_claude(tmp_path, monkeypatch)
+    report = install.apply("claude-code", tmp_path)
+    assert "registered with Claude Code" in report
+    assert "read hint on" in report
+    assert hook.is_enabled(settings)
+
+
+def test_installing_with_no_hook_leaves_the_settings_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _fake_claude(tmp_path, monkeypatch)
+    install.apply("claude-code", tmp_path, read_hint=False)
+    assert not settings.exists()
