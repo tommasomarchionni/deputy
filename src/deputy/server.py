@@ -11,7 +11,7 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import model_profiles, runs, stats, updates
+from deputy import lessons, model_profiles, runs, stats, updates
 from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
@@ -71,6 +71,7 @@ async def _delegate(prepared: _Delegation, task: str, max_turns: int | None) -> 
             checks=prepared.checks,
             policy=prepared.config.policy,
             max_turns=max_turns or model_profiles.suggested_max_turns(prepared.measured),
+            lessons=lessons.applicable(prepared.profile.name, prepared.checks),
         )
     finally:
         await prepared.client.aclose()

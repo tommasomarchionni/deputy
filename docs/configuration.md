@@ -133,3 +133,25 @@ uses it in two ways:
 - **`status`.** Next to each backend it shows `<backend> profile`: when it was measured and how it
   did, or `never measured: run deputy tune`, or, when the server now serves a different model than
   the one measured, a note saying so and to run `deputy tune` again.
+
+## Lessons learned from use
+
+`deputy learn` reads the trace of your **real** runs (benchmark runs never teach) and looks for a
+kind of check that keeps failing for a profile: at least 5 runs that carried it, and at least 25% of
+them failing. For each one it proposes a *lesson*: a short reminder from a fixed catalogue (for
+example, for `contains`: "list every fact the task asks for and make sure each appears"), with the
+evidence behind it.
+
+```sh
+deputy learn                 # a report: what it would learn, and why
+deputy learn --apply         # save them; from now on they go into the worker prompt
+deputy lessons               # list the active lessons and what you muted
+deputy lessons remove helper:contains   # remove one, and never learn it again
+deputy bench --lessons       # measure the model with the lessons applied (default: without)
+```
+
+Rules that keep this safe: the text of a lesson comes only from the catalogue, never from a trace,
+an answer or a file; at most 3 lessons are added to a prompt, only for the profile and the kinds of
+checks the task asks for; a lesson expires after 14 days and is re-derived only while the evidence
+still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
+`deputy stats` and the benchmark can tell whether they help.

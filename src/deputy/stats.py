@@ -8,8 +8,8 @@ from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from deputy.bench import BENCH_SOURCE
 from deputy.config import state_dir
+from deputy.runs import BENCH_SOURCE
 
 SECONDS_PER_DAY = 86_400
 

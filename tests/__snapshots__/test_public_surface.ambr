@@ -2,13 +2,15 @@
 # name: test_each_command_help_is_stable[bench]
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                      [--run-code] [--variant VARIANT] [--json]
+                      [--lessons] [--run-code] [--variant VARIANT] [--json]
   
   options:
     -h, --help         show this help message and exit
     --backend BACKEND  backend name (default: the default backend)
     --runs RUNS        repetitions of the suite
     --tasks TASKS      comma-separated task names
+    --lessons          apply the learned lessons (by default the benchmark
+                       measures the raw model)
     --run-code         also run tasks whose grader executes model-written code
                        (in a temp directory)
     --variant VARIANT  extra setting: NAME=JSON
@@ -75,6 +77,30 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[learn]
+  '''
+  usage: deputy learn [-h] [--days DAYS] [--apply]
+  
+  options:
+    -h, --help   show this help message and exit
+    --days DAYS  how far back to look
+    --apply      save the lessons
+  
+  '''
+# ---
+# name: test_each_command_help_is_stable[lessons]
+  '''
+  usage: deputy lessons [-h] [{list,remove}] [id]
+  
+  positional arguments:
+    {list,remove}
+    id             the lesson to remove (profile:check)
+  
+  options:
+    -h, --help     show this help message and exit
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[mcp]
   '''
   usage: deputy mcp [-h]
@@ -99,13 +125,15 @@
 # name: test_each_command_help_is_stable[tune]
   '''
   usage: deputy tune [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                     [--run-code] [--apply] [--revert]
+                     [--lessons] [--run-code] [--apply] [--revert]
   
   options:
     -h, --help         show this help message and exit
     --backend BACKEND  backend name (default: the default backend)
     --runs RUNS        repetitions of the suite
     --tasks TASKS      comma-separated task names
+    --lessons          apply the learned lessons (by default the benchmark
+                       measures the raw model)
     --run-code         also run tasks whose grader executes model-written code
                        (in a temp directory)
     --apply            write the winner
@@ -154,6 +182,8 @@
     'init',
     'install',
     'instructions',
+    'learn',
+    'lessons',
     'mcp',
     'stats',
     'tune',

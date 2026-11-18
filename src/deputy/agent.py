@@ -12,6 +12,7 @@ from deputy import runs
 from deputy.backends import BackendError, ChatClient, Reply
 from deputy.checks import Check, CheckResult, failures_message, run_checks
 from deputy.config import Policy
+from deputy.lessons import Lesson, prompt_addendum
 from deputy.profiles import Profile
 from deputy.sandbox import Sandbox, SandboxError
 
@@ -133,8 +134,10 @@ class AgentRun:
         max_turns: int,
         max_retries: int,
         source: str,
+        lessons: list[Lesson],
     ) -> None:
         self._source = source
+        self._lessons = lessons
         self._client = client
         self._profile = profile
         self._task = task
@@ -144,7 +147,7 @@ class AgentRun:
         self._max_turns = max_turns
         self._max_retries = max_retries
         self._messages: list[dict[str, Any]] = [
-            {"role": "system", "content": profile.body},
+            {"role": "system", "content": profile.body + prompt_addendum(lessons)},
             {"role": "user", "content": task},
         ]
         self._metrics = Metrics(model=client.backend.model)
@@ -238,6 +241,7 @@ class AgentRun:
                 "run_id": result.run_id,
                 "profile": self._profile.name,
                 "source": self._source,
+                "lessons": [lesson.id for lesson in self._lessons],
                 "task_class": task_class(self._profile.name, self._checks),
                 "status": result.status,
                 "flags": result.flags,
@@ -259,6 +263,7 @@ async def run_task(  # noqa: PLR0913
     max_turns: int = 8,
     max_retries: int = 1,
     source: str = "mcp",
+    lessons: list[Lesson] | None = None,
 ) -> Result:
     """Delegate `task` to the worker behind `client` and return the verified result.
 
@@ -274,4 +279,5 @@ async def run_task(  # noqa: PLR0913
         max_turns=max_turns,
         max_retries=max_retries,
         source=source,
+        lessons=lessons or [],
     ).execute()
