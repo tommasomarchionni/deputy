@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import argparse
 
-from deputy.cli import connect, memory, serve, setup, stats, tuning, update, workspace
+from deputy.cli import connect, memory, optimise, serve, setup, stats, tuning, update, workspace
 from deputy.cli import lessons as lessons_cli
 from deputy.version import current_version
 
-_COMMAND_MODULES = (setup, connect, tuning, stats, lessons_cli, memory, workspace, update, serve)
+_COMMAND_MODULES = (
+    setup,
+    connect,
+    tuning,
+    stats,
+    lessons_cli,
+    memory,
+    optimise,
+    workspace,
+    update,
+    serve,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
