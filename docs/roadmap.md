@@ -12,4 +12,4 @@ Each milestone says what must be **proven**, not only built. The plan lives in t
 | **M4 Profiles and memory** | a run with memory beats the same run without it (ablation); profiles are measured, not typed | planned |
 | **M5 Async and routing** | slow models do not block the agent; the router picks the cheapest passing path | done: background tasks (`wait=false`, `collect`) and the router |
 | **M6 Second agent** | the same server driven from GitHub Copilot (VS Code) gives the same benchmark results as through Claude Code | planned; instruction files for every agent exist, the real-app verification does not |
-| **M7 Improvement loop** | an offline optimiser proposes profile and parameter changes with a report; a human approves; rollback works | planned |
+| **M7 Improvement loop** | an offline optimiser proposes profile and parameter changes with a report; a human approves; rollback works | in progress: `deputy optimise` works; the nightly run is open |

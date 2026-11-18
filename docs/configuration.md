@@ -216,6 +216,20 @@ checks the task asks for; a lesson expires after 14 days and is re-derived only 
 still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
 `deputy stats` and the benchmark can tell whether they help.
 
+## Optimising the worker profile
+
+```sh
+deputy optimise                  # measure, reflect, judge, confirm; writes a report, changes nothing
+deputy optimise --list           # saved proposals
+deputy optimise --apply ID       # your approval: installs it as your profile (previous one kept)
+deputy optimise --revert ID      # undo
+```
+
+Options: `--profile NAME` (default `helper`), `--backend`, `--runs N` (repeat each measurement).
+A proposal is saved under the state directory with `report.md` (the tables and a diff). It can
+only be applied if it also held up on the held-out tasks. It takes minutes on a local model: it
+runs the selection tasks for the current profile and for each proposal, then the held-out tasks.
+
 ## Routing
 
 With more than one `[[backends]]`, `delegate` without a `backend` argument chooses one. Rules, in
