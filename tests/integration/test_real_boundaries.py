@@ -153,7 +153,7 @@ def test_the_status_tool_shows_the_usage_line_over_the_real_protocol(configured:
             "status": "ok",
             "metrics": {},
             "saved_est": 640,
-        }  # fmt: skip
+        }
     )
 
     async def go() -> dict:
