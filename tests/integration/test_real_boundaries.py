@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from fake_model import FakeModel
@@ -168,3 +169,31 @@ def test_the_status_tool_shows_the_usage_line_over_the_real_protocol(configured:
     assert status["fake"].startswith("up")
     assert "1 runs" in status["usage"]
     assert "~640 tokens saved" in status["usage"]
+
+
+def test_the_status_tool_names_the_kinds_of_task_that_do_not_pay_off(configured: FakeModel) -> None:
+    now = time.time()
+    for index in range(6):
+        runs.record(
+            {
+                "event": "run",
+                "run_id": f"r{index}",
+                "ts": now,
+                "profile": "helper",
+                "task_class": "helper:contains",
+                "status": "ok",
+                "metrics": {},
+                "saved_est": 0,
+            }
+        )
+
+    async def go() -> dict:
+        params = StdioServerParameters(
+            command=sys.executable, args=["-m", "deputy", "mcp"], env=dict(os.environ)
+        )
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            await session.initialize()
+            return (await session.call_tool("status", {})).structured_content
+
+    status = asyncio.run(go())
+    assert "helper:contains: 6 runs, no net token saving" in status["advice"]

@@ -1,6 +1,7 @@
 # pyright: basic
 import asyncio
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -229,3 +230,60 @@ def test_the_stats_command_can_include_the_benchmark(capsys: pytest.CaptureFixtu
     assert json.loads(capsys.readouterr().out)["total"]["runs"] == 0
     assert cli.main(["stats", "--json", "--include-bench"]) == 0
     assert json.loads(capsys.readouterr().out)["total"]["runs"] == 1
+
+
+def runs_of(task_class_: str, count: int, **kwargs) -> list[dict]:  # type: ignore[no-untyped-def]
+    return [
+        run_event(f"{task_class_}-{i}", task_class_=task_class_, **kwargs) for i in range(count)
+    ]
+
+
+def advice_for_events(events: list[dict]) -> list[stats.Advice]:
+    return stats.delegation_advice(stats.build_report(events, days=30, now=NOW))
+
+
+def test_there_is_no_advice_until_a_class_has_been_tried_enough() -> None:
+    few = runs_of("helper:contains", stats.MIN_RUNS_FOR_ADVICE - 1, saved=0)
+    assert advice_for_events(few) == []
+
+
+def test_a_class_with_no_net_saving_is_not_worth_delegating() -> None:
+    (advice,) = advice_for_events(runs_of("helper:contains", 5, saved=0))
+    assert advice.task_class == "helper:contains"
+    assert advice.runs == 5
+    assert "no net token saving" in advice.reason
+
+
+def test_a_class_that_is_mostly_handed_back_is_not_worth_delegating() -> None:
+    events = runs_of(
+        "helper:cites_lines", 3, saved=500, status="checks_failed", flags=["needs_frontier"]
+    )
+    events += runs_of("helper:cites_lines", 2, saved=500)
+    events = [{**e, "run_id": f"r{i}"} for i, e in enumerate(events)]
+    (advice,) = advice_for_events(events)
+    assert advice.escalation_rate == pytest.approx(0.6)
+    assert "handed back" in advice.reason
+
+
+def test_a_healthy_class_gets_no_advice_and_each_class_is_judged_alone() -> None:
+    events = runs_of("helper:contains", 8, saved=400) + runs_of("helper:max_chars", 6, saved=-10)
+    advice = advice_for_events(events)
+    assert [a.task_class for a in advice] == ["helper:max_chars"]
+
+
+def test_benchmark_traffic_never_triggers_advice() -> None:
+    events = [{**e, "source": "bench"} for e in runs_of("helper:contains", 9, saved=0)]
+    assert advice_for_events(events) == []
+
+
+def test_the_advice_is_found_by_class_and_listed_for_the_status_tool() -> None:
+    path = state_dir() / "runs.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    lines = [{**e, "ts": now} for e in runs_of("helper:contains", 6, saved=0)]
+    path.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+    assert stats.advice_for_class("helper:contains") is not None
+    assert stats.advice_for_class("helper:other") is None
+    (line,) = stats.advice_lines()
+    assert line.startswith("helper:contains: 6 runs, no net token saving")
+    assert line.endswith("do these yourself")
