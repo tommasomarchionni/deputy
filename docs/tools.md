@@ -17,10 +17,15 @@ Run a task on a worker model and verify the result.
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
 | `wait` | `true` by default. With `false` it returns at once with `status: running`; get the result with `collect`. |
 
-Returns: `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs `running`, `cancelled`), `answer`, `files_written`,
-`checks` (pass or fail each), `flags` (`needs_frontier`, `turn_limit`, `backend_error`,
-`setup_error`, `not_worth_delegating`, `small_input`), `metrics` (turns, tokens, seconds, model), `run_id`, and
-`orchestrator_tokens_saved_est` (a rough chars/4 estimate of what you did not have to read).
+Returns: `run_id`, `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs
+`running`, `cancelled`), `answer`, a one-line `checks` summary (`3/3 passed`, or what failed with its
+detail), and, only when there are any, `files_written` and `flags` (`needs_frontier`, `turn_limit`,
+`backend_error`, `setup_error`, `not_worth_delegating`, `small_input`).
+
+The result is short on purpose. Metrics (turns, tokens, seconds, model) and the saving estimate
+(`orchestrator_tokens_saved_est`, a rough bytes / 4 estimate of what you did not have to read) are
+recorded in the trace and shown by `deputy stats`, not sent: a typical passing result is about 16 %
+smaller (558 to 471 tokens in a measured case), and the tool's output schema is smaller too.
 The worker always answers in English (the bundled profile says so), unless asked to translate.
 
 ## `collect`

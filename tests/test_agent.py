@@ -3,8 +3,8 @@ import asyncio
 from pathlib import Path
 
 from deputy import agent
-from deputy.agent import run_task
-from deputy.checks import CitesLines, Contains
+from deputy.agent import Result, run_task
+from deputy.checks import CheckResult, CitesLines, Contains
 from deputy.config import Policy
 from deputy.profiles import Profile
 from deputy.sandbox import Sandbox
@@ -136,3 +136,38 @@ def test_the_worker_can_ask_for_a_log_summary(fake_client, tmp_path: Path) -> No
     assert result.status == "ok"
     assert result.metrics.tool_calls == 1
     assert result.orchestrator_tokens_saved_est > 1000
+
+
+def _result(**over):  # type: ignore[no-untyped-def]
+    base = {
+        "run_id": "r1",
+        "status": "ok",
+        "answer": "beta",
+        "checks": [
+            CheckResult(name="contains", passed=True),
+            CheckResult(name="max_chars", passed=True),
+        ],
+    }
+    return Result(**{**base, **over})
+
+
+def test_a_passing_outcome_is_the_answer_a_summary_and_nothing_else() -> None:
+    out = agent.outcome_of(_result())
+    assert out.checks == "2/2 passed"
+    assert out.model_dump_json(exclude_none=True) == (
+        '{"run_id":"r1","status":"ok","answer":"beta","checks":"2/2 passed"}'
+    )
+
+
+def test_a_failing_outcome_names_what_failed_with_its_detail() -> None:
+    failed = [CheckResult(name="contains", passed=False, detail="missing: needle")]
+    out = agent.outcome_of(_result(status="checks_failed", checks=failed, flags=["needs_frontier"]))
+    assert out.checks == "0/1 passed; failed: contains: missing: needle"
+    assert out.flags == ["needs_frontier"]
+
+
+def test_an_outcome_with_files_and_no_checks_keeps_only_what_exists() -> None:
+    out = agent.outcome_of(_result(checks=[], files_written=["out.txt"]))
+    assert out.checks is None
+    assert out.files_written == ["out.txt"]
+    assert out.flags is None
