@@ -45,3 +45,13 @@ def test_a_secret_or_outside_path_is_ignored_not_counted(tmp_path: Path) -> None
 def test_a_trailing_full_stop_does_not_hide_the_file(tmp_path: Path) -> None:
     box = _box(tmp_path, notes_md=40)
     assert small_input.named_input_tokens("Read notes.md.", box) == 10
+
+
+def test_a_file_whose_name_starts_with_a_dot_is_found(tmp_path: Path) -> None:
+    # The real case: "Which Node.js version does .nvmrc pin?" got no flag.
+    (tmp_path / ".nvmrc").write_text("22.22.3\n")
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / ".editorconfig").write_text("root=1\n")
+    box = Sandbox(tmp_path)
+    assert small_input.named_input_tokens("Which Node.js version does .nvmrc pin?", box) == 2
+    assert small_input.named_input_tokens("Read config/.editorconfig.", box) == 2
