@@ -27,7 +27,7 @@ session. Details of each field, check and flag: [tools](tools.md).
 1. **Prepare:** load the profile, validate the checks, choose a backend (see Routing), and add the
    project memory and any lessons that apply to this kind of task.
 2. **Run the worker** with its tools, all confined to `workdir`: `read_file`, `write_file`, `grep`,
-   read-only `git`, `summarise_log` and `scan_file`. The turn limit comes from the measured model
+   `list_files`, read-only `git`, `summarise_log` and `scan_file`. The turn limit comes from the measured model
    profile unless the call or the profile sets one.
 3. **Verify:** the server runs the declared checks on the answer and on written files. A `command`
    check runs only an allow-listed argv, without a shell.

@@ -1,6 +1,6 @@
 # Security model
 
-- **The worker is untrusted.** It can only call `read_file`, `write_file`, `grep`, `summarise_log`,
+- **The worker is untrusted.** It can only call `read_file`, `write_file`, `grep`, `list_files`, `summarise_log`,
   `scan_file` and a read-only `git`, all confined
   to `workdir` with `realpath` checks: `..`, absolute paths and symlinks pointing outside are
   refused. Files that look like secrets (`.env*`, `*.pem`, `*.key`, SSH keys, `.npmrc`, `.netrc`)

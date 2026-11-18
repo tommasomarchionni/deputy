@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import shutil
@@ -20,7 +21,9 @@ MAX_FILE_BYTES = 5_000_000
 LARGE_FILE_CHARS = 80_000  # above this, a read points the worker at scan_file
 MAX_WRITE_BYTES = 1_000_000
 MAX_GREP_HITS = 50  # up to this many hits are shown line by line; more are grouped by file
-MAX_GREP_FILES = 300  # files listed when hits are grouped
+MAX_GREP_FILES = 300
+MAX_LIST_FILES = 200  # files listed one per line; more are grouped by folder
+MAX_LIST_FOLDERS = 300  # files listed when hits are grouped
 MAX_GREP_SCAN_HITS = 20_000  # a search never collects more than this
 MAX_PATTERN_CHARS = 200
 MAX_LINE_CHARS = 2_000  # a line is cut here before matching: a long line must not become a bomb
@@ -213,6 +216,25 @@ class Sandbox:
                         return self._seen(_format_hits(hits, note))
         return self._seen(_format_hits(hits, note))
 
+    def list_files(self, path: str = ".", pattern: str = "*") -> str:
+        """Files under a folder (what git does not ignore), with sizes; grouped by folder if many.
+
+        `pattern` is a glob matched against the file name or its path from `path`."""
+        base = self.resolve(path)
+        if not base.is_dir():
+            raise SandboxError(f"not a folder: {path}")
+        rows: list[tuple[str, int]] = []
+        for candidate in self._searchable(base):
+            file = self._contained(candidate)
+            if file is None or "node_modules" in file.parts:
+                continue
+            below = file.relative_to(base).as_posix()
+            if fnmatch.fnmatch(file.name, pattern) or fnmatch.fnmatch(below, pattern):
+                rows.append((file.relative_to(self.root).as_posix(), file.stat().st_size))
+        out = _format_listing(rows)
+        self.chars_read += len(out) + 1
+        return out
+
     def _searchable(self, base: Path) -> list[Path]:
         """The files to search under `base`: what git tracks or does not ignore, else every file.
 
@@ -338,3 +360,23 @@ def _format_hits(hits: list[tuple[str, int, str]], note: str = "") -> list[str]:
     if len(by_file) > MAX_GREP_FILES:
         rows.append(f"[... {len(by_file) - MAX_GREP_FILES} more files; narrow the pattern or path]")
     return [*rows, note] if note else rows
+
+
+def _format_listing(rows: list[tuple[str, int]]) -> str:
+    """Every file with its size when they are few; otherwise every folder with its count."""
+    if not rows:
+        return "no files"
+    total = sum(size for _, size in rows)
+    head = f"[{len(rows)} files, {total:,} bytes]"
+    if len(rows) <= MAX_LIST_FILES:
+        return "\n".join([head, *(f"{rel}  {size:,} bytes" for rel, size in rows)])
+    folders: dict[str, list[str]] = {}
+    for rel, _size in rows:
+        folder, _, name = rel.rpartition("/")
+        folders.setdefault(folder or ".", []).append(name)
+    lines = [f"{head}: too many to list, grouped by folder; list one folder for the files"]
+    for folder, names in list(folders.items())[:MAX_LIST_FOLDERS]:
+        lines.append(f"{folder}/: {len(names)} files, e.g. {', '.join(names[:3])}")
+    if len(folders) > MAX_LIST_FOLDERS:
+        lines.append(f"[... {len(folders) - MAX_LIST_FOLDERS} more folders; narrow the path]")
+    return "\n".join(lines)

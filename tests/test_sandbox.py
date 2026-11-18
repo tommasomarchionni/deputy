@@ -319,3 +319,49 @@ def test_a_file_with_many_hits_shows_its_first_lines_and_says_there_are_more(
     box = make(tmp_path)
     (box.root / "big.txt").write_text("needle\n" * 60)
     assert "big.txt: 60 hits, lines 1, 2, 3, 4, 5, ..." in box.grep("needle")
+
+
+def test_list_files_shows_each_file_with_its_size_and_filters_by_pattern(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "docs").mkdir()
+    (box.root / "docs" / "a.md").write_text("x" * 10)
+    (box.root / "docs" / "b.txt").write_text("y" * 20)
+    (box.root / ".env").write_text("K=1")
+    out = box.list_files(".", "*.md")
+    assert out.splitlines() == ["[1 files, 10 bytes]", "docs/a.md  10 bytes"]
+    everything = box.list_files()
+    assert "docs/b.txt  20 bytes" in everything
+    assert ".env" not in everything
+    assert box.chars_read > 0
+
+
+def test_list_files_groups_many_files_by_folder(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    for folder in ("a", "b"):
+        (box.root / folder).mkdir()
+        for i in range(150):
+            (box.root / folder / f"f{i:03d}.txt").write_text("z")
+    out = box.list_files()
+    assert out.startswith("[300 files, 300 bytes]: too many to list, grouped by folder")
+    assert "a/: 150 files, e.g. f000.txt, f001.txt, f002.txt" in out
+
+
+def test_list_files_refuses_a_file_or_a_path_outside(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    (box.root / "a.md").write_text("x")
+    with pytest.raises(SandboxError):
+        box.list_files("a.md")
+    with pytest.raises(SandboxError):
+        box.list_files("..")
+
+
+def test_list_files_leaves_out_what_git_ignores(tmp_path: Path) -> None:
+    box = make(tmp_path)
+    subprocess.run(["git", "init", "-q", str(box.root)], check=True)
+    (box.root / ".gitignore").write_text("build/\n")
+    (box.root / "build").mkdir()
+    (box.root / "build" / "out.js").write_text("x")
+    (box.root / "src.py").write_text("x")
+    out = box.list_files()
+    assert "src.py" in out
+    assert "build/out.js" not in out

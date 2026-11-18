@@ -66,6 +66,20 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "list_files",
+            "description": (
+                "Files under a folder with their sizes (git-ignored ones left out); a glob "
+                "pattern such as *.md filters them. Many files are grouped by folder."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}, "pattern": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "git",
             "description": (
                 'Read-only git in the folder: args such as ["log", "--oneline", "-n", "20"], '
@@ -201,6 +215,10 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
             )
         if name == "write_file":
             return sandbox.write_file(str(arguments["path"]), str(arguments["content"]))
+        if name == "list_files":
+            return sandbox.list_files(
+                str(arguments.get("path") or "."), str(arguments.get("pattern") or "*")
+            )
         if name == "git":
             raw = arguments["args"]
             if not isinstance(raw, list):
@@ -214,7 +232,7 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
         return f"ERROR: {exc}"
     except (KeyError, TypeError, ValueError):
         return "ERROR: missing or invalid arguments"
-    known = "read_file, write_file, grep, git, summarise_log or scan_file"
+    known = "read_file, write_file, grep, list_files, git, summarise_log or scan_file"
     return f"ERROR: unknown tool '{name}'; use {known}"
 
 
