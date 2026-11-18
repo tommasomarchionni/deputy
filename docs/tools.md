@@ -46,7 +46,7 @@ Jobs live in the memory of the running server: if the server exits, they are gon
 | `excludes` | none of the strings in `values` appears in the answer (for example a secret) |
 | `file_contains` | the file `path` in `workdir` contains every string in `values` |
 | `cites_text` | every quoted passage next to a line number (`line 2: "the exact words"`, `2: "..."`, `a.txt:2 "..."`, or `"..." (line 2)`) is on that line (or in that range) of the file `path`; case and spacing do not matter; at least one quoted citation is required |
-| `cites_lines` | every cited line number (`line 12`, `lines 12-14`, `righe 12`, `l. 12`) is within `min`..`max`, and at least one is cited |
+| `cites_lines` | every cited line number (`line 12`, `lines 12-14`, `righe 12`, `l. 12`) is within `min`..`max`, and at least one is cited. Give `path` instead of `max` and the bound is that file's current number of lines, so the check stays right when the file grows |
 | `json_schema` | the answer (or the file `path`) is JSON that validates against `json_schema` (JSON Schema, draft 2020-12); a code fence around the JSON is fine |
 | `max_chars` | the answer is at most `limit` characters |
 | `file_written` | the worker wrote `path` |

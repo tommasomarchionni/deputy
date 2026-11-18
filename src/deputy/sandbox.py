@@ -107,6 +107,10 @@ class Sandbox:
             footer += "; the file is large: scan_file(path, question) can read all of it in parts"
         return "\n".join([*out, footer])
 
+    def line_count(self, path: str) -> int:
+        """How many lines a file has, for a check; not counted as read by the worker."""
+        return len(_read_text(self.resolve(path)).splitlines())
+
     def read_all_lines(self, path: str) -> list[str]:
         """Every line of a file (for a scan in parts), counted as read by the worker."""
         target = self.resolve(path)
