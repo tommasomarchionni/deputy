@@ -66,6 +66,24 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "summarise_log",
+            "description": (
+                "For a large repetitive file (a log, a test run): every distinct kind of line "
+                "once, with how many lines it stands for, their line range, an example and the "
+                "values of the numbers that vary little (a worker id). Rare lines are shown "
+                "whole with their line number. Fast: no model reads the file. Use it before "
+                "scan_file; use read_file for the exact lines it points to."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "grep",
             "description": "Regex search in a file or folder; returns file:line: text.",
             "parameters": {
@@ -124,13 +142,17 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
             )
         if name == "write_file":
             return sandbox.write_file(str(arguments["path"]), str(arguments["content"]))
+        if name == "summarise_log":
+            return sandbox.summarise_log(str(arguments["path"]))
         if name == "grep":
             return sandbox.grep(str(arguments["pattern"]), str(arguments.get("path") or "."))
     except SandboxError as exc:
         return f"ERROR: {exc}"
     except (KeyError, TypeError, ValueError):
         return "ERROR: missing or invalid arguments"
-    return f"ERROR: unknown tool '{name}'; use read_file, write_file, grep or scan_file"
+    return (
+        f"ERROR: unknown tool '{name}'; use read_file, write_file, grep, summarise_log or scan_file"
+    )
 
 
 FAILED_ANSWER_CHARS = 300  # a failed answer is cut here: the orchestrator will redo the task

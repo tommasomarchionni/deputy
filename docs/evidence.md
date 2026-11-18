@@ -42,6 +42,43 @@ frontier pass was done by hand in a session, so it is a reference, not a repeate
 For the same eight tasks the frontier model paid about 9,270 tokens (prompt, files read, answer);
 delegating them costs the orchestrator only the request and the result.
 
+## Large logs for a small model
+
+A worker that reads a big log through the model costs minutes. `summarise_log` reduces every line
+to a template and reports each distinct kind of line once, with its count and line range, and drops
+nothing but repetition ([tools](tools.md#large-logs-summarise_log)). The slow benchmark task (which
+worker logged the most errors in a 2,400-line log), local worker, two runs each:
+
+| | Pass | Mean time | Output tokens | Turns |
+| --- | ---: | ---: | ---: | ---: |
+| Before (search, then ask the model) | 2 of 2 | 68.9 s (spread 24.6 s) | 759 | 3.0 |
+| After (`summarise_log` available) | 2 of 2 | 29.4 s (spread 0.2 s) | 398 | 2.5 |
+
+The log itself shrinks from about 34,500 tokens to about 120. On a real 215-line CI log the summary
+keeps all 176 distinct kinds of line in about 3,000 tokens instead of 7,700. Two runs each is a
+small sample, and the saving is largest when a search cannot answer the question.
+
+## Shell output, with and without rtk
+
+The orchestrator also reads command output itself. The open-source tool
+[rtk](https://github.com/rtk-ai/rtk) (1.2.0, run unmodified) compresses it. Measured on read-only
+commands of two real repositories, estimated tokens (bytes / 4):
+
+| Command | Raw | With rtk | Saved |
+| --- | ---: | ---: | ---: |
+| `git diff` over 5 commits | 139,031 | 8,182 | 94 % |
+| `git log -30` | 2,451 | 843 | 65 % |
+| `ls -la` of a source folder | 661 | 148 | 77 % |
+| `gh run list` | 583 | 219 | 62 % |
+| `grep -rn`, `pytest -q`, `ruff check` | 4 to 2,305 | same | 0 % |
+
+The two tools cut different bills and do not interfere: rtk shortens what shell commands print,
+deputy takes whole reads off the orchestrator and its worker never uses the shell. In 11 coding
+sessions on one repository, shell commands were 77 % of what the orchestrator read, but nearly half
+of that was `sed`, `grep` and `cat` (reading files), which rtk leaves alone; `git`, `gh` and `ls`
+were about a tenth. So expect rtk to help mostly on git and test output, and deputy on long reads.
+These are volumes, not costs: prompt caching changes what a re-read costs.
+
 ## What this does not show
 
 - The saving is an estimate with one yardstick on both sides; real tokenizers differ by up to about

@@ -122,3 +122,17 @@ def test_the_result_of_a_passing_run_keeps_its_whole_long_answer(
     result = go(fake_client([message(long)]), tmp_path, [Contains(values=["needle"])])
     assert result.status == "ok"
     assert result.answer == long
+
+
+def test_the_worker_can_ask_for_a_log_summary(fake_client, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    (tmp_path / "app.log").write_text("\n".join(f"INFO batch {i} ok" for i in range(500)))
+    client = fake_client(
+        [
+            message(tool_calls=[tool_call("summarise_log", {"path": "app.log"})]),
+            message("one kind of line, 500 times"),
+        ]
+    )
+    result = go(client, tmp_path)
+    assert result.status == "ok"
+    assert result.metrics.tool_calls == 1
+    assert result.orchestrator_tokens_saved_est > 1000

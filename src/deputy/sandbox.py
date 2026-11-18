@@ -13,6 +13,8 @@ from pathlib import Path
 
 import regex
 
+from deputy import logsummary
+
 MAX_READ_CHARS = 60_000
 MAX_FILE_BYTES = 5_000_000
 LARGE_FILE_CHARS = 80_000  # above this, a read points the worker at scan_file
@@ -107,6 +109,10 @@ class Sandbox:
         self.chars_read += sum(len(line) + 1 for line in lines)
         self.files_read.add(target.relative_to(self.root).as_posix())
         return lines
+
+    def summarise_log(self, path: str) -> str:
+        """A deterministic summary of a repetitive file; the whole file counts as read for you."""
+        return logsummary.summarise(self.read_all_lines(path))
 
     def write_file(self, path: str, content: str) -> str:
         target = self.resolve(path)
