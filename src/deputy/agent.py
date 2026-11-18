@@ -6,7 +6,7 @@ import json
 import time
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer
 
 from deputy import runs, scan, tokens
 from deputy.backends import BackendError, ChatClient, Reply
@@ -139,6 +139,11 @@ class Outcome(BaseModel):
     checks: str | None = None  # "3/3 passed", or the failing checks with their detail
     files_written: list[str] | None = None
     flags: list[str] | None = None
+
+    @model_serializer(mode="wrap")
+    def _without_empty_fields(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Over MCP a field that says nothing still costs tokens: send only what is there."""
+        return {key: value for key, value in handler(self).items() if value is not None}
 
 
 def _checks_summary(checks: list[CheckResult]) -> str | None:
