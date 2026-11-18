@@ -1,76 +1,76 @@
 # Evidence
 
-What deputy saved and what it cost in quality, measured on 2026-11-18. The yardstick is the one
-described in [configuration](configuration.md#how-the-saving-is-estimated): bytes divided by four
-for both sides, so the *difference* is an order of magnitude, not an invoice.
+What deputy saves and what it costs in quality, measured on 2026-11-18 with the current version.
+Savings use the yardstick described in [configuration](configuration.md#how-the-saving-is-estimated):
+bytes divided by four on both sides, so a difference is an order of magnitude, not an invoice.
 
-Worker model: `Jackrong/Qwen3.8-27B-MTP-GGUF:Q4_K_M`, served locally (free for the orchestrator).
-Frontier reference: **Claude Sonnet 5.5** (`claude-sonnet-5-5`).
+- Worker: `Jackrong/Qwen3.8-27B-MTP-GGUF:Q4_K_M`, served locally by llama.cpp on a laptop.
+- Frontier references: **Claude Opus 5.5** (`claude-opus-5-5`) and **Claude Sonnet 5.5**
+  (`claude-sonnet-5-5`), each recorded separately.
 
-## A real repository
+## Everyday tasks on two real repositories
 
-Six read-only tasks on a private multi-app TypeScript and Python repository (about 900 lines of
-CI documentation, several apps and packages), each with checks, run one after another. First run
-with version 0.11, second with 0.12 (`deputy bench --tasks-file`), which returns a shorter result
-and counts a search by the lines it returns.
+21 tasks of the kind an agent hands off during ordinary work, each with checks: 12 on a private
+multi-app TypeScript and Python repository (some of its documents are in Italian), 9 on this
+repository. Inventories, summaries with cited lines, a section list translated from Italian, git
+history, code questions, counts, searches and one-line lookups. One correction round allowed.
 
-| Task | 0.11: checks | 0.11: saved | 0.12: checks | 0.12: saved | 0.12: worker time |
-| --- | --- | ---: | --- | ---: | ---: |
-| Inventory of apps and packages, with cited lines | passed | 3,891 | passed | 4,095 | 88 s |
-| Find every file that mentions an identifier | passed | 3,295 | **failed** | 3,690 | 359 s |
-| Summarise a long CI document, with cited lines | passed | 12,976 | passed | 22,545 | 356 s |
-| List the workflow files with one phrase each | passed | 11,566 | passed | 9,984 | 181 s |
-| List the build targets of one project file | passed | −74 | passed | 3 | 14 s |
-| Find the design notes that mention a topic | passed | 1,140 | passed | 1,275 | 48 s |
-| **Total** | 6 of 6 | 32,794 | 5 of 6 | 41,592 | 1,044 s |
+**Quality.** All 21 answers passed their checks. Claude Opus 5.5 then compared every answer with
+the files by hand, line numbers included: all 21 were correct; one cited range was off by one line.
 
-"Saved" is the estimated frontier tokens the orchestrator did not have to read, net of what it paid
-for the request and the result. On 0.12 the mean is about 6,900 tokens a task. The smallest task
-saves about nothing (it cost more than it saved on 0.11): delegate what is long to read; do small
-lookups yourself, which is what the `small_input` and `not_worth_delegating` flags say.
+**Saving**, net of what the orchestrator paid for the request and the result:
 
-The failed search on 0.12 was a real defect: the search stopped at 50 hits, and the identifier had
-66 hits in 29 files, so files past the cap were never seen. Since then a large search lists every
-matching file with its hit count (about 490 tokens for those 29 files), and the task's own check
-caught the incomplete answer, so the orchestrator was told to redo it instead of trusting it.
-
-## Quality against a frontier model
-
-The built-in synthetic suite (8 fast tasks, graded by code), three repetitions on the local model,
-and one pass by the frontier model graded with the same checks.
-
-| Model | Pass rate | Mean time per task |
-| --- | ---: | ---: |
-| Local worker (24 runs) | 91.7 % (spread ±11.8 points) | 25.5 s |
-| Claude Sonnet 5.5 (one pass of 8) | 100 % | not measured |
-
-The local model failed one run of two tasks (finding a line number in a long file, and a summary
-that had to name two facts within 300 characters); the frontier model passed all eight. The
-frontier pass was done by hand in a session, so it is a reference, not a repeated measurement.
-For the same eight tasks the frontier model paid about 9,270 tokens (prompt, files read, answer);
-delegating them costs the orchestrator only the request and the result.
-
-## Large logs for a small model
-
-A worker that reads a big log through the model costs minutes. `summarise_log` reduces every line
-to a template and reports each distinct kind of line once, with its count and line range, and drops
-nothing but repetition ([tools](tools.md#large-logs-summarise_log)). The slow benchmark task (which
-worker logged the most errors in a 2,400-line log), local worker, two runs each:
-
-| | Pass | Mean time | Output tokens | Turns |
+| Kind of task | Tasks | Saved in total | Saved per task | Worker time per task |
 | --- | ---: | ---: | ---: | ---: |
-| Before (search, then ask the model) | 2 of 2 | 68.9 s (spread 24.6 s) | 759 | 3.0 |
-| After (`summarise_log` available) | 2 of 2 | 29.4 s (spread 0.2 s) | 398 | 2.5 |
+| Reading: summaries, inventories, translated sections, history, code questions | 11 | 52,751 | about 4,800 | about 113 s |
+| Lookups and searches: one line, a commit subject, which files mention X | 10 | 2,400 | about 240 (4 below zero) | about 29 s |
+| **All** | 21 | 55,151 | about 2,600 | 73 s |
 
-The log itself shrinks from about 34,500 tokens to about 120. On a real 215-line CI log the summary
-keeps all 176 distinct kinds of line in about 3,000 tokens instead of 7,700. Two runs each is a
-small sample, and the saving is largest when a search cannot answer the question.
+Reading pays; lookups and searches do not, because the orchestrator would see the same short
+result itself. That is the rule in the delegation guide, and why a task that names only small files
+is flagged `small_input`.
 
-## Shell output, with and without rtk
+## The worker profile
 
-The orchestrator also reads command output itself. The open-source tool
-[rtk](https://github.com/rtk-ai/rtk) (1.2.0, run unmodified) compresses it. Measured on read-only
-commands of two real repositories, estimated tokens (bytes / 4):
+The 10 fast tasks of the built-in suite, 3 runs each (30 runs per profile), on the local worker:
+
+| Profile | Passed | Citations correct | Mean time | Output tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Every tool named, one phrase each (the bundled profile) | 100 % | 100 % | 23.5 s | 265 |
+| Same, with three tools named | 100 % | 100 % | 28.3 s | 320 |
+| Same as the first, plus seven rules from public prompt collections | 96.7 % | 83 % | 27.0 s | 304 |
+
+Telling a small model which tools it has makes it faster at equal quality. Adding rules made this
+27B model worse, so the profile stays short; those ideas went into the orchestrator's guide instead.
+
+On the same tasks the frontier models, one pass each by hand: Claude Opus 5.5 passed 10 of 10
+(about 9,380 tokens to read and answer), Claude Sonnet 5.5 passed the first 8 of 8 (about 9,270).
+Delegating them costs the orchestrator only the request and the result.
+
+## Worker tools that pay for themselves
+
+Each measured on the local worker, with and without the tool:
+
+| Tool | Task | Without | With |
+| --- | --- | --- | --- |
+| `list_files` | how many note files, and which is the largest | 1 of 3 passed, 127 s | 3 of 3, 14 s |
+| `summarise_log` | which worker logged most errors in a 2,400-line log | 2 of 2, 69 s | 2 of 2, 29 s |
+| read-only `git` | which commit changed a rule, the old value, and why | not possible | 3 of 3, 49 s |
+
+`summarise_log` keeps every distinct kind of line: a 2,400-line log of about 34,500 tokens becomes
+about 120, and a real 215-line CI log keeps all 176 kinds of line in about 3,000 tokens instead of
+7,700. A search with many hits lists every matching file with its count: 66 hits in 29 files cost
+about 490 tokens.
+
+## Where an agent's reading goes, and rtk
+
+`deputy discover` on 11 Claude Code sessions of one real repository: about 5.2 million tokens of
+tool results read by the orchestrator. Reads (files, searches, listings) were 62 %, and large reads,
+over about 1,000 tokens each, 30 % of everything: that is what delegation can take. Command output
+(git, gh, test runners) was 15 %.
+
+That 15 % is what [rtk](https://github.com/rtk-ai/rtk) (1.2.0, run unmodified) compresses. On
+read-only commands of two real repositories:
 
 | Command | Raw | With rtk | Saved |
 | --- | ---: | ---: | ---: |
@@ -80,20 +80,19 @@ commands of two real repositories, estimated tokens (bytes / 4):
 | `gh run list` | 583 | 219 | 62 % |
 | `grep -rn`, `pytest -q`, `ruff check` | 4 to 2,305 | same | 0 % |
 
-The two tools cut different bills and do not interfere: rtk shortens what shell commands print,
-deputy takes whole reads off the orchestrator and its worker never uses the shell. In 11 coding
-sessions on one repository, shell commands were 77 % of what the orchestrator read, but nearly half
-of that was `sed`, `grep` and `cat` (reading files), which rtk leaves alone; `git`, `gh` and `ls`
-were about a tenth. So expect rtk to help mostly on git and test output, and deputy on long reads.
-These are volumes, not costs: prompt caching changes what a re-read costs.
+The two tools cut different parts of the bill and do not interfere: rtk shortens what shell
+commands print; deputy takes long reads off the orchestrator, and its worker never uses the shell.
 
 ## What this does not show
 
-- The saving is an estimate with one yardstick on both sides; real tokenizers differ by up to about
-  a quarter.
-- Six tasks on one repository, run once. The numbers show direction and order of magnitude.
-- Worker time is not free for you: a local 27B model needs minutes for long documents.
-- Nothing here measures the quality of answers that have no check.
+- Savings are estimates with one yardstick on both sides; real tokenizers differ by up to about a
+  quarter, and prompt caching changes what a re-read costs.
+- 21 tasks on two repositories, one run each; the profile and tool comparisons have 2 or 3 runs.
+  The numbers show direction and order of magnitude.
+- The frontier references are one pass by hand, not repeated measurements.
+- Worker time is not free for you: a local 27B model needs one to three minutes for a long document.
+- Answers are only as checked as their checks; the frontier review above covered every answer of
+  this run, not of every run.
 
-The benchmark runs every night on the maintainer's machine (see
-[local serving](local-serving.md#nightly-benchmark-macos)); this page is updated from those reports.
+A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
+`deputy bench --compare` shows what changed between two nights.

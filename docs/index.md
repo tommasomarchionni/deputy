@@ -15,8 +15,8 @@ answer with code, and returns a short result. Your agent reads the answer, not t
 | Big logs and test output | Reading code you are about to edit |
 | Questions about git history | Searches that only list files, and anything that needs a shell, the network or credentials |
 
-On a real multi-app repository a read-heavy task saved about 6,900 frontier tokens on average
-(estimated), and a tiny one about nothing: see [evidence](evidence.md).
+On 21 everyday tasks on two real repositories, a reading task saved about 4,800 frontier tokens
+(estimated) and every answer was correct; a lookup saved about nothing: see [evidence](evidence.md).
 
 ## Get started
 

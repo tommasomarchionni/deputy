@@ -109,8 +109,8 @@ to apply it: deputy tune --apply
 Reading it: every variant passes everything, so none is worse; turning thinking off produces 55%
 fewer output tokens and is faster, so it is recommended. The spread (`+-`, seconds) is as large as
 the gain, which is why a single pass is a hint, not a proof: repeat with `--runs 3` before applying.
-The suite is easy, so it cannot say whether thinking-off hurts harder tasks; that is what the
-planned larger suite is for. Your numbers will differ; that is the point of measuring.
+The suite is easy, so it cannot say whether thinking-off hurts harder tasks; measure those on
+your own work with `deputy bench --tasks-file`. Your numbers will differ; that is the point of measuring.
 
 ## Guardrails
 
