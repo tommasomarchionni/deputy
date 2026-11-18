@@ -25,8 +25,7 @@ frontier tokens (estimated) and every answer was correct; a lookup saved about n
 curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh
 deputy init                               # point it at your model server
 deputy doctor                             # check that it answers
-deputy install claude-code --apply        # once: register the MCP server
-deputy instructions --for claude --apply  # in each project: teach the agent when to delegate
+deputy install claude-code --apply        # once: MCP server, skill and read hint, every project
 ```
 
 Then read [Install and connect an agent](install.md).

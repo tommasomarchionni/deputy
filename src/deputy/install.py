@@ -79,6 +79,50 @@ def apply_instructions(target: str, project: Path) -> str:
     return f"wrote {path}"
 
 
+def user_skill_path() -> Path:
+    """Claude Code's user-level skill for deputy: it applies in every project."""
+    return hook.settings_path().parent / "skills" / "deputy" / "SKILL.md"
+
+
+def install_user_skill(path: Path | None = None) -> str:
+    """Write the delegation guide as a user-level Claude Code skill."""
+    target = path or user_skill_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(render_instructions("claude"), encoding="utf-8")
+    return f"skill installed: {target} (kept current by deputy)"
+
+
+def refresh_user_skill(path: Path | None = None) -> bool:
+    """Rewrite the user-level skill if it exists and is out of date. Never creates it, never
+    raises: it runs when the server starts, after an update. True when it rewrote the file."""
+    target = path or user_skill_path()
+    try:
+        if not target.is_file():
+            return False
+        wanted = render_instructions("claude")
+        if target.read_text(encoding="utf-8") == wanted:
+            return False
+        target.write_text(wanted, encoding="utf-8")
+    except OSError:
+        return False
+    return True
+
+
+def stale_project_skill(project: Path) -> str | None:
+    """A warning when this folder has its own copy of the skill that differs from the guide."""
+    copy = project / INSTRUCTION_TARGETS["claude"].path
+    try:
+        if copy.is_file() and copy.read_text(encoding="utf-8") != render_instructions("claude"):
+            return (
+                f"skill: {copy} is an older copy of the delegation guide; delete it (the "
+                "user-level skill from `deputy install claude-code --apply` stays current) or "
+                "refresh it with `deputy instructions --for claude --apply`"
+            )
+    except OSError:
+        return None
+    return None
+
+
 def _json_entry(key: str, *, with_type: bool) -> dict[str, Any]:
     entry: dict[str, Any] = {"command": COMMAND, "args": ["mcp"]}
     if with_type:
@@ -119,10 +163,11 @@ def _merge_json(path: Path, key: str, with_type: bool) -> str:
     return f"added to {path}"
 
 
-def apply(agent: str, project: Path, *, read_hint: bool = True) -> str:
+def apply(agent: str, project: Path, *, read_hint: bool = True, skill: bool = True) -> str:
     """Register deputy with `agent`. Returns a one-line report; raises RuntimeError on failure.
 
-    For Claude Code it also turns on the read hint (`deputy hook`), unless `read_hint` is False."""
+    For Claude Code it also installs the user-level skill (the delegation guide, kept current by
+    deputy) and turns on the read hint (`deputy hook`), unless told not to."""
     if agent == "claude-code":
         claude = shutil.which("claude")
         if claude is None:
@@ -136,6 +181,11 @@ def apply(agent: str, project: Path, *, read_hint: bool = True) -> str:
         if done.returncode != 0:
             raise RuntimeError((done.stderr or done.stdout).strip() or "claude mcp add failed")
         report = "registered with Claude Code (user scope)"
+        if skill:
+            try:
+                report += "\n" + install_user_skill()
+            except OSError as exc:
+                report += f"\nskill not installed: {exc}"
         if read_hint:
             try:
                 report += "\n" + hook.enable()

@@ -84,7 +84,7 @@
 # ---
 # name: test_each_command_help_is_stable[install]
   '''
-  usage: deputy install [-h] [--apply] [--no-hook]
+  usage: deputy install [-h] [--apply] [--no-hook] [--no-skill]
                         {claude-code,vscode,cursor,codex,generic}
   
   positional arguments:
@@ -95,6 +95,8 @@
     --apply               do it instead of printing
     --no-hook             claude-code: do not add the hint that suggests
                           delegating large reads
+    --no-skill            claude-code: do not install the delegation guide as a
+                          user-level skill
   
   '''
 # ---

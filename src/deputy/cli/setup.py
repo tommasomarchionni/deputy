@@ -13,6 +13,7 @@ from deputy.backends import ChatClient
 from deputy.cli import tuning
 from deputy.cli._common import Subparsers
 from deputy.config import Config, ConfigError, Policy, config_path, load_config, state_dir
+from deputy.install import stale_project_skill
 from deputy.model_profiles import changed_model, load_profile
 from deputy.profiles import load_profiles
 from deputy.profiles import overrides as profile_overrides
@@ -171,6 +172,9 @@ def doctor(_: argparse.Namespace) -> int:
             print(f"profile {profile.name}: {problem}")
     for warning in profile_overrides(profiles):
         print(warning)
+    stale = stale_project_skill(Path.cwd())
+    if stale:
+        print(stale)
     failed += _check_state()
     line, broken = _confinement_line(load_config().policy)
     print(line)
