@@ -20,6 +20,7 @@ dependencies = [
   "httpx>=0.28,<1",
   "pydantic>=2.11,<3",
   "regex>=2026.11.15",
+  "jsonschema>=4.26.0",
 ]
 
 [project.urls]

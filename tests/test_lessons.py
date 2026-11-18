@@ -126,7 +126,17 @@ def test_applicable_lessons_are_bounded_and_never_expired(kinds, offsets) -> Non
         ]
     )
     checks = [
-        to_check(CheckSpec(type=k, values=["a"], max=3, limit=9, path="p", argv=["x"]))
+        to_check(
+            CheckSpec(
+                type=k,
+                values=["a"],
+                max=3,
+                limit=9,
+                path="p",
+                argv=["x"],
+                json_schema={"type": "object"},
+            )
+        )
         for k in kinds
     ]
     chosen = lessons.applicable("helper", checks, now=NOW, book=book)

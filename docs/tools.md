@@ -31,6 +31,7 @@ The worker always answers in English (the bundled profile says so), unless asked
 | `file_contains` | the file `path` in `workdir` contains every string in `values` |
 | `cites_text` | every quoted passage next to a line number (`line 2: "the exact words"`, `2: "..."`, `a.txt:2 "..."`, or `"..." (line 2)`) is on that line (or in that range) of the file `path`; case and spacing do not matter; at least one quoted citation is required |
 | `cites_lines` | every cited line number (`line 12`, `lines 12-14`, `righe 12`, `l. 12`) is within `min`..`max`, and at least one is cited |
+| `json_schema` | the answer (or the file `path`) is JSON that validates against `json_schema` (JSON Schema, draft 2020-12); a code fence around the JSON is fine |
 | `max_chars` | the answer is at most `limit` characters |
 | `file_written` | the worker wrote `path` |
 | `command` | an allow-listed `argv` exits 0 in `workdir` (see [configuration](configuration.md)) |
@@ -93,3 +94,22 @@ prompt (a 27B model on a laptop reads about 50 tokens a second) 70 KB took about
 has a 10 minute budget and says where it stopped. The worker is told to try `grep` first, which is
 fast, and to use `scan_file` only when grep cannot answer. The orchestrator pays nothing for the
 parts: the whole file counts as read on its behalf in `orchestrator_tokens_saved_est`.
+
+### Structured answers: `json_schema`
+
+For a list, a table or any structured answer, ask for JSON and check it against a schema instead of
+reading it:
+
+```json
+{"type": "json_schema", "json_schema": {
+  "type": "object", "required": ["rules"],
+  "properties": {"rules": {"type": "array", "minItems": 2,
+    "items": {"type": "object", "required": ["line", "text"]}}}}}
+```
+
+The answer may be wrapped in a code fence. Add `path` to validate a file the worker wrote instead.
+On a mismatch the worker is told exactly what is wrong, with the place inside the document
+(`$.rules[1].line: 'x' is not of type 'integer'`, `$.rules[0]: 'text' is a required property`; the
+first five errors, and how many more). A schema that is not valid JSON Schema is refused up front
+(`invalid check`). A `$ref` to a URL is never fetched: it fails with "unavailable", so the check can
+never make the server reach out to the network.

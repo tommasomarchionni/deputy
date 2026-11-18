@@ -7,12 +7,16 @@ means adding one class, not editing a chain of conditions.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+import jsonschema
+from pydantic import BaseModel, Field, TypeAdapter, field_validator
+from referencing import Registry
+from referencing.exceptions import Unresolvable
 
 from deputy.config import Policy
 from deputy.sandbox import Sandbox, SandboxError, read_lines
@@ -172,6 +176,70 @@ class CitesText(BaseModel):
         return _result(name, "; ".join(wrong))
 
 
+_FENCE = re.compile(r"```(?:json)?\s*\n(?P<body>.*?)```", re.DOTALL | re.IGNORECASE)
+_MAX_SCHEMA_ERRORS = 5
+
+
+def _json_text(text: str) -> str:
+    """The JSON of an answer: the first fenced block if there is one, else the text itself."""
+    fenced = _FENCE.search(text)
+    return (fenced.group("body") if fenced else text).strip()
+
+
+def _location(error: jsonschema.ValidationError) -> str:
+    parts = "".join(f"[{p}]" if isinstance(p, int) else f".{p}" for p in error.absolute_path)
+    return f"${parts}"
+
+
+class JsonSchema(BaseModel):
+    """The answer (or the file `path`) is JSON that validates against `json_schema`."""
+
+    type: Literal["json_schema"] = "json_schema"
+    json_schema: dict[str, Any]
+    path: str | None = None
+
+    @field_validator("json_schema")
+    @classmethod
+    def _is_a_schema(cls, value: dict[str, Any]) -> dict[str, Any]:
+        try:
+            jsonschema.Draft202012Validator.check_schema(value)
+        except jsonschema.SchemaError as exc:
+            raise ValueError(f"not a valid JSON schema: {exc.message}") from exc
+        return value
+
+    async def evaluate(self, ctx: CheckContext) -> CheckResult:
+        name = f"json_schema: {self.path}" if self.path else "json_schema"
+        try:
+            source = (
+                ctx.sandbox.resolve(self.path).read_text(encoding="utf-8")
+                if self.path
+                else ctx.answer
+            )
+        except (SandboxError, OSError, UnicodeDecodeError) as exc:
+            return _result(name, f"cannot read: {exc}")
+        document: Any
+        try:
+            document = json.loads(_json_text(source))
+        except ValueError as exc:
+            return _result(name, f"not valid JSON: {exc}")
+        # An empty registry: jsonschema would otherwise download a `$ref` to a URL by itself.
+        validator = jsonschema.Draft202012Validator(self.json_schema, registry=Registry())
+        try:
+            errors: list[jsonschema.ValidationError] = sorted(
+                validator.iter_errors(document),  # pyright: ignore[reportUnknownMemberType]
+                key=lambda e: list(e.absolute_path),
+            )
+        except Unresolvable as exc:  # a $ref that cannot be resolved offline (nothing is fetched)
+            return _result(name, f"the schema refers to something unavailable: {exc}")
+        shown = [f"{_location(e)}: {e.message}" for e in errors[:_MAX_SCHEMA_ERRORS]]
+        more = (
+            f" (and {len(errors) - _MAX_SCHEMA_ERRORS} more)"
+            if len(errors) > _MAX_SCHEMA_ERRORS
+            else ""
+        )
+        return _result(name, "; ".join(shown) + more if errors else "")
+
+
 class MaxChars(BaseModel):
     """The answer is at most `limit` characters."""
 
@@ -265,21 +333,28 @@ class Command(BaseModel):
 
 
 Check = Annotated[
-    Contains | CitesLines | CitesText | MaxChars | FileWritten | FileContains | Excludes | Command,
+    Contains
+    | CitesLines
+    | CitesText
+    | JsonSchema
+    | MaxChars
+    | FileWritten
+    | FileContains
+    | Excludes
+    | Command,
     Field(discriminator="type"),
 ]
 
 
 class CheckSpec(BaseModel):
-    """What the orchestrator sends: one flat shape, so the tool schema stays small.
-    `type` is contains|excludes|cites_lines|cites_text|max_chars|file_written|file_contains|command.
-    """
+    """One proof run on the answer: `type` picks the kind, the other fields are its arguments."""
 
     type: Literal[
         "contains",
         "excludes",
         "cites_lines",
         "cites_text",
+        "json_schema",
         "max_chars",
         "file_written",
         "file_contains",
@@ -291,6 +366,7 @@ class CheckSpec(BaseModel):
     limit: int | None = None
     path: str | None = None
     argv: list[str] | None = None
+    json_schema: dict[str, Any] | None = None
 
 
 _CHECK_ADAPTER: TypeAdapter[Check] = TypeAdapter(Check)
