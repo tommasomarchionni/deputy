@@ -38,7 +38,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
 | Measured profiles read by routing: the backend is chosen per task by pass rate and speed | **today** ([configuration](configuration.md#routing)); per task class is planned |
 | Offline optimiser that proposes a better worker profile, judged on the benchmark and confirmed on held-out tasks, applied only on your approval, with rollback (`deputy optimise`) | **today** for the profile text; other parameters are covered by `tune` |
-| Nightly benchmark on a machine with a local model | planned, needs a decision ([#22](https://github.com/tommasomarchionni/deputy/issues/22)) |
+| Nightly benchmark on the machine that serves your model, one JSON report per night (`examples/nightly-bench.sh`, scheduled with launchd) | **today**, opt-in |
 
 ## How it works today
 
