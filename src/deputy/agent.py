@@ -8,7 +8,7 @@ from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
 
-from deputy import runs, tokens
+from deputy import runs, scan, tokens
 from deputy.backends import BackendError, ChatClient, Reply
 from deputy.checks import Check, CheckResult, failures_message, run_checks
 from deputy.config import Policy
@@ -44,6 +44,21 @@ TOOLS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                 "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "scan_file",
+            "description": (
+                "Ask a question about a file too large to read: it is read in parts and what is "
+                "relevant is reported with the line numbers of the original file."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}, "question": {"type": "string"}},
+                "required": ["path", "question"],
             },
         },
     },
@@ -110,7 +125,7 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
         return f"ERROR: {exc}"
     except (KeyError, TypeError, ValueError):
         return "ERROR: missing or invalid arguments"
-    return f"ERROR: unknown tool '{name}'; use read_file, write_file or grep"
+    return f"ERROR: unknown tool '{name}'; use read_file, write_file, grep or scan_file"
 
 
 def task_class(profile: str, checks: list[Check]) -> str:
@@ -180,7 +195,7 @@ class AgentRun:
             reply = await self._client.chat(self._messages, TOOLS)
             self._count_usage(reply)
             if reply.tool_calls:
-                self._run_tool_calls(reply)
+                await self._run_tool_calls(reply)
             elif await self._verify(reply.content.strip()):
                 return
         self._flags.append("turn_limit")
@@ -190,15 +205,15 @@ class AgentRun:
         self._metrics.tokens_out += reply.tokens_out
         self._metrics.model = reply.model
 
-    def _run_tool_calls(self, reply: Reply) -> None:
+    async def _run_tool_calls(self, reply: Reply) -> None:
         self._messages.append(
             {"role": "assistant", "content": reply.content, "tool_calls": reply.tool_calls}
         )
         for call in reply.tool_calls:
             self._metrics.tool_calls += 1
             function: dict[str, Any] = call.get("function") or {}
-            output = _execute(
-                self._sandbox, str(function.get("name", "")), str(function.get("arguments", ""))
+            output = await self._call_tool(
+                str(function.get("name", "")), str(function.get("arguments", ""))
             )
             self._messages.append(
                 {
@@ -207,6 +222,18 @@ class AgentRun:
                     "content": output[:TOOL_RESULT_LIMIT],
                 }
             )
+
+    async def _call_tool(self, name: str, raw_args: str) -> str:
+        """Run one tool call. `scan_file` needs the model, so it lives here; the rest is pure."""
+        if name != "scan_file":
+            return _execute(self._sandbox, name, raw_args)
+        try:
+            arguments = json.loads(raw_args or "{}")
+            return await scan.scan_file(
+                self._client, self._sandbox, str(arguments["path"]), str(arguments["question"])
+            )
+        except (ValueError, KeyError, TypeError):
+            return "ERROR: scan_file needs a path and a question"
 
     async def _verify(self, answer: str) -> bool:
         """Run the checks on a final answer. True when the conversation is over."""

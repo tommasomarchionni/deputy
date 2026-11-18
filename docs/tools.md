@@ -77,3 +77,19 @@ a citation; one wrong quote fails the check and the detail names the line and th
 
 and ask the worker, in the task, to quote the exact words of every line it cites. The check is
 about one file; run one per file.
+
+## Large files: `scan_file`
+
+A model has a limited context, so a very large file cannot be read in one pass. The worker has a tool
+for it, `scan_file(path, question)`: the server cuts the file into parts of whole lines (about 24,000
+characters each), asks the worker model the question about each part in a fresh conversation, and
+returns the findings of all parts, each under its range of lines. **Every line keeps its number in
+the original file**, so what the worker cites at the end is true of the whole file, and `cites_lines`
+and `cites_text` check it as usual.
+
+Costs, plainly: a scan runs one model call per part (at most 12, so files up to about 290 KB), one
+after the other, and the whole file is processed. On a local model that is slow at reading its
+prompt (a 27B model on a laptop reads about 50 tokens a second) 70 KB took about 8 minutes, so a scan
+has a 10 minute budget and says where it stopped. The worker is told to try `grep` first, which is
+fast, and to use `scan_file` only when grep cannot answer. The orchestrator pays nothing for the
+parts: the whole file counts as read on its behalf in `orchestrator_tokens_saved_est`.
