@@ -68,7 +68,9 @@ Available profiles, name and description.
 ## `feedback`
 
 `run_id`, `verdict` (`accepted` or `rejected`) and an optional `reason`. Recorded in the trace;
-this is what the tuning loop learns from.
+this is what the tuning loop learns from. Send it for every result you used. A run that was
+handed back (checks failed, out of turns or time) records a `rejected` verdict by itself, with the
+reason; a verdict you send later wins. The `status` line says how many runs were judged.
 
 ### `not_worth_delegating`
 

@@ -250,6 +250,19 @@ def excerpt_of_failed(answer: str) -> str:
     return answer[:FAILED_ANSWER_CHARS] + "\n[...cut: this answer failed its checks]"
 
 
+def handed_back_reason(result: Result) -> str | None:
+    """Why the worker's answer was not usable, or None. Backend and setup errors are not the
+    worker's fault, and a run still in progress has no verdict yet."""
+    if result.status == "checks_failed":
+        failed = [
+            f"{c.name}: {c.detail}" if c.detail else c.name for c in result.checks if not c.passed
+        ]
+        return "handed back, checks failed: " + "; ".join(failed)
+    if result.status == "turn_limit":
+        return "handed back: " + ("out of time" if "time_limit" in result.flags else "out of turns")
+    return None
+
+
 def saving(status: str, read: int, cost: int) -> int:
     """What a delegation spared the orchestrator. Only a run that ended `ok` spared the reading;
     any other outcome means the orchestrator does the task itself, so it only lost the cost."""
@@ -452,6 +465,18 @@ class AgentRun:
                 "saved_est": result.orchestrator_tokens_saved_est,
             }
         )
+        reason = handed_back_reason(result)
+        if reason and self._source != runs.BENCH_SOURCE:
+            # The orchestrator rarely sends feedback; a run it must redo is a known rejection.
+            runs.record(
+                {
+                    "event": "feedback",
+                    "run_id": result.run_id,
+                    "verdict": "rejected",
+                    "reason": reason,
+                    "source": "auto",
+                }
+            )
 
 
 async def run_task(  # noqa: PLR0913

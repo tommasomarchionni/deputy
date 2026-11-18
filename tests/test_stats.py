@@ -310,3 +310,14 @@ def test_a_handed_back_run_is_a_loss_even_if_it_read_a_lot() -> None:
     failed["read_est"], failed["cost_est"] = 8_754, 228
     report = stats.build_report([failed], days=30, now=NOW)
     assert report.total.tokens_saved_est == -228
+
+
+def test_the_status_line_says_how_many_runs_were_judged() -> None:
+    runs.record({"event": "run", "run_id": "a", "profile": "helper", "status": "ok", "metrics": {},
+                 "saved_est": 700, "read_est": 800, "cost_est": 100})  # fmt: skip
+    runs.record({"event": "run", "run_id": "b", "profile": "helper", "status": "ok", "metrics": {},
+                 "saved_est": 700, "read_est": 800, "cost_est": 100})  # fmt: skip
+    runs.record({"event": "feedback", "run_id": "a", "verdict": "accepted"})
+    line = stats.usage_line()
+    assert line is not None
+    assert "(1 of 2 judged: send feedback)" in line

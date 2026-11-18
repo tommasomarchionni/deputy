@@ -270,10 +270,12 @@ def usage_line(days: float = 7) -> str | None:
     total = build_report(events, days=days, unreadable=unreadable).total
     if total.runs == 0:
         return None
-    judged = _percent(total.acceptance_rate)
+    accepted = _percent(total.acceptance_rate)
+    judged = total.accepted + total.rejected
     return (
         f"{days:g}d: {total.runs} runs, {total.pass_rate:.0%} ok, {total.escalated} handed back, "
-        f"~{total.tokens_saved_est} tokens saved, {judged} accepted"
+        f"~{total.tokens_saved_est} tokens saved, {accepted} accepted ({judged} of {total.runs} "
+        "judged: send feedback)"
     )
 
 
