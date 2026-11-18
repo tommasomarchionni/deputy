@@ -63,7 +63,8 @@ fixed cost per session. So:
 
 - **Short schemas** (about 970 tokens for the whole tool list, about 680 for what the model sees) and a **short result** (the answer, a
   one-line check summary, nothing empty).
-- **Checks replace re-reading:** if the checks passed, the orchestrator does not reread the files.
+- **Checks replace most re-reading:** if the checks passed, the orchestrator does not reread the
+  files; before it acts on a fact, it reads that one cited line.
 - **The task names files; it does not paste them.** Standing rules live in the profile.
 - **Delegate input-heavy, output-light work.** Every run records what the worker read and what the
   orchestrator paid; `deputy stats` reports the net saving per kind of task, and a kind that does
