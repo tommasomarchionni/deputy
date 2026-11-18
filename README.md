@@ -8,11 +8,11 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 **Status:** alpha. The server, installer, checks, benchmark and tuning commands work; project
-memory works; routing and async tasks are next. Expect breaking changes.
+memory works; background tasks work; routing is next. Expect breaking changes.
 
 ## Highlights
 
-- **Fewer tokens for the frontier model.** Four tiny tool schemas (about 1,200 tokens), results
+- **Fewer tokens for the frontier model.** Five tiny tool schemas (about 1,200 tokens), results
   by reference, checks instead of re-reading, and an estimate of the tokens saved on every run.
 - **Quality you can verify.** The worker has no shell and a confined sandbox; every claim is checked
   by code (cited lines, required facts, forbidden leaks, files written, allow-listed commands).
@@ -72,7 +72,7 @@ Full site: **<https://tommasomarchionni.github.io/deputy/>** (source in `docs/`)
 | --- | --- |
 | Install, connect Claude Code, Copilot, Cursor, Codex | [install](docs/install.md) |
 | Configuration, tuning, updates | [configuration](docs/configuration.md) |
-| The four tools and the checks | [tools](docs/tools.md) |
+| The five tools and the checks | [tools](docs/tools.md) |
 | Security model | [security](docs/security.md) |
 | Architecture, memory, self-improvement | [architecture](docs/architecture.md), [memory](docs/memory.md), [self-improvement](docs/self-improvement.md) |
 | Measured speed of a local model | [local serving](docs/local-serving.md) |

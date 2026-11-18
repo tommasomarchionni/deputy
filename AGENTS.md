@@ -29,7 +29,7 @@ Do not run what is not needed: a focused test while editing, the full suite once
 
 ## Map
 
-- `src/deputy/` the product: `server.py` (four MCP tools), `agent.py` (the loop), `sandbox.py`,
+- `src/deputy/` the product: `server.py` (five MCP tools), `agent.py` (the loop), `sandbox.py`,
   `checks.py`, `backends.py`, `config.py`, `bench.py` and `tune.py`, `updates.py`, `install.py`,
   `workspace.py`, `cli/` (one module per command group), `profiles/` (bundled worker profiles).
 - `tests/` unit, property, snapshot (`test_public_surface.py`), `integration/`, `ci/` (automation
@@ -40,7 +40,7 @@ Do not run what is not needed: a focused test while editing, the full suite once
 
 - **The worker has no shell** and cannot leave its sandbox. Never weaken the sandbox, the check
   allow-list, secret handling or the "worker output is a draft" rule to make something pass.
-- **Four tools, tiny schemas.** A test caps the schema size; adding a tool or a field needs a reason
+- **Five tools, tiny schemas.** A test caps the schema size; adding a tool or a field needs a reason
   in terms of tokens saved.
 - **Claims must be true today.** Docs and READMEs say what works now and mark what is planned.
 - No secrets, private code or personal data anywhere (issues, tests, traces, benchmarks).

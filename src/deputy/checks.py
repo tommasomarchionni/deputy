@@ -20,11 +20,14 @@ from referencing.exceptions import Unresolvable
 
 from deputy.config import Policy
 from deputy.sandbox import Sandbox, SandboxError, read_lines
+from deputy.schema import COMPACT
 
 _COMMAND_ENV = frozenset({"PATH", "HOME", "LANG", "TMPDIR"})
 
 
 class CheckResult(BaseModel):
+    model_config = COMPACT
+
     name: str
     passed: bool
     detail: str = ""
@@ -320,6 +323,10 @@ class Command(BaseModel):
             if process is not None:
                 process.kill()
             return _result(name, "timed out")
+        except asyncio.CancelledError:
+            if process is not None:
+                process.kill()  # a cancelled run leaves no process behind
+            raise
         except OSError as exc:
             return _result(name, f"could not start: {exc.strerror}")
         if process.returncode == 0:
@@ -347,6 +354,7 @@ Check = Annotated[
 
 
 class CheckSpec(BaseModel):
+    model_config = COMPACT
     """One proof run on the answer: `type` picks the kind, the other fields are its arguments."""
 
     type: Literal[

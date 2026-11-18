@@ -23,9 +23,15 @@ def structured(result: Any) -> dict[str, Any]:
     return result.structured_content
 
 
-def test_exposes_exactly_four_small_tools() -> None:
+def test_exposes_exactly_five_small_tools() -> None:
     tools = asyncio.run(build_server().list_tools())
-    assert sorted(t.name for t in tools) == ["delegate", "feedback", "profiles", "status"]
+    assert sorted(t.name for t in tools) == [
+        "collect",
+        "delegate",
+        "feedback",
+        "profiles",
+        "status",
+    ]
     size = sum(len(json.dumps(t.model_dump(mode="json"))) for t in tools)
     assert size < SCHEMA_BUDGET_CHARS, f"tool schemas are {size} chars"
 

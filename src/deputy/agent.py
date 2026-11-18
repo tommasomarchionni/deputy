@@ -15,6 +15,7 @@ from deputy.config import Policy
 from deputy.lessons import Lesson, prompt_addendum
 from deputy.profiles import Profile
 from deputy.sandbox import Sandbox, SandboxError
+from deputy.schema import COMPACT
 
 TOOL_RESULT_LIMIT = 24_000
 
@@ -76,10 +77,12 @@ TOOLS: list[dict[str, Any]] = [
     },
 ]
 
-Status = Literal["ok", "checks_failed", "error", "turn_limit"]
+Status = Literal["ok", "checks_failed", "error", "turn_limit", "running", "cancelled"]
 
 
 class Metrics(BaseModel):
+    model_config = COMPACT
+
     model: str = ""
     turns: int = 0
     tool_calls: int = 0
@@ -90,6 +93,8 @@ class Metrics(BaseModel):
 
 
 class Result(BaseModel):
+    model_config = COMPACT
+
     run_id: str
     status: Status
     answer: str = ""
@@ -152,7 +157,9 @@ class AgentRun:
         lessons: list[Lesson],
         request_tokens: int,
         notes: str,
+        run_id: str | None,
     ) -> None:
+        self._run_id = run_id or runs.new_run_id()
         self._request_tokens = request_tokens
         self._notes = notes
         self._read_tokens = 0
@@ -178,7 +185,7 @@ class AgentRun:
         self._status: Status = "turn_limit"
 
     async def execute(self) -> Result:
-        run_id = runs.new_run_id()
+        run_id = self._run_id
         started = time.monotonic()
         try:
             await self._converse()
@@ -308,6 +315,7 @@ async def run_task(  # noqa: PLR0913
     lessons: list[Lesson] | None = None,
     request_tokens: int | None = None,
     notes: str = "",
+    run_id: str | None = None,
 ) -> Result:
     """Delegate `task` to the worker behind `client` and return the verified result.
 
@@ -326,4 +334,5 @@ async def run_task(  # noqa: PLR0913
         lessons=lessons or [],
         request_tokens=tokens.estimate(task) if request_tokens is None else request_tokens,
         notes=notes,
+        run_id=run_id,
     ).execute()

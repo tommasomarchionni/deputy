@@ -1,9 +1,9 @@
 # Architecture
 
 !!! note "What exists today"
-    Built and tested: the four tools, the execution loop with sandbox, checks and one correction round,
+    Built and tested: the five tools, background tasks, the execution loop with sandbox, checks and one correction round,
     OpenAI-compatible backends, the benchmark and tuning commands, workspaces, install and update.
-    Planned: asynchronous tasks, routing by measured profile, memory, a second adapter family
+    Planned: routing by measured profile, memory, a second adapter family
     (see the [roadmap](roadmap.md)). Sections below that describe planned work say so.
 
 ## Roles
@@ -21,7 +21,7 @@
 | Tool | Purpose |
 | --- | --- |
 | `deputy_delegate` | Run one task. Inputs: task, profile, sandbox or workdir, budget (time, tokens), `checks`. Output: `status`, `answer`, `artifacts`, `evidence`, `metrics`, `flags`. |
-| `deputy_submit` / `deputy_poll` / `deputy_cancel` | The same work, asynchronously (MCP tasks), for slow local models. |
+| `collect` | The result of a background `delegate` (`wait=false`), waiting up to 20 s; `cancel` stops it and puts the files back. Built as a plain tool, not MCP tasks, because clients do not support those yet. |
 | `deputy_status` | Backends, loaded models, health, queue. |
 | `deputy_profiles` | Profiles and model profiles known to the server. |
 | `deputy_feedback` | The orchestrator says accepted / rejected and why; this feeds memory and the benchmark. |
