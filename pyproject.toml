@@ -51,7 +51,7 @@ packages = ["src/deputy"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["src", "tests"]
+src = ["src", "tests", "tools/ci"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PT", "C4", "PL"]
@@ -59,9 +59,11 @@ ignore = ["PLR2004", "S101"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "PLR"]
+"tools/**" = ["T20"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tools/ci"]
 addopts = "-q --strict-markers"
 markers = ["live: needs a real model server (set DEPUTY_LIVE_URL)"]
 
@@ -74,6 +76,7 @@ fail_under = 85
 show_missing = true
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "tools"]
+extraPaths = ["tools/ci"]
 typeCheckingMode = "strict"
 pythonVersion = "3.11"

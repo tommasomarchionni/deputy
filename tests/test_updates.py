@@ -85,17 +85,17 @@ def fake_run(code: int, err: str = "") -> updates.Runner:
 
 
 def test_upgrade_reinstalls_at_the_release_tag(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(updates.shutil, "which", lambda _: "/usr/bin/uv")
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/uv")
     runner = fake_run(0)
     assert "updated to 0.2.0" in updates.upgrade("0.2.0", runner)
     assert runner.argv[-1].endswith("@v0.2.0")  # type: ignore[attr-defined]
 
 
 def test_upgrade_failures_are_explained(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(updates.shutil, "which", lambda _: "/usr/bin/uv")
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/uv")
     with pytest.raises(updates.UpdateError, match="boom"):
         updates.upgrade("0.2.0", fake_run(1, "line\nboom"))
-    monkeypatch.setattr(updates.shutil, "which", lambda _: None)
+    monkeypatch.setattr("shutil.which", lambda _: None)
     with pytest.raises(updates.UpdateError, match="uv is not on PATH"):
         updates.upgrade("0.2.0", fake_run(0))
 

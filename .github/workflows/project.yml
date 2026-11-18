@@ -1,0 +1,28 @@
+name: Project board
+
+# Puts new issues and pull requests on the Roadmap project. It needs a token that can write to
+# Projects (a fine-grained or classic token with the project scope, secret PROJECT_TOKEN); without
+# it the job is skipped, and items are added by hand.
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  add:
+    name: Add to project
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HAS_TOKEN: ${{ secrets.PROJECT_TOKEN != '' }}
+      PROJECT_URL: ${{ vars.PROJECT_URL }}
+    steps:
+      - if: env.HAS_TOKEN == 'true' && env.PROJECT_URL != ''
+        uses: actions/add-to-project@f2c1f1fa649a891be84948ea89b5dfba1526ef05 # v2.0.1
+        with:
+          project-url: ${{ vars.PROJECT_URL }}
+          github-token: ${{ secrets.PROJECT_TOKEN }}

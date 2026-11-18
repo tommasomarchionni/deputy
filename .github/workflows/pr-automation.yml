@@ -1,0 +1,38 @@
+name: PR automation
+
+# Area labels from the changed files; type, priority and milestone from the linked issue; the author
+# as assignee. It never checks out or runs the pull request's code: it only reads the file list and
+# the issue through the API, with the plain pull_request event. (A pull request from a fork gets a
+# read-only token, so there the maintainer labels by hand.)
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-automation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    name: PR automation
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Label, assign and set the milestone
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 tools/ci/pr_automation.py
