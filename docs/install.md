@@ -51,7 +51,7 @@ Details and examples for each kind of server: [configuration](configuration.md).
 | Claude Code | `deputy install claude-code --apply` | runs `claude mcp add --scope user deputy -- deputy mcp` |
 | GitHub Copilot (VS Code) | `deputy install vscode --apply` | adds the server to `.vscode/mcp.json` of the current project |
 | Cursor | `deputy install cursor --apply` | adds it to `.cursor/mcp.json` |
-| Codex CLI | `deputy install codex` | prints a TOML block for `~/.codex/config.toml` |
+| Codex CLI | `deputy install codex --apply` | writes the guide in `~/.codex/AGENTS.md` and prints a TOML block to add to `~/.codex/config.toml` |
 | Anything else that speaks MCP | `deputy install generic` | prints a JSON block; the command is `deputy mcp` over stdio |
 
 Restart the agent (or reload its MCP servers) afterwards.
@@ -73,8 +73,12 @@ user-level skill, `~/.claude/skills/deputy/SKILL.md`: it applies in every projec
 when a task matches, and deputy rewrites it when a new version starts, so it never falls behind.
 Skip it with `--no-skill`.
 
-**Other agents, or a copy inside a project.** One command writes the guide in the format each agent
-reads, in the current project:
+**Codex: nothing to do either.** `deputy install codex --apply` writes the guide as a marked block in
+`~/.codex/AGENTS.md` (your own text there is kept), and deputy refreshes that block when a new
+version starts.
+
+**Other agents (Copilot, Cursor), or a copy inside a project.** These read the guide from files in
+the project, so `deputy instructions` writes it there, in the format each agent reads:
 
 ```sh
 deputy instructions --for claude --apply        # a project copy of the Claude Code skill
@@ -96,8 +100,11 @@ Without `--apply` the command only prints what it would write; `--write FILE` in
 a marked block in any file you name. Files deputy owns are rewritten each
 time; in shared files only the block between the `deputy:start` and `deputy:end` markers is touched,
 so your own text is safe. Prefer the skill over `claude-md`: a skill is loaded on demand, a
-`CLAUDE.md` block on every turn. A copy inside a project is not refreshed by updates: `deputy
-doctor` says when it is older than the guide, and the user-level skill makes it unnecessary.
+`CLAUDE.md` block on every turn.
+
+**A copy inside a project does not update itself.** deputy never rewrites files in your repository
+on its own, so after an update run the same command again. `deputy doctor`, run in the project, names
+every copy older than the current guide and the command that refreshes it.
 
 The guide is short on purpose (about 450 tokens). It says what to delegate and what not, how to write
 `checks`, what to trust (`status: ok`) and what to do yourself, to review worker output, and to send

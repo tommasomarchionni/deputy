@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -108,19 +109,64 @@ def refresh_user_skill(path: Path | None = None) -> bool:
     return True
 
 
-def stale_project_skill(project: Path) -> str | None:
-    """A warning when this folder has its own copy of the skill that differs from the guide."""
-    copy = project / INSTRUCTION_TARGETS["claude"].path
-    try:
-        if copy.is_file() and copy.read_text(encoding="utf-8") != render_instructions("claude"):
-            return (
-                f"skill: {copy} is an older copy of the delegation guide; delete it (the "
-                "user-level skill from `deputy install claude-code --apply` stays current) or "
-                "refresh it with `deputy instructions --for claude --apply`"
-            )
-    except OSError:
+def _guide_block(text: str) -> str | None:
+    """The guide between deputy's markers in a shared file, or None when there is no block."""
+    if MARK_START not in text or MARK_END not in text:
         return None
-    return None
+    return text.partition(MARK_START)[2].partition(MARK_END)[0].strip()
+
+
+def stale_guide_copies(project: Path) -> list[str]:
+    """A warning for each copy of the delegation guide in this folder that is older than the
+    guide of this version. Project files are never rewritten here: that is the user's change."""
+    warnings: list[str] = []
+    for name, spec in INSTRUCTION_TARGETS.items():
+        path = project / spec.path
+        try:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if spec.frontmatter is not None:
+            stale = text != render_instructions(name)
+        else:
+            block = _guide_block(text)
+            stale = block is not None and block != instructions_text().strip()
+        if stale:
+            hint = (
+                " (or delete it: the user-level skill from `deputy install claude-code --apply` "
+                "stays current)"
+                if name == "claude"
+                else ""
+            )
+            warnings.append(
+                f"guide: {path} is an older copy of the delegation guide; refresh it with "
+                f"`deputy instructions --for {name} --apply`{hint}"
+            )
+    return warnings
+
+
+def codex_guide_path() -> Path:
+    """Codex's user-level AGENTS.md: it applies in every project."""
+    base = os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")
+    return Path(base) / "AGENTS.md"
+
+
+def refresh_codex_guide(path: Path | None = None) -> bool:
+    """Rewrite deputy's block in Codex's user-level AGENTS.md if it is there and out of date.
+    Never adds it, never raises."""
+    target = path or codex_guide_path()
+    try:
+        if not target.is_file():
+            return False
+        block = _guide_block(target.read_text(encoding="utf-8"))
+        if block is None or block == instructions_text().strip():
+            return False
+        write_instructions(target)
+    except OSError:
+        return False
+    return True
 
 
 def _json_entry(key: str, *, with_type: bool) -> dict[str, Any]:
@@ -201,6 +247,12 @@ def apply(agent: str, project: Path, *, read_hint: bool = True, skill: bool = Tr
         return _merge_json(project / ".vscode" / "mcp.json", "servers", with_type=True)
     if agent == "cursor":
         return _merge_json(project / ".cursor" / "mcp.json", "mcpServers", with_type=False)
+    if agent == "codex":
+        report = write_instructions(codex_guide_path())
+        return (
+            f"{report} (kept current by deputy)\nMCP: add the printed block to "
+            f"{codex_guide_path().parent / 'config.toml'} yourself"
+        )
     raise RuntimeError(f"--apply is not supported for '{agent}'; paste the printed snippet")
 
 
