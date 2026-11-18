@@ -258,3 +258,25 @@ def test_doctor_reports_what_is_wrong_in_a_profile_front_matter(
     assert (
         "profile oops: max_turns: 'lots' is not a whole number (ignored)" in capsys.readouterr().out
     )
+
+
+def test_a_delegation_naming_only_a_short_file_carries_the_small_input_flag(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    (tmp_path / "notes.md").write_text("alpha beta\n")
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client([message("beta")]))
+    out = asyncio.run(
+        build_server().call_tool(
+            "delegate",
+            {
+                "task": "find beta in notes.md",
+                "workdir": str(tmp_path),
+                "checks": [{"type": "contains", "values": ["beta"]}],
+            },
+        )
+    )
+    flags = structured(out)["flags"]
+    assert any(flag.startswith("small_input") for flag in flags)
