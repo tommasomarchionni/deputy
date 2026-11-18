@@ -19,6 +19,8 @@ How:
 3. `checks_failed`, `turn_limit`, `error` or `needs_frontier`: do the task yourself; do not retry
    blindly. A `not_worth_delegating` flag (also in `status`) means this kind of task has not saved
    tokens in past runs: stop delegating it and do it yourself.
+   A `small_input` flag says the files named were short (a thousand tokens or less): next time read
+   such files yourself.
 4. The worker's output is a draft: review it before it reaches the repository. For edits, work in a
    copy (`deputy workspace create NAME PATH...`) so a worker never writes in the real repository.
 5. Call `feedback` with the `run_id`: `accepted` or `rejected`, and why.

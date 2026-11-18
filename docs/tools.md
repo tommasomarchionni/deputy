@@ -19,7 +19,7 @@ Run a task on a worker model and verify the result.
 
 Returns: `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs `running`, `cancelled`), `answer`, `files_written`,
 `checks` (pass or fail each), `flags` (`needs_frontier`, `turn_limit`, `backend_error`,
-`setup_error`, `not_worth_delegating`), `metrics` (turns, tokens, seconds, model), `run_id`, and
+`setup_error`, `not_worth_delegating`, `small_input`), `metrics` (turns, tokens, seconds, model), `run_id`, and
 `orchestrator_tokens_saved_est` (a rough chars/4 estimate of what you did not have to read).
 The worker always answers in English (the bundled profile says so), unless asked to translate.
 
@@ -71,6 +71,13 @@ when its mean estimated token saving is zero or negative, or when more than half
 handed back to the orchestrator. The flag appears in the `delegate` result and, with the numbers, in
 the `status` tool (`advice`). The run itself is not refused: the flag tells the orchestrator to do
 this kind of task itself from now on. The delegation guide says so.
+
+### `small_input`
+
+When every existing file a task names is about a thousand tokens or less (bytes / 4), the result
+carries `small_input` with the estimate: reading such a file costs the orchestrator about what the
+request and the result cost, so next time read it yourself. This needs no history, unlike
+`not_worth_delegating`. It never refuses a run, and a task that names no file gets no flag.
 
 ### Checking what a citation says, not only where it points
 

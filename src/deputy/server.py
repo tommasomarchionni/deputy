@@ -20,6 +20,7 @@ from deputy import (
     project_memory,
     router,
     runs,
+    small_input,
     stats,
     tokens,
     updates,
@@ -156,6 +157,9 @@ async def _delegate(prepared: _Delegation, args: _Request) -> Result:
         return _setup_error(args.run_id, "no backend answers: " + "; ".join(skipped))
     if advice:
         result.flags.append(stats.ADVICE_FLAG)
+    small = small_input.advice(args.task, prepared.sandbox)
+    if small:
+        result.flags.append(small)
     return result
 
 
