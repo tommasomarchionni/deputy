@@ -189,4 +189,3 @@ prompt caching makes a re-read cheaper, and a read made to edit a file cannot be
 
 Measured on 11 sessions of one real repository: large reads were 30 % of everything the orchestrator
 read, command output 15 %.
-
