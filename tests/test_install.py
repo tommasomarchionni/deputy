@@ -177,3 +177,37 @@ def test_installing_with_no_hook_leaves_the_settings_alone(
     settings = _fake_claude(tmp_path, monkeypatch)
     install.apply("claude-code", tmp_path, read_hint=False)
     assert not settings.exists()
+
+
+def test_installing_for_claude_code_writes_the_user_level_skill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _fake_claude(tmp_path, monkeypatch)
+    report = install.apply("claude-code", tmp_path, read_hint=False)
+    skill = tmp_path / "claude" / "skills" / "deputy" / "SKILL.md"
+    assert "skill installed" in report
+    assert skill.read_text() == install.render_instructions("claude")
+    install.apply("claude-code", tmp_path / "other", read_hint=False, skill=False)  # no error
+
+
+def test_the_user_skill_is_refreshed_only_when_it_exists_and_is_stale(tmp_path: Path) -> None:
+    skill = tmp_path / "skills" / "deputy" / "SKILL.md"
+    assert install.refresh_user_skill(skill) is False  # never created by a refresh
+    assert not skill.exists()
+    skill.parent.mkdir(parents=True)
+    skill.write_text("an old guide\n")
+    assert install.refresh_user_skill(skill) is True
+    assert skill.read_text() == install.render_instructions("claude")
+    assert install.refresh_user_skill(skill) is False  # already current
+
+
+def test_doctor_names_a_stale_project_copy_of_the_skill(tmp_path: Path) -> None:
+    assert install.stale_project_skill(tmp_path) is None
+    copy = tmp_path / ".claude" / "skills" / "deputy" / "SKILL.md"
+    copy.parent.mkdir(parents=True)
+    copy.write_text(install.render_instructions("claude"))
+    assert install.stale_project_skill(tmp_path) is None  # current: fine
+    copy.write_text("an old guide\n")
+    warning = install.stale_project_skill(tmp_path)
+    assert warning is not None
+    assert "older copy of the delegation guide" in warning

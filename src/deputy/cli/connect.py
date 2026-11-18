@@ -16,7 +16,11 @@ def install(args: argparse.Namespace) -> int:
         print("\n(printed only; add --apply to do it for you)")
         return 0
     try:
-        print(installer.apply(args.agent, Path.cwd(), read_hint=not args.no_hook))
+        print(
+            installer.apply(
+                args.agent, Path.cwd(), read_hint=not args.no_hook, skill=not args.no_skill
+            )
+        )
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -43,6 +47,11 @@ def register(sub: Subparsers) -> None:
         "--no-hook",
         action="store_true",
         help="claude-code: do not add the hint that suggests delegating large reads",
+    )
+    install_parser.add_argument(
+        "--no-skill",
+        action="store_true",
+        help="claude-code: do not install the delegation guide as a user-level skill",
     )
     install_parser.set_defaults(func=install)
 

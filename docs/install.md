@@ -66,11 +66,18 @@ state with `deputy hook status`), or install without it: `deputy install claude-
 
 ## 4. Teach the agent when to delegate
 
-Delegation only saves tokens if the agent uses it on the right work. One command writes a short guide
-in the format each agent reads:
+Delegation only saves tokens if the agent uses it on the right work, so deputy ships a short guide.
+
+**Claude Code: nothing to do.** `deputy install claude-code --apply` installs the guide as a
+user-level skill, `~/.claude/skills/deputy/SKILL.md`: it applies in every project, is loaded only
+when a task matches, and deputy rewrites it when a new version starts, so it never falls behind.
+Skip it with `--no-skill`.
+
+**Other agents, or a copy inside a project.** One command writes the guide in the format each agent
+reads, in the current project:
 
 ```sh
-deputy instructions --for claude --apply        # Claude Code skill: loaded only when relevant
+deputy instructions --for claude --apply        # a project copy of the Claude Code skill
 deputy instructions --for copilot --apply       # GitHub Copilot: .github/instructions/deputy.instructions.md
 deputy instructions --for cursor --apply        # Cursor rule
 deputy instructions --for agents --apply        # AGENTS.md (Codex, Copilot and many others)
@@ -88,8 +95,9 @@ deputy instructions --for agents --apply        # AGENTS.md (Codex, Copilot and 
 Without `--apply` the command only prints what it would write; `--write FILE` inserts the guide as
 a marked block in any file you name. Files deputy owns are rewritten each
 time; in shared files only the block between the `deputy:start` and `deputy:end` markers is touched,
-so your own text is safe. Prefer `claude` over `claude-md`: a skill is loaded on demand, a
-`CLAUDE.md` block on every turn.
+so your own text is safe. Prefer the skill over `claude-md`: a skill is loaded on demand, a
+`CLAUDE.md` block on every turn. A copy inside a project is not refreshed by updates: `deputy
+doctor` says when it is older than the guide, and the user-level skill makes it unnecessary.
 
 The guide is short on purpose (about 450 tokens). It says what to delegate and what not, how to write
 `checks`, what to trust (`status: ok`) and what to do yourself, to review worker output, and to send
