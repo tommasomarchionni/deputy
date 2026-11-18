@@ -28,6 +28,7 @@ from deputy.bench import (
 from deputy.checks import CheckResult
 from deputy.cli.tuning import format_table
 from deputy.config import Backend, config_path, load_config
+from deputy.model_profiles import load_profile
 from deputy.tune import merge_tuned, read_tuned, revert_tuned, tuned_path, write_tuned
 from helpers import message, tool_call
 
@@ -356,3 +357,28 @@ def test_narrowing_with_tasks_keeps_the_held_out_ones_out_or_refuses(
         cli.main(["tune", "--tasks", "needle-in-long-file"]) == 1
     )  # only held-out left: nothing to choose on
     assert "no tuning task left" in capsys.readouterr().err
+
+
+def test_a_partial_bench_or_tune_keeps_the_measured_profile(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
+    backend = load_config().backend()
+
+    async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
+        return summary(variant.name, mean_elapsed_s=99.0)
+
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
+    assert cli.main(["bench", "--tasks", "write-file"]) == 0
+    assert "profile kept" in capsys.readouterr().out
+    assert load_profile(backend) is None
+    assert cli.main(["tune", "--tasks", "write-file"]) == 0
+    assert "profile kept" in capsys.readouterr().out
+    assert load_profile(backend) is None
+    assert cli.main(["bench", "--json", "--tasks", "write-file"]) == 0
+    assert json.loads(capsys.readouterr().out)["profile"] is None
+    assert cli.main(["bench"]) == 0
+    assert "profile saved" in capsys.readouterr().out
+    measured = load_profile(backend)
+    assert measured is not None
+    assert measured.mean_elapsed_s == 99.0
