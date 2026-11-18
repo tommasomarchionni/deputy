@@ -15,6 +15,7 @@ from deputy.cli._common import Subparsers
 from deputy.config import Config, ConfigError, Policy, config_path, load_config, state_dir
 from deputy.model_profiles import changed_model, load_profile
 from deputy.profiles import load_profiles
+from deputy.profiles import overrides as profile_overrides
 from deputy.version import current_version
 
 CONFIG_TEMPLATE = """# deputy configuration. No secrets here: use a key file (mode 600) or env var.
@@ -168,6 +169,8 @@ def doctor(_: argparse.Namespace) -> int:
     for profile in profiles.values():
         for problem in profile.problems:
             print(f"profile {profile.name}: {problem}")
+    for warning in profile_overrides(profiles):
+        print(warning)
     failed += _check_state()
     line, broken = _confinement_line(load_config().policy)
     print(line)
