@@ -140,7 +140,9 @@ installs it:
 
 You can go back to any release with `DEPUTY_REF=<tag> sh install.sh`. The installer itself does not
 verify provenance; to check a release by hand: `gh release download <tag> -R tommasomarchionni/deputy`
-then `gh attestation verify <file>.whl -R tommasomarchionni/deputy`.
+then `gh attestation verify <file>.whl -R tommasomarchionni/deputy`. Each release also carries the
+provenance bundle as `<file>.whl.intoto.jsonl`, so the check works offline too:
+`gh attestation verify <file>.whl --bundle <file>.whl.intoto.jsonl -R tommasomarchionni/deputy`.
 
 ## Usage report
 

@@ -1,5 +1,6 @@
 # pyright: basic
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -128,3 +129,22 @@ def test_the_delegation_guide_states_the_measured_rules_and_stays_short() -> Non
     for rule in ("more than about 4 KB", "do not read it first", "none of your context", "lookup"):
         assert rule in guide
     assert tokens.estimate(guide) <= 500  # the frontier model pays for it whenever it is loaded
+
+
+def test_the_installer_refuses_a_uv_installer_that_does_not_match_its_checksum(
+    tmp_path: Path,
+) -> None:
+    fake = tmp_path / "uv-installer.sh"
+    fake.write_text("echo 'this must never run' > ran.txt\n")
+    script = Path(__file__).parents[1] / "install.sh"
+    done = subprocess.run(
+        ["/bin/sh", str(script), "--install-uv"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "UV_INSTALLER_URL": fake.as_uri()},
+        check=False,
+    )
+    assert done.returncode != 0
+    assert "does not match its pinned SHA-256" in done.stderr
+    assert not (tmp_path / "ran.txt").exists()
