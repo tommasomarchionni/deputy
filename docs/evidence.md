@@ -50,9 +50,24 @@ The 10 fast tasks of the built-in suite, 3 runs each (30 runs per profile), on t
 Telling a small model which tools it has makes it faster at equal quality. Adding rules made this
 27B model worse, so the profile stays short; those ideas went into the orchestrator's guide instead.
 
-On the same tasks the frontier models, one pass each by hand: Claude Opus 5.5 passed 10 of 10
-(about 9,380 tokens to read and answer), Claude Sonnet 5.5 passed the first 8 of 8 (about 9,270).
-Delegating them costs the orchestrator only the request and the result.
+The whole suite today (12 fast tasks, including CI-log triage and a code outline, 3 runs each, 33
+runs with the code tasks): 100 % passed, 100 % of citations correct, 34.6 s per task on average.
+
+The frontier references, one pass each by hand: Claude Opus 5.5 passed all 12 fast tasks, Claude
+Sonnet 5.5 the first 8 of 8. On the two newest tasks Opus needed only about 120 to 150 tokens,
+because one search found the answer; see the limits below.
+
+## Live checks through the MCP server
+
+deputy 0.16 driven by Claude Code on a real repository, each answer checked against the files:
+
+| Task | Result |
+| --- | --- |
+| Why did a real CI run fail (log fetched with `gh` into a file) | correct: job, step, cause, and that a second job failed only as a consequence |
+| How many ADR files, and the largest (`list_files`) | correct |
+| What the last three commits changed (read-only `git`) | correct, with file and line counts |
+| A five-bullet summary of an Italian document section, within 1,800 characters | handed back: 1,913 characters even after the correction round, so the check refused it |
+| One version number from a tiny file | correct, but it should have been flagged `small_input`; fixed since |
 
 ## Worker tools that pay for themselves
 
@@ -97,9 +112,19 @@ commands print; deputy takes long reads off the orchestrator, and its worker nev
 - 21 tasks on two repositories, two runs; the profile and tool comparisons have 2 or 3 runs.
   The numbers show direction and order of magnitude.
 - The frontier references are one pass by hand, not repeated measurements.
+- **The estimate assumes the orchestrator would read the whole file.** When one search finds the
+  answer (the failing line of a CI log, a list of definitions), an orchestrator that searches pays
+  far less: about 120 to 150 tokens on the two newest benchmark tasks. Delegation pays when the
+  answer needs reading and understanding (summaries, inventories, causes that need context); when
+  one search finds it, do it yourself.
 - Worker time is not free for you: a local 27B model needs one to three minutes for a long document.
 - Answers are only as checked as their checks; Claude Opus 5.5 reviewed every answer of both runs
   against the files they were given.
+
+**Where to start measuring your own use.** `deputy discover` on 30 days of real sessions of one
+repository: about 5.3 million tokens of tool results read by the orchestrator, large reads 30 % of
+it, and 11 delegations against 835 large reads done directly. That is the baseline before the read
+hint and the delegation skill were turned on.
 
 A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
 `deputy bench --compare` shows what changed between two nights.

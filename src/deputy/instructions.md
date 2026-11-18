@@ -7,8 +7,8 @@ tokens, never to decide anything.
 log, git history) and the answer is short: summaries, inventories, cross-references, extracting
 facts with their lines, log triage, "what changed and why". Decide **before** you read the input,
 and do not read it first: reading it yourself is the cost you are avoiding.
-**Do it yourself**: a lookup in one short file or one line, a search that only lists files (you
-would see the same list), a file you are about to edit, decisions, anything involving secrets.
+**Do it yourself**: a lookup in one short file or one line, anything one search answers (you
+would see the same lines), a file you are about to edit, decisions, anything involving secrets.
 
 How:
 
