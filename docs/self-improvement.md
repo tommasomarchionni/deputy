@@ -46,8 +46,21 @@ the orchestrator does the task. Bounded retries, bounded turns.
 
 ### Between runs: measure, then change settings
 
-- `deputy bench` runs a synthetic project that is identical every time: cited extraction, a needle in
-  a 600-line log (paging), a file write, a secret it must refuse, a short summary. Graders are code.
+- `deputy bench` runs a synthetic project that is identical every time. Graders are code. Tasks:
+
+  | Task | What it proves | Grader |
+  | --- | --- | --- |
+  | `cited-extract` | finds the facts and cites their lines | `contains`, `cites_lines` |
+  | `needle-in-long-file` | finds one line in a 600-line log (paging or `grep`) | `contains`, `cites_lines` (exact line) |
+  | `write-file` | writes exactly what was asked | `file_written`, `file_contains` |
+  | `refuse-secret` | does not leak a planted value from a hidden file | `excludes` |
+  | `short-summary` | stays under a length limit | `max_chars` |
+  | `short-with-facts` | a short answer that still holds the facts | `contains`, `max_chars` |
+  | `translate-keep-terms` | translates and keeps numbers and identifiers | `file_written`, `file_contains` |
+  | `write-passing-test` | writes a test that really passes (opt-in, runs code) | `file_contains`, `command` |
+
+  `write-passing-test` runs the model's code on your machine (in a temporary directory, with a
+  minimal environment and a 30 second limit), so it only runs with `--run-code`.
   It reports pass rate, citation accuracy, turns, output tokens, seconds with spread, tokens per
   second and the estimated tokens saved for the orchestrator, and saves a **model profile**.
 - `deputy tune` runs the suite for your settings and for candidates (thinking off, shorter output,
@@ -65,9 +78,25 @@ deputy tune --apply          # write the winner to tuned.toml now
 deputy tune --revert         # undo it
 ```
 
-A real run on a laptop (Qwen3.8 27B, local llama.cpp), baseline only: all five tasks pass, between 7
-and 33 seconds each, 90 to 294 output tokens. Your numbers will differ; that is the point of
-measuring.
+A real `deputy tune` run on a laptop (Qwen3.8 27B, Q4_K_M, local llama.cpp; the five original
+tasks, one pass):
+
+```text
+variant         pass  cites  turns  tok out     sec    +-  tok/s  saved*
+baseline        100%   100%    1.8      203    19.8  10.6   10.3    1742
+thinking-off    100%   100%    1.8       92    15.5   8.5    6.0    1622
+short-output    100%   100%    1.8      185    20.1  10.9    9.2    1746
+cool            100%   100%    1.8      240    19.2  11.7   12.5    1621
+
+recommendation: thinking-off (same accuracy, 15.5s vs 19.8s)
+to apply it: deputy tune --apply
+```
+
+Reading it: every variant passes everything, so none is worse; turning thinking off produces 55%
+fewer output tokens and is faster, so it is recommended. The spread (`+-`, seconds) is as large as
+the gain, which is why a single pass is a hint, not a proof: repeat with `--runs 3` before applying.
+The suite is easy, so it cannot say whether thinking-off hurts harder tasks; that is what the
+planned larger suite is for. Your numbers will differ; that is the point of measuring.
 
 ## Guardrails
 
@@ -77,10 +106,9 @@ data in the benchmark.
 
 ## The benchmark design
 
-The suite today covers extraction, paging, writing, refusing and a short summary. Translation,
-code-with-a-test, repeats with a held-out split and a frontier baseline are planned
-([#5](https://github.com/tommasomarchionni/deputy/issues/5),
-[#6](https://github.com/tommasomarchionni/deputy/issues/6),
+The suite covers extraction, paging, writing, refusing, summarising, translating and writing a
+test. Repeats with a held-out split and a frontier baseline are planned
+([#6](https://github.com/tommasomarchionni/deputy/issues/6),
 [#8](https://github.com/tommasomarchionni/deputy/issues/8)). The design:
 
 - Tasks from real work: cited extraction, required-facts coverage, code that must pass a test,
