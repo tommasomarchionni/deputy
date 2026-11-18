@@ -25,7 +25,7 @@ from deputy import (
     tokens,
     updates,
 )
-from deputy.agent import Result, run_task, task_class
+from deputy.agent import Outcome, Result, outcome_of, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
 from deputy.config import Backend, Config, ConfigError, load_config
@@ -206,15 +206,15 @@ def build_server() -> MCPServer:
         backend: str | None = None,
         max_turns: int | None = None,
         wait: bool = True,
-    ) -> Result:
+    ) -> Outcome:
         run_id = runs.new_run_id()
         try:
             prepared = _prepare(workdir, profile, checks, backend)
         except ValidationError as exc:
             detail = "; ".join(str(e["msg"]) for e in exc.errors())
-            return _setup_error(run_id, f"invalid check: {detail}")
+            return outcome_of(_setup_error(run_id, f"invalid check: {detail}"))
         except (ConfigError, SandboxError) as exc:
-            return _setup_error(run_id, str(exc))
+            return outcome_of(_setup_error(run_id, str(exc)))
         request = {
             "task": task,
             "workdir": workdir,
@@ -227,16 +227,18 @@ def build_server() -> MCPServer:
             prepared, _Request(task, max_turns, tokens.estimate_value(request), run_id)
         )
         if wait:
-            return await work
+            return outcome_of(await work)
         if not pending.has_room():
             work.close()
-            return _setup_error(run_id, f"{background.MAX_ACTIVE} jobs are already running")
-        return pending.submit(run_id, prepared.sandbox, work)
+            return outcome_of(
+                _setup_error(run_id, f"{background.MAX_ACTIVE} jobs are already running")
+            )
+        return outcome_of(pending.submit(run_id, prepared.sandbox, work))
 
     @server.tool(structured_output=False)  # the result shape is already described by `delegate`
-    async def collect(run_id: str, cancel: bool = False) -> Result:
+    async def collect(run_id: str, cancel: bool = False) -> Outcome:
         """Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it."""
-        return await pending.collect(run_id, cancel=cancel)
+        return outcome_of(await pending.collect(run_id, cancel=cancel))
 
     @server.tool()
     async def status() -> dict[str, str]:

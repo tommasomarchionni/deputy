@@ -125,6 +125,43 @@ class Result(BaseModel):
     orchestrator_tokens_saved_est: int = 0
 
 
+class Outcome(BaseModel):
+    """What the orchestrator reads: the answer and the verdict, nothing it has no use for.
+
+    Metrics and the saving estimate stay in the trace (`deputy stats`, the `status` tool); empty
+    fields are left out, so a passing result is the answer and a few words."""
+
+    model_config = COMPACT
+
+    run_id: str
+    status: Status
+    answer: str = ""
+    checks: str | None = None  # "3/3 passed", or the failing checks with their detail
+    files_written: list[str] | None = None
+    flags: list[str] | None = None
+
+
+def _checks_summary(checks: list[CheckResult]) -> str | None:
+    if not checks:
+        return None
+    failed = [c for c in checks if not c.passed]
+    if not failed:
+        return f"{len(checks)}/{len(checks)} passed"
+    detail = "; ".join(f"{c.name}: {c.detail}" if c.detail else c.name for c in failed)
+    return f"{len(checks) - len(failed)}/{len(checks)} passed; failed: {detail}"
+
+
+def outcome_of(result: Result) -> Outcome:
+    return Outcome(
+        run_id=result.run_id,
+        status=result.status,
+        answer=result.answer,
+        checks=_checks_summary(result.checks),
+        files_written=result.files_written or None,
+        flags=result.flags or None,
+    )
+
+
 def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR0911
     try:
         parsed: Any = json.loads(raw_args) if raw_args else {}
@@ -312,7 +349,9 @@ class AgentRun:
             metrics=self._metrics,
         )
         self._read_tokens = tokens.from_chars(self._sandbox.chars_read)
-        self._cost_tokens = self._request_tokens + tokens.estimate(result.model_dump_json())
+        self._cost_tokens = self._request_tokens + tokens.estimate(
+            outcome_of(result).model_dump_json(exclude_none=True)
+        )
         result.orchestrator_tokens_saved_est = self._read_tokens - self._cost_tokens
         return result
 

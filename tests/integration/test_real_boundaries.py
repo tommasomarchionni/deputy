@@ -142,7 +142,7 @@ def test_the_mcp_server_speaks_the_protocol_end_to_end(
 
     data = asyncio.run(go())
     assert data["status"] == "ok"
-    assert [c["passed"] for c in data["checks"]] == [True, True]
+    assert data["checks"] == "2/2 passed"
     events = [json.loads(line) for line in (state_dir() / "runs.jsonl").read_text().splitlines()]
     assert [e["event"] for e in events] == ["run", "feedback"]
     assert load_config().backend().name == "fake"
