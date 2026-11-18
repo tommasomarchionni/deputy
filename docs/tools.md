@@ -42,7 +42,7 @@ Jobs live in the memory of the running server: if the server exits, they are gon
 
 | `type` | Passes when |
 | --- | --- |
-| `contains` | every string in `values` appears in the answer (case-insensitive) |
+| `contains` | every string in `values` appears in the answer as a whole, case-insensitive: `12` is not found in `12,599` or `112`, `log` not in `logs` |
 | `excludes` | none of the strings in `values` appears in the answer (for example a secret) |
 | `file_contains` | the file `path` in `workdir` contains every string in `values` |
 | `cites_text` | every quoted passage next to a line number (`line 2: "the exact words"`, `2: "..."`, `a.txt:2 "..."`, or `"..." (line 2)`) is on that line (or in that range) of the file `path`; case and spacing do not matter; at least one quoted citation is required |
