@@ -39,11 +39,16 @@ def test_identical_reports_show_no_regression() -> None:
     assert out.text.endswith("no regression")
 
 
-def test_a_task_that_fails_more_is_named_and_is_a_regression() -> None:
+def test_a_task_that_fails_more_is_named_but_alone_it_is_not_a_regression() -> None:
     out = compare.compare(summary(), summary(failures={"needle": 2, "summary": 1}))
-    assert out.regressed
-    assert "failed more: needle" in out.text
-    assert "failed more: summary" in out.text
+    assert not out.regressed
+    assert "failed more (change, not alone a regression): needle" in out.text
+    assert "failed more (change, not alone a regression): summary" in out.text
+
+
+def test_one_task_worse_and_another_better_at_the_same_pass_rate_is_no_regression() -> None:
+    out = compare.compare(summary(failures={"a": 1}), summary(failures={"b": 1}))
+    assert not out.regressed
 
 
 def test_a_task_that_fails_less_is_reported_and_is_not_a_regression() -> None:
