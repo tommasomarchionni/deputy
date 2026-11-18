@@ -147,10 +147,15 @@ def main() -> int:
         event=os.environ.get("EVENT", ""),
         force=os.environ.get("FORCE", "false") == "true",
     )
-    print(f"release={decision.release} version={decision.version}: {decision.reason}")
+    breaking = any(c.breaking for c in commits)
+    print(
+        f"release={decision.release} version={decision.version} breaking={breaking}: "
+        f"{decision.reason}"
+    )
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
         out.write(
             f"release={'true' if decision.release else 'false'}\nversion={decision.version}\n"
+            f"breaking={'true' if breaking else 'false'}\n"
         )
     return 0
 

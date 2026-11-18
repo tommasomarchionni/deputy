@@ -83,7 +83,7 @@ class Config(BaseModel):
     default_backend: str
     backends: list[Backend]
     auto_tune: Literal["off", "propose", "apply"] = "propose"
-    auto_update: Literal["off", "notify", "apply"] = "notify"
+    auto_update: Literal["off", "notify", "apply"] = "apply"
     routing: Literal["off", "auto"] = "auto"
     policy: Policy = Field(default_factory=Policy)
 

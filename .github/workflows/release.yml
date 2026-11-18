@@ -39,6 +39,7 @@ jobs:
     outputs:
       release: ${{ steps.plan.outputs.release }}
       version: ${{ steps.plan.outputs.version }}
+      breaking: ${{ steps.plan.outputs.breaking }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -99,9 +100,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
+          BREAKING: ${{ needs.plan.outputs.breaking }}
         run: |
           git push origin "v${VERSION}"
-          gh release create "v${VERSION}" dist/* --title "v${VERSION}" --generate-notes --verify-tag
+          # The marker tells deputy update not to install this release without asking.
+          set -- dist/* --title "v${VERSION}" --generate-notes --verify-tag
+          if [ "$BREAKING" = "true" ]; then
+            set -- "$@" --notes "**BREAKING CHANGE**: this release may break your setup; read the notes before updating."
+          fi
+          gh release create "v${VERSION}" "$@"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist

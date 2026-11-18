@@ -22,7 +22,7 @@ from deputy.version import current_version
 CONFIG_TEMPLATE = """# deputy configuration. No secrets here: use a key file (mode 600) or env var.
 default_backend = "{name}"
 # auto_tune = "propose"      # off | propose | apply (see docs/configuration.md)
-# auto_update = "notify"     # off | notify | apply
+# auto_update = "apply"      # apply (verified, compatible releases) | notify | off
 # routing = "auto"           # off | auto: choose among backends (see docs/configuration.md)
 
 [[backends]]
