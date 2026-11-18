@@ -7,8 +7,8 @@
 [![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://tommasomarchionni.github.io/deputy/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Status:** alpha. The server, installer, checks, benchmark and tuning commands work; routing,
-memory and async tasks are next. Expect breaking changes.
+**Status:** alpha. The server, installer, checks, benchmark and tuning commands work; project
+memory works; routing and async tasks are next. Expect breaking changes.
 
 ## Highlights
 
