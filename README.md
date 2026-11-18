@@ -39,13 +39,14 @@ laptop. Details and limits: [evidence](docs/evidence.md).
 curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/install.sh | sh
 deputy init                               # point it at your model server
 deputy doctor                             # check that it answers
-deputy install claude-code --apply        # once: the MCP server and a hint on large reads (or: vscode, cursor, codex, generic)
-deputy instructions --for claude --apply  # in each project folder: a skill that tells the agent when to delegate
+deputy install claude-code --apply        # once: the MCP server, the skill and a hint on large reads
 ```
 
-`install` gives your agent the tools, and in Claude Code a one-line hint before it reads a large
-file (`deputy hook off` turns it off); `instructions` teaches it when to use them. The Claude Code
-skill is loaded only when relevant, so it costs no tokens otherwise.
+For Claude Code that one command does everything, for every project: it registers the MCP server,
+installs the skill that teaches the agent when to delegate (`~/.claude/skills/deputy/`, loaded only
+when relevant, kept current by deputy on each update), and adds a one-line hint before a large read
+(`deputy hook off` turns it off). For other agents: `deputy install vscode|cursor|codex|generic`,
+then `deputy instructions --for <agent> --apply` in each project.
 
 ## How it works
 
