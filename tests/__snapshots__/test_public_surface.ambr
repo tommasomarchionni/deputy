@@ -115,6 +115,23 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[memory]
+  '''
+  usage: deputy memory [-h] [--repo REPO] [--apply]
+                       [{show,export,scan,pointer,term,remove}] [key] [text]
+  
+  positional arguments:
+    {show,export,scan,pointer,term,remove}
+    key                   pointer: a file; term: the word; remove: either
+    text                  pointer: why it matters; term: what it means
+  
+  options:
+    -h, --help            show this help message and exit
+    --repo REPO           a folder inside the repository (default: here)
+    --apply               scan: remember what it finds
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[stats]
   '''
   usage: deputy stats [-h] [--days DAYS] [--json] [--include-bench]
@@ -192,6 +209,7 @@
     'learn',
     'lessons',
     'mcp',
+    'memory',
     'stats',
     'tune',
     'update',

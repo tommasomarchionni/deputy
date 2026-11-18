@@ -11,7 +11,7 @@ from typing import Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
-from deputy import lessons, model_profiles, runs, stats, tokens, updates
+from deputy import lessons, model_profiles, project_memory, runs, stats, tokens, updates
 from deputy.agent import Result, run_task, task_class
 from deputy.backends import ChatClient
 from deputy.checks import Check, CheckSpec, to_check
@@ -34,6 +34,7 @@ class _Delegation:
     client: ChatClient
     checks: list[Check]
     measured: ModelProfile | None
+    notes: str
 
 
 def _prepare(
@@ -53,6 +54,9 @@ def _prepare(
         client=ChatClient(chosen_backend),
         checks=[to_check(c) for c in checks or []],
         measured=model_profiles.load_profile(chosen_backend),
+        notes=project_memory.prompt_notes(
+            project_memory.load(project_memory.repo_root(Path(workdir)))
+        ),
     )
 
 
@@ -89,6 +93,7 @@ async def _delegate(
             else prepared.profile.max_retries,
             lessons=lessons.applicable(prepared.profile.name, prepared.checks),
             request_tokens=request_tokens,
+            notes=prepared.notes,
         )
     finally:
         await prepared.client.aclose()

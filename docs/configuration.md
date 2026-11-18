@@ -208,6 +208,27 @@ checks the task asks for; a lesson expires after 14 days and is re-derived only 
 still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
 `deputy stats` and the benchmark can tell whether they help.
 
+## Project memory
+
+A small note per repository, so the worker knows where the rules live and what your words mean.
+Pointers, not copies: an entry says *which file* and *why*, so it cannot go stale.
+
+```bash
+deputy memory scan --apply       # find AGENTS.md, CLAUDE.md, .github/instructions/*.md ...
+deputy memory pointer docs/design.md "how stages are leased"
+deputy memory term Lease "a hold on one worker stage"
+deputy memory                    # show; `export` prints the same markdown to review in a PR
+deputy memory remove Lease
+```
+
+- `--repo DIR` picks the repository (default: the current folder; a folder inside a repository is
+  that repository).
+- The note lives in the state directory, keyed by the repository, never in the repository, and a
+  worker cannot reach it.
+- It is added to the worker's prompt only for tasks in that repository, capped at 1,500
+  characters (up to 12 pointers and 20 terms).
+- A pointer must be a real file inside the repository and not a secret file.
+
 ## Confinement of command checks
 
 `[policy] command_wrapper` is an argv prefix that runs every `command` check inside an OS sandbox;
