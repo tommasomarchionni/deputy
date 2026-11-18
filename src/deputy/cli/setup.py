@@ -10,8 +10,10 @@ from pathlib import Path
 
 from deputy import confinement, updates
 from deputy.backends import ChatClient
+from deputy.cli import tuning
 from deputy.cli._common import Subparsers
-from deputy.config import ConfigError, Policy, config_path, load_config, state_dir
+from deputy.config import Config, ConfigError, Policy, config_path, load_config, state_dir
+from deputy.model_profiles import changed_model, load_profile
 from deputy.profiles import load_profiles
 from deputy.version import current_version
 
@@ -74,20 +76,43 @@ def init(args: argparse.Namespace) -> int:
     return 0
 
 
-async def _check_backends() -> int:
-    """Print one line per backend; return how many are not healthy."""
+async def _check_backends() -> tuple[int, dict[str, list[str]]]:
+    """Print one line per backend; return how many are not healthy and the models served."""
     failed = 0
+    served: dict[str, list[str]] = {}
     for backend in load_config().backends:
         client = ChatClient(backend)
         try:
-            ok, detail = await client.health()
+            probe = await client.probe()
+            ok, detail = probe.ok, probe.detail
+            served[backend.name] = probe.models
         except ConfigError as exc:
             ok, detail = False, str(exc)
         finally:
             await client.aclose()
         print(f"backend {backend.name}: {'ok' if ok else 'FAIL'} - {detail}")
         failed += 0 if ok else 1
-    return failed
+    return failed, served
+
+
+def _model_changes(config: Config, served: dict[str, list[str]]) -> None:
+    """Say when a server serves another model than the one measured, and act as `auto_tune` says.
+
+    Only `doctor` does this, never a delegation: a re-tune takes minutes.
+    """
+    for backend in config.backends:
+        profile = load_profile(backend)
+        now = changed_model(profile, served.get(backend.name, []))
+        if profile is None or now is None:
+            continue
+        print(f"model {backend.name}: now serves {now}, was measured on {profile.served_model}")
+        if config.auto_tune == "apply":
+            print("re-tuning with one quick pass (auto_tune = apply)...")
+            tuning.retune(backend.name)
+        elif config.auto_tune == "propose":
+            print("run: deputy tune")
+        else:
+            print("auto_tune is off: run deputy tune when you want a new measurement")
 
 
 def _check_state() -> int:
@@ -136,7 +161,7 @@ def doctor(_: argparse.Namespace) -> int:
         print(f"config: FAIL - {exc}")
         return 1
     print(f"config: ok ({config_path()})")
-    failed = asyncio.run(_check_backends())
+    failed, served = asyncio.run(_check_backends())
     profiles = load_profiles(Path.cwd())
     print(f"profiles: {', '.join(profiles)}")
     for profile in profiles.values():
@@ -146,6 +171,7 @@ def doctor(_: argparse.Namespace) -> int:
     line, broken = _confinement_line(load_config().policy)
     print(line)
     failed += broken
+    _model_changes(load_config(), served)
     _print_update_notice()
     return 1 if failed else 0
 

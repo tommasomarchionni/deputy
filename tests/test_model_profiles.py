@@ -12,6 +12,7 @@ from deputy.model_profiles import (
     MAX_MAX_TURNS,
     MIN_MAX_TURNS,
     ModelProfile,
+    changed_model,
     describe,
     load_profile,
     profile_path,
@@ -106,3 +107,14 @@ def test_a_benchmark_summary_records_the_most_common_answering_model() -> None:
     )
     assert got.served_model == "m2"
     assert summarise("v", []).served_model == ""
+
+
+def test_changed_model_names_the_new_model_only_when_it_differs_from_the_measured_one() -> None:
+    measured = ModelProfile("local", "default", "qwen-27b", time.time(), 1.0, 2.0, 10.0)
+    assert changed_model(measured, ["qwen-27b"]) is None
+    assert changed_model(measured, ["qwen-27b", "other"]) is None
+    assert changed_model(measured, ["llama-70b"]) == "llama-70b"
+    assert changed_model(measured, []) is None  # the server did not say
+    assert changed_model(None, ["llama-70b"]) is None  # never measured: nothing changed
+    unknown = ModelProfile("local", "default", "", time.time(), 1.0, 2.0, 10.0)
+    assert changed_model(unknown, ["llama-70b"]) is None
