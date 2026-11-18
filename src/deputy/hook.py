@@ -1,8 +1,9 @@
-"""A Claude Code hook that suggests delegating a large read. It never blocks anything.
+"""A Claude Code hook that suggests `digest` before a large read. It never blocks anything.
 
-Before Claude Code reads a whole file larger than `HINT_BYTES`, the hook adds one line to the
-model's context: the file's size in tokens and that `delegate` can read it instead. A read of part
-of a file (offset or limit), a small file, a missing file or any error adds nothing. The hook is
+Before Claude Code reads a whole file larger than `HINT_BYTES`, or runs a shell command that prints
+more than that (`cat`, `nl`, `sed -n`, `head`, `tail`), the hook adds one line to the model's
+context: the size in tokens and the tool that can read it instead. A partial read through the read
+tool, a small read, a filtered command, a missing file or any error adds nothing. The hook is
 installed with the MCP server (`deputy install claude-code --apply`) and removed with
 `deputy hook off`.
 """
@@ -15,13 +16,15 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from deputy import tokens
+from deputy import shellreads, tokens
 
 # About 2,000 tokens: in real sessions about 1.5 % of reads, holding about 18 % of what was read.
 HINT_BYTES = 8_000
+MAX_MEASURED_BYTES = 5_000_000  # the worker's own limit: a larger file is not measured line by line
 HOOK_TIMEOUT_S = 5  # the hint must never hold a read for long
 HOOK_COMMAND = "deputy-hook"  # a light entry point: it runs before every read
 _EVENT = "PreToolUse"
+_MATCHER = "Read|Bash"
 _BINARY_SUFFIXES = frozenset(
     [
         ".png",
@@ -71,29 +74,67 @@ def _is_binary(path: Path) -> bool:
         return True
 
 
-def hint(payload: dict[str, Any]) -> str | None:
-    """The line to add before a large whole-file read, or None."""
-    if payload.get("tool_name") != "Read":
-        return None
-    arguments = cast("dict[str, Any]", payload.get("tool_input") or {})
+def _line(names: list[str], size: int) -> str:
+    what = f"{names[0]} is" if len(names) == 1 else f"These {len(names)} files are"
+    return (
+        f"deputy: {what} about {tokens.from_chars(size):,} tokens. If you need facts rather than "
+        "to edit, call `mcp__deputy__digest` with the files and your question instead of reading."
+    )
+
+
+def _read_tool_hint(arguments: dict[str, Any], cwd: str) -> str | None:
     if arguments.get("offset") or arguments.get("limit"):
         return None
     raw = str(arguments.get("file_path") or "")
     if not raw:
         return None
-    path = Path(raw)
-    if not path.is_absolute():
-        path = Path(str(payload.get("cwd") or ".")) / path
-    try:
-        size = path.stat().st_size
-    except OSError:
-        return None
+    path = Path(cwd) / raw
+    size = path.stat().st_size
     if size <= HINT_BYTES or not path.is_file() or _is_binary(path):
         return None
-    return (
-        f"deputy: {path.name} is about {tokens.from_chars(size):,} tokens. If you need facts from "
-        "it rather than to edit it, the deputy `delegate` tool can read it for you."
-    )
+    return _line([path.name], size)
+
+
+def _printed_bytes(read: shellreads.ShellRead, path: Path) -> int:
+    """How much of the file the command prints; 0 when that cannot be told beforehand."""
+    if read.filtered or read.pattern or not path.is_file() or _is_binary(path):
+        return 0
+    size = path.stat().st_size
+    if read.first is None and read.from_end is None:
+        return size
+    if size <= HINT_BYTES or size > MAX_MEASURED_BYTES:
+        return 0
+    lines = path.read_bytes().splitlines(keepends=True)
+    if read.from_end is not None:
+        part = lines[-read.from_end :] if read.from_end else []
+    else:
+        part = lines[(read.first or 1) - 1 : read.last]
+    return sum(len(line) for line in part)
+
+
+def _shell_hint(command: str, cwd: str) -> str | None:
+    folder = Path(cwd) / (shellreads.working_folder(command) or "")
+    sizes = {
+        (folder / read.path): _printed_bytes(read, folder / read.path)
+        for read in shellreads.shell_reads(command)
+    }
+    printed = {path: size for path, size in sizes.items() if size}
+    total = sum(printed.values())
+    return _line([path.name for path in printed], total) if total > HINT_BYTES else None
+
+
+def hint(payload: dict[str, Any]) -> str | None:
+    """The line to add before a large read, or None."""
+    arguments = cast("dict[str, Any]", payload.get("tool_input") or {})
+    cwd = str(payload.get("cwd") or ".")
+    try:
+        if payload.get("tool_name") == "Read":
+            return _read_tool_hint(arguments, cwd)
+        if payload.get("tool_name") == "Bash":
+            return _shell_hint(str(arguments.get("command") or ""), cwd)
+    except OSError:
+        return None
+    return None
 
 
 def run(stdin_text: str) -> str:
@@ -145,11 +186,12 @@ def enable(path: Path | None = None) -> str:
     settings = _load(target)
     entries = _entries(settings)
     ours = {"type": "command", "command": HOOK_COMMAND, "timeout": HOOK_TIMEOUT_S}
+    wanted = {"matcher": _MATCHER, "hooks": [ours]}
     current = [e for e in entries if _is_ours(e)]
-    if current and all(e.get("hooks") == [ours] for e in current):
+    if current and all(e == wanted for e in current):
         return f"the read hint is already on ({target})"
     entries[:] = [e for e in entries if not _is_ours(e)]
-    entries.append({"matcher": "Read", "hooks": [ours]})
+    entries.append(wanted)
     _write(target, settings)
     return (
         f"read hint on: Claude Code will suggest delegating large reads ({target}); "
@@ -173,6 +215,20 @@ def disable(path: Path | None = None) -> str:
         del settings["hooks"]
     _write(target, settings)
     return f"read hint off ({target}); on again with `deputy hook on`"
+
+
+def refresh(path: Path | None = None) -> bool:
+    """Bring a hint that is on up to this version; a hint that is off stays off. True if changed."""
+    target = path or settings_path()
+    try:
+        entries = _entries(_load(target))
+        ours = [e for e in entries if _is_ours(e)]
+        if not ours or all(e.get("matcher") == _MATCHER for e in ours):
+            return False
+        enable(target)
+    except (ValueError, OSError):
+        return False
+    return True
 
 
 def is_enabled(path: Path | None = None) -> bool:
