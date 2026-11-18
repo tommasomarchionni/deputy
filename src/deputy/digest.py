@@ -44,7 +44,8 @@ def plan(files: list[str], question: str, sandbox: Sandbox) -> Plan:
         f"Question: {question.strip()}\n\n"
         "Read the files, then answer. Back every fact with its source in exactly this form:\n"
         '- the fact (path/to/file.md:12 "exact words copied from that line")\n'
-        "One fact per line, at most 8 lines, nothing else: no title, no introduction. Use the file "
+        "One fact per line, stated in your own words before its source, at most 8 lines, nothing "
+        "else: no title, no introduction. Use the file "
         "path as listed, a single line number, and 3 to 10 words copied exactly from that line. "
         f"Answer in at most {ANSWER_CHARS} characters. If the files do not contain the "
         "answer, write only: not found"

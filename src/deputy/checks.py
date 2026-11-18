@@ -224,6 +224,7 @@ def _matching(name: str, paths: list[str]) -> list[str]:
 
 _TRAILING_QUOTE = re.compile(r'^[\s,:)\-\u2013]*"(?P<words>.+)"\s*\)?[.,;]?\s*$')
 _MIN_QUOTE_CHARS = 8
+_MIN_FACT_WORDS = 2
 
 
 def _quote_near(answer: str, start: int, end: int) -> str | None:
@@ -260,8 +261,8 @@ def _quote_is_on(quote: str, text: list[str], first: int, last: int) -> bool:
 
 
 class CitesFiles(BaseModel):
-    """Every line of the answer cites a listed file and a real line of it, with words quoted from
-    that line. Nothing in the answer stands without its source."""
+    """Every line of the answer states a fact and cites a listed file and a real line of it, with
+    words quoted from that line. Nothing stands without its source, and no source without a fact."""
 
     type: Literal["cites_files"] = "cites_files"
     paths: list[str]
@@ -298,6 +299,12 @@ class CitesFiles(BaseModel):
             if line.strip() and not _NAMED_CITATION.search(line)
         ]
         problems += [f"no source for: {line!r}" for line in bare]
+        problems += [
+            f"no fact before the source: {line.strip()[:40]!r}"
+            for line in ctx.answer.splitlines()
+            if (found := _NAMED_CITATION.search(line))
+            and len(re.findall(r"\w+", _QUOTE.sub("", line[: found.start()]))) < _MIN_FACT_WORDS
+        ]
         return _result("cites_files", "; ".join(problems[:5]))
 
 

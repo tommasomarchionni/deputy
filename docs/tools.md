@@ -16,8 +16,9 @@ so this is the shortest way to delegate.
 | `workdir` | Absolute path the worker is confined to. |
 
 Every line of the answer must carry its source, in the form `- the fact (docs/a.md:12 "exact words")`.
-The status is `ok` only when each citation names one of the files and a real line of it, the quoted
-words are on that line, no line stands without a source, and the answer is at most 2,000 characters.
+The status is `ok` only when each line states a fact, each citation names one of the files and a
+real line of it, the quoted words are on that line, no line stands without a source, and the answer
+is at most 2,000 characters.
 Anything else, including an answer the files do not contain, comes back as `checks_failed`: read
 the files yourself. Missing, empty, binary, secret-looking or outside paths are refused before any
 model is called. The result has the same fields as `delegate`.

@@ -400,13 +400,13 @@ def _files_check(tmp_path: Path, answer: str, paths: tuple[str, ...] = ("docs/a.
     [
         '- beta is second (docs/a.md:2 "beta is the second letter")',
         '- beta is second (a.md:2 "BETA is  the second")',
-        '- beta (docs/a.md:2) "the second letter"',
-        '"the second letter" docs/a.md:2',
-        '- one (docs/a.md:1 "alpha line one")\n\n- two (docs/a.md:3 "gamma closes the file")',
+        '- beta is second (docs/a.md:2) "the second letter"',
+        'beta is second, "the second letter" docs/a.md:2',
+        '- it opens (docs/a.md:1 "alpha line one")\n\n- it ends (docs/a.md:3 "gamma closes the")',
         '- wrapped text (docs/a.md:2 "line one beta is the second")',
         '- wrapped text (docs/a.md:2 "the second letter gamma closes")',
-        '- code (docs/a.md:4 "names = {".git", ".ssh"}")',
-        '- escaped (docs/a.md:4 "names = {\\".git\\", \\".ssh\\"}")',
+        '- the names (docs/a.md:4 "names = {".git", ".ssh"}")',
+        '- the names (docs/a.md:4 "names = {\\".git\\", \\".ssh\\"}")',
     ],
 )
 def test_cites_files_accepts_quotes_found_on_the_cited_line(tmp_path: Path, answer: str) -> None:
@@ -416,6 +416,9 @@ def test_cites_files_accepts_quotes_found_on_the_cited_line(tmp_path: Path, answ
 @pytest.mark.parametrize(
     ("answer", "problem"),
     [
+        ('docs/a.md:2 "beta is the second letter"', "no fact before the source"),
+        ('- docs/a.md:2 "beta is the second letter"', "no fact before the source"),
+        ('- x (docs/a.md:2 "beta is the second letter")', "no fact before the source"),
         ("beta is the second letter", "no citation"),
         ("not found", "no citation"),
         ("", "no citation"),
@@ -440,5 +443,5 @@ def test_cites_files_refuses_a_name_that_could_be_two_files(tmp_path: Path) -> N
     answer = '- x (a.md:2 "the second letter")'
     paths = ("docs/a.md", "other/a.md")
     assert "ambiguous" in _files_check(tmp_path, answer, paths)
-    exact = '- x (other/a.md:2 "the second letter")'
+    exact = '- the fact (other/a.md:2 "the second letter")'
     assert _files_check(tmp_path, exact, paths) == ""
