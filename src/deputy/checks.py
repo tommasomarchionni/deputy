@@ -15,7 +15,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, TypeAdapter
 
 from deputy.config import Policy
-from deputy.sandbox import Sandbox, SandboxError
+from deputy.sandbox import Sandbox, SandboxError, read_lines
 
 _COMMAND_ENV = frozenset({"PATH", "HOME", "LANG", "TMPDIR"})
 
@@ -101,6 +101,75 @@ class CitesLines(BaseModel):
         return _result(
             "cites_lines", f"outside {self.min}-{self.max}: {outside}" if outside else ""
         )
+
+
+_QUOTE = re.compile(
+    r'"(?P<a>[^"\n]{8,200})"|\u201c(?P<b>[^\u201d\n]{8,200})\u201d|`(?P<c>[^`\n]{8,200})`'
+    r"|(?<!\w)'(?P<d>[^'\n]{8,200})'(?!\w)"
+)
+_REF = (
+    r"(?:\blines?\b|\brighe?\b|\bl\.|\br\.)\s*(?P<{i}a>\d+)(?:\s*[-\u2013]\s*(?P<{i}b>\d+))?"
+    r"|\b(?P<{i}c>\d+)\s*:"
+    r"|[A-Za-z_][\w./-]*\.[A-Za-z0-9]+:(?P<{i}d>\d+)(?:[-\u2013](?P<{i}e>\d+))?"
+)
+_REF_BEFORE = re.compile(f"(?:{_REF.format(i='p')})[\\s:,(\\-\u2013]*$", re.IGNORECASE)
+_REF_AFTER = re.compile(f"^[\\s,(\\-\u2013]*(?:{_REF.format(i='n')})", re.IGNORECASE)
+_NEIGHBOUR_CHARS = 40
+
+
+def _span(match: re.Match[str] | None, prefix: str) -> tuple[int, int] | None:
+    """The line or line range named by a reference match, or None."""
+    if match is None:
+        return None
+    groups = match.groupdict()
+    first = groups.get(f"{prefix}a") or groups.get(f"{prefix}c") or groups.get(f"{prefix}d")
+    last = groups.get(f"{prefix}b") or groups.get(f"{prefix}e") or first
+    return (int(first), int(last)) if first and last else None
+
+
+def quoted_citations(answer: str) -> list[tuple[int, int, str]]:
+    """Every quoted passage that sits right next to a line reference: (first, last, text).
+
+    The reference may come before ('line 12: "text"', '12: "text"', 'a.txt:12 "text"') or after
+    ('"text" (line 12)'). A quote with no reference next to it is not a citation."""
+    pairs: list[tuple[int, int, str]] = []
+    for quote in _QUOTE.finditer(answer):
+        text = next(g for g in quote.groups() if g)
+        before = answer[max(0, quote.start() - _NEIGHBOUR_CHARS) : quote.start()]
+        after = answer[quote.end() : quote.end() + _NEIGHBOUR_CHARS]
+        span = _span(_REF_BEFORE.search(before), "p") or _span(_REF_AFTER.search(after), "n")
+        if span:
+            pairs.append((span[0], span[1], text))
+    return pairs
+
+
+def _normal(text: str) -> str:
+    """Compare quotes the way a reader would: case and runs of whitespace do not matter."""
+    return " ".join(text.split()).casefold()
+
+
+class CitesText(BaseModel):
+    """Every quoted passage next to a line number is really on that line of `path`."""
+
+    type: Literal["cites_text"] = "cites_text"
+    path: str
+
+    async def evaluate(self, ctx: CheckContext) -> CheckResult:
+        name = f"cites_text: {self.path}"
+        try:
+            lines = read_lines(ctx.sandbox.resolve(self.path))
+        except SandboxError as exc:
+            return _result(name, f"cannot read: {exc}")
+        pairs = quoted_citations(ctx.answer)
+        if not pairs:
+            return _result(name, 'no quoted citation (expected: line 12: "the exact words")')
+        wrong: list[str] = []
+        for first, last, text in pairs:
+            where = f"{first}" if first == last else f"{first}-{last}"
+            window = lines[first - 1 : last] if 1 <= first <= last <= len(lines) else []
+            if not any(_normal(text) in _normal(line) for line in window):
+                wrong.append(f"line {where} does not contain {text[:40]!r}")
+        return _result(name, "; ".join(wrong))
 
 
 class MaxChars(BaseModel):
@@ -196,19 +265,21 @@ class Command(BaseModel):
 
 
 Check = Annotated[
-    Contains | CitesLines | MaxChars | FileWritten | FileContains | Excludes | Command,
+    Contains | CitesLines | CitesText | MaxChars | FileWritten | FileContains | Excludes | Command,
     Field(discriminator="type"),
 ]
 
 
 class CheckSpec(BaseModel):
     """What the orchestrator sends: one flat shape, so the tool schema stays small.
-    `type` is contains|excludes|cites_lines|max_chars|file_written|file_contains|command."""
+    `type` is contains|excludes|cites_lines|cites_text|max_chars|file_written|file_contains|command.
+    """
 
     type: Literal[
         "contains",
         "excludes",
         "cites_lines",
+        "cites_text",
         "max_chars",
         "file_written",
         "file_contains",

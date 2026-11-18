@@ -1,12 +1,16 @@
 # pyright: basic
 import asyncio
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from deputy.checks import (
     CitesLines,
+    CitesText,
     Command,
     Contains,
     Excludes,
@@ -14,6 +18,7 @@ from deputy.checks import (
     FileWritten,
     MaxChars,
     cited_numbers,
+    quoted_citations,
     run_checks,
 )
 from deputy.config import Policy
@@ -117,3 +122,91 @@ def test_citation_forms_are_recognised_without_false_positives(
     answer: str, expected: list[int]
 ) -> None:
     assert sorted(cited_numbers(answer)) == sorted(expected)
+
+
+FILE_TEXT = (
+    "alpha one\nRetention of audit logs is 30 days\nthird   line  here\nlast line of the file\n"
+)
+
+
+@pytest.fixture
+def cited(tmp_path: Path) -> Sandbox:
+    (tmp_path / "doc.txt").write_text(FILE_TEXT)
+    return Sandbox(tmp_path)
+
+
+def cites_text(answer: str, box: Sandbox, path: str = "doc.txt"):  # type: ignore[no-untyped-def]
+    return run([CitesText(path=path)], answer, box)[0]
+
+
+def test_a_quote_that_is_on_the_cited_line_passes_in_every_citation_style(cited: Sandbox) -> None:
+    for answer in (
+        'line 2: "retention of audit logs is 30 days"',
+        '2: "retention of audit logs"',
+        "doc.txt:2 `audit logs is 30 days`",
+        '"Retention of audit logs is 30 days" (line 2)',
+        'righe 1-2: "alpha one" and "audit logs is 30 days"',
+    ):
+        assert cites_text(answer, cited).passed, answer
+
+
+def test_a_quote_that_is_not_on_the_cited_line_fails_and_says_where(cited: Sandbox) -> None:
+    result = cites_text('line 3: "retention of audit logs is 30 days"', cited)
+    assert not result.passed
+    assert "line 3 does not contain" in result.detail
+    assert "retention of audit logs" in result.detail
+
+
+def test_one_wrong_quote_among_right_ones_fails_the_check(cited: Sandbox) -> None:
+    answer = 'line 1: "alpha one" and line 4: "retention of audit logs is 30 days"'
+    result = cites_text(answer, cited)
+    assert not result.passed
+    assert "line 4" in result.detail
+    assert "line 1" not in result.detail
+
+
+def test_quotes_are_compared_without_regard_to_case_or_spacing(cited: Sandbox) -> None:
+    assert cites_text('line 3: "THIRD line here"', cited).passed
+
+
+def test_a_quote_beyond_the_end_of_the_file_fails(cited: Sandbox) -> None:
+    assert not cites_text('line 99: "alpha one is here"', cited).passed
+
+
+def test_an_answer_without_a_quoted_citation_fails_with_the_expected_form(cited: Sandbox) -> None:
+    for answer in ("see line 2", 'it says "retention of audit logs" somewhere', 'line 2: "short"'):
+        result = cites_text(answer, cited)
+        assert not result.passed
+        assert "no quoted citation" in result.detail
+
+
+def test_an_unreadable_or_forbidden_path_fails_without_raising(cited: Sandbox) -> None:
+    assert not cites_text('line 1: "alpha one is here"', cited, path="missing.txt").passed
+    assert not cites_text('line 1: "alpha one is here"', cited, path="../x").passed
+
+
+def test_apostrophes_in_prose_are_not_taken_for_quotes() -> None:
+    assert quoted_citations("line 2: it's what they don't say, isn't it") == []
+
+
+@given(
+    st.lists(
+        st.text(alphabet="abcdefghij klmnop", min_size=12, max_size=40), min_size=3, max_size=12
+    ),
+    st.data(),
+)
+def test_a_quote_copied_from_a_line_always_verifies_on_that_line_and_not_elsewhere(
+    lines, data
+) -> None:  # type: ignore[no-untyped-def]
+    lines = [" ".join(line.split()) for line in lines]
+    index = data.draw(st.integers(0, len(lines) - 1))
+    quote = lines[index]
+    if len(quote) < 8 or sum(quote in other for other in lines) != 1:
+        return  # not an unambiguous quote: nothing to assert
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        (root / "f.txt").write_text("\n".join(lines))
+        box = Sandbox(root)
+        assert cites_text(f'line {index + 1}: "{quote}"', box, "f.txt").passed
+        other = (index + 1) % len(lines) + 1
+        assert not cites_text(f'line {other}: "{quote}"', box, "f.txt").passed
