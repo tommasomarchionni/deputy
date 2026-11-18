@@ -1,13 +1,13 @@
 # deputy
 
-> A frontier model orchestrates. Any other model does the legwork, through MCP, and gets
-> better at it every week.
+> A frontier model orchestrates. Any other model does the legwork, through MCP. Every answer is
+> checked by code, and your frontier tokens are saved.
 
 [![CI](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml/badge.svg)](https://github.com/tommasomarchionni/deputy/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-blue.svg)](https://tommasomarchionni.github.io/deputy/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-**Status:** alpha (v0.1). The server, installer, checks, benchmark and tuning commands work; routing,
+**Status:** alpha. The server, installer, checks, benchmark and tuning commands work; routing,
 memory and async tasks are next. Expect breaking changes.
 
 ## Highlights
@@ -16,8 +16,9 @@ memory and async tasks are next. Expect breaking changes.
   by reference, checks instead of re-reading, and an estimate of the tokens saved on every run.
 - **Quality you can verify.** The worker has no shell and a confined sandbox; every claim is checked
   by code (cited lines, required facts, forbidden leaks, files written, allow-listed commands).
-- **Improves itself, safely.** `deputy bench` measures your model, `deputy tune` recommends or, if
-  you allow it, applies better settings, and nothing changes without a measurement.
+- **Measured, then tuned.** `deputy bench` measures your model and `deputy tune` recommends or, if you
+  allow it, applies better request settings; nothing changes without a measurement. (Learning from
+  feedback and routing are planned; see [how deputy improves](docs/self-improvement.md).)
 - **Works with any agent and any model.** Claude Code, GitHub Copilot, Cursor, Codex; llama.cpp,
   Ollama, LM Studio, vLLM or any OpenAI-compatible API.
 - **Easy to install and keep current.** One command, no `sudo`, releases with provenance
@@ -32,7 +33,7 @@ curl -LsSf https://raw.githubusercontent.com/tommasomarchionni/deputy/main/insta
 deputy init                      # your model server: llama.cpp, Ollama, LM Studio, vLLM, ...
 deputy doctor                    # check it answers
 deputy install claude-code --apply   # or: vscode (Copilot), cursor, codex, generic
-deputy instructions --write CLAUDE.md   # teach the agent when to delegate (saves tokens)
+deputy instructions --for claude --apply   # teach the agent when to delegate (also: copilot, cursor, agents)
 deputy tune                      # measure your model and get better settings (optional)
 ```
 
