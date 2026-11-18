@@ -240,6 +240,7 @@ def test_bench_json_prints_machine_readable_summaries(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
+    capsys.readouterr()  # drop what init printed, so only the JSON is left
 
     async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
         return summary(variant.name)
