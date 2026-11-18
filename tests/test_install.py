@@ -77,3 +77,47 @@ def test_init_writes_a_private_config_and_refuses_to_overwrite(
 def test_doctor_without_config_fails_with_a_hint(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["doctor"]) == 1
     assert "deputy init" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("target", sorted(install.INSTRUCTION_TARGETS))
+def test_every_target_renders_the_guide(target: str) -> None:
+    text = install.render_instructions(target)
+    assert "deputy" in text
+    assert "`delegate`" in text
+    spec = install.INSTRUCTION_TARGETS[target]
+    assert text.startswith("---\n") == (spec.frontmatter is not None)
+
+
+def test_owned_files_have_the_front_matter_their_agent_reads() -> None:
+    assert install.render_instructions("claude").startswith("---\nname: deputy\ndescription: ")
+    assert 'applyTo: "**"' in install.render_instructions("copilot")
+    assert "alwaysApply: false" in install.render_instructions("cursor")
+
+
+def test_apply_writes_owned_files_whole_and_shared_files_as_a_block(tmp_path: Path) -> None:
+    assert "wrote" in install.apply_instructions("copilot", tmp_path)
+    owned = tmp_path / ".github/instructions/deputy.instructions.md"
+    assert owned.read_text() == install.render_instructions("copilot")
+
+    shared = tmp_path / "AGENTS.md"
+    shared.write_text("# Mine\n\nkeep me\n")
+    install.apply_instructions("agents", tmp_path)
+    install.apply_instructions("agents", tmp_path)  # refreshed in place, not duplicated
+    text = shared.read_text()
+    assert text.count(install.MARK_START) == 1
+    assert "keep me" in text
+
+
+def test_the_cli_prints_applies_and_keeps_the_legacy_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["instructions", "--for", "claude"]) == 0
+    assert capsys.readouterr().out.startswith("---\nname: deputy")
+    assert not (tmp_path / ".claude").exists()
+    assert cli.main(["instructions", "--for", "claude", "--apply"]) == 0
+    assert (tmp_path / ".claude/skills/deputy/SKILL.md").is_file()
+    assert cli.main(["instructions", "--write", str(tmp_path / "NOTES.md")]) == 0
+    assert install.MARK_START in (tmp_path / "NOTES.md").read_text()
+    assert cli.main(["instructions"]) == 0
+    assert "Delegating to deputy" in capsys.readouterr().out

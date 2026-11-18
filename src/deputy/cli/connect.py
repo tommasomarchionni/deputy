@@ -26,6 +26,10 @@ def install(args: argparse.Namespace) -> int:
 def instructions(args: argparse.Namespace) -> int:
     if args.write:
         print(installer.write_instructions(Path(args.write)))
+    elif args.target and args.apply:
+        print(installer.apply_instructions(args.target, Path.cwd()))
+    elif args.target:
+        print(installer.render_instructions(args.target), end="")
     else:
         print(installer.instructions_text())
     return 0
@@ -38,5 +42,15 @@ def register(sub: Subparsers) -> None:
     install_parser.set_defaults(func=install)
 
     guide = sub.add_parser("instructions", help="print or write the delegation guide for agents")
-    guide.add_argument("--write", metavar="FILE", help="insert it in FILE (CLAUDE.md, ...)")
+    guide.add_argument(
+        "--for",
+        dest="target",
+        choices=sorted(installer.INSTRUCTION_TARGETS),
+        help="the format of this agent: "
+        + "; ".join(f"{n}: {t.note}" for n, t in installer.INSTRUCTION_TARGETS.items()),
+    )
+    guide.add_argument(
+        "--apply", action="store_true", help="with --for: write it where the agent reads it"
+    )
+    guide.add_argument("--write", metavar="FILE", help="insert the guide as a marked block in FILE")
     guide.set_defaults(func=instructions)

@@ -1,17 +1,25 @@
-## Delegating to deputy (token-saving)
+# Delegating to deputy
 
-You can hand small, checkable, **input-heavy** work to a cheaper model with the `deputy` MCP tools.
+deputy hands work to a cheaper model and proves the result with checks. Use it to save your own
+tokens, never to decide anything.
 
-Delegate: reading long files or logs and returning a short extract, summaries, lists, translations,
-first drafts of tests. Do NOT delegate what you can answer in one short turn, or anything that
-decides architecture, security or the final shape of a change.
+**Delegate** work that is input-heavy and has a short, checkable answer: reading long files or logs
+and extracting facts, summaries, lists, translations, first drafts of tests.
+**Do not delegate** architecture or security decisions, anything you can answer in one short turn,
+or anything that involves secrets.
 
 How:
 
-- Call `delegate` with the task, an absolute `workdir`, and `checks` that prove the result
-  (`cites_lines`, `contains`, `max_chars`, `file_written`, `command`). Name files; do not paste them.
-- If `status` is `ok`, trust the checks and do not reread the sources. Read `files_written` only if
-  you need them.
-- If `status` is `checks_failed` or `flags` has `needs_frontier`, do the task yourself.
-- Worker output is a draft: review it before it reaches the real repository.
-- Call `feedback` with the `run_id` and `accepted` or `rejected` so routing improves.
+1. Call `delegate` with a task that names the files (never paste them), an absolute `workdir`, and
+   `checks` that prove the answer: `cites_lines` (cited line numbers in range), `contains` (required
+   facts), `excludes` (text that must not appear), `max_chars` (keep it short), `file_written` and
+   `file_contains` (when it writes), `command` (only allow-listed tests).
+2. `status: ok`: trust the checks and do not reread the sources. Read `files_written` only if you
+   need them.
+3. `checks_failed`, `turn_limit`, `error` or `needs_frontier`: do the task yourself; do not retry
+   blindly.
+4. The worker's output is a draft: review it before it reaches the repository. For edits, work in a
+   copy (`deputy workspace create NAME PATH...`) so a worker never writes in the real repository.
+5. Call `feedback` with the `run_id`: `accepted` or `rejected`, and why.
+
+The worker answers in English.

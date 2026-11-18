@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,63 @@ MARK_END = "<!-- deputy:end -->"
 
 def instructions_text() -> str:
     return (resources.files("deputy") / "instructions.md").read_text(encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class InstructionTarget:
+    """Where an agent reads instructions from, and how the file must look."""
+
+    path: str
+    frontmatter: str | None  # None: a shared file, so deputy only owns a marked block in it
+    note: str
+
+
+_DESCRIPTION = (
+    "Delegate small, checkable, read-heavy tasks (reading long files or logs, extraction, "
+    "summaries, translations, first drafts of tests) to a cheaper model with the deputy MCP "
+    "tools, to save tokens. Use when a task is input-heavy and its answer is short."
+)
+
+INSTRUCTION_TARGETS: dict[str, InstructionTarget] = {
+    "claude": InstructionTarget(
+        ".claude/skills/deputy/SKILL.md",
+        f"---\nname: deputy\ndescription: {_DESCRIPTION}\n---\n",
+        "a Claude Code skill: loaded only when relevant, so it costs no tokens otherwise",
+    ),
+    "claude-md": InstructionTarget("CLAUDE.md", None, "always loaded by Claude Code"),
+    "copilot": InstructionTarget(
+        ".github/instructions/deputy.instructions.md",
+        '---\napplyTo: "**"\n---\n',
+        "a GitHub Copilot instructions file",
+    ),
+    "copilot-repo": InstructionTarget(
+        ".github/copilot-instructions.md", None, "GitHub Copilot repository instructions"
+    ),
+    "cursor": InstructionTarget(
+        ".cursor/rules/deputy.mdc",
+        f"---\ndescription: {_DESCRIPTION}\nalwaysApply: false\n---\n",
+        "a Cursor rule the agent attaches when relevant",
+    ),
+    "agents": InstructionTarget("AGENTS.md", None, "read by Codex, Copilot and many other agents"),
+}
+
+
+def render_instructions(target: str) -> str:
+    """The guide as the target agent expects it (front matter included for owned files)."""
+    spec = INSTRUCTION_TARGETS[target]
+    body = instructions_text().strip() + "\n"
+    return f"{spec.frontmatter}\n{body}" if spec.frontmatter else body
+
+
+def apply_instructions(target: str, project: Path) -> str:
+    """Write the guide where `target` reads it: owned files whole, shared files as a block."""
+    spec = INSTRUCTION_TARGETS[target]
+    path = project / spec.path
+    if spec.frontmatter is None:
+        return write_instructions(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_instructions(target), encoding="utf-8")
+    return f"wrote {path}"
 
 
 def _json_entry(key: str, *, with_type: bool) -> dict[str, Any]:
