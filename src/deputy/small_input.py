@@ -10,12 +10,12 @@ from deputy.sandbox import Sandbox, SandboxError
 SMALL_INPUT_FLAG = "small_input"
 # Below this many tokens of input, the request and the result cost about as much as reading it.
 SMALL_INPUT_TOKENS = 1_000
-_PATH_LIKE = re.compile(r"[\w./-]+\.\w{1,8}")
+_PATH_LIKE = re.compile(r"[\w./-]*\.[\w./-]*\w")  # a token with a dot: x.md, docs/x.md, .nvmrc
 
 
 def named_input_tokens(task: str, sandbox: Sandbox) -> int | None:
     """Estimated tokens of the existing files the task names, or None when it names none."""
-    names = {m.group(0).strip(".,:;") for m in _PATH_LIKE.finditer(task)}
+    names = {m.group(0).rstrip(".,:;") for m in _PATH_LIKE.finditer(task)}  # keep a leading dot
     total = 0
     found = False
     for name in sorted(names):
