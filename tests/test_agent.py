@@ -2,12 +2,12 @@
 import asyncio
 from pathlib import Path
 
-from conftest import message, tool_call
 from deputy.agent import run_task
 from deputy.checks import CitesLines, Contains
 from deputy.config import Policy
 from deputy.profiles import Profile
 from deputy.sandbox import Sandbox
+from helpers import message, tool_call
 
 PROFILE = Profile(name="helper", description="", body="You help.", source="test")
 

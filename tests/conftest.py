@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -11,8 +10,21 @@ from typing import Any
 import httpx
 import pytest
 
+from deputy import updates
 from deputy.backends import ChatClient
 from deputy.config import Backend
+from deputy.version import current_version
+
+
+@pytest.fixture(autouse=True)
+def _no_update_check(monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest) -> None:
+    """Unit tests never reach GitHub: the update check is answered as 'up to date'.
+
+    test_updates.py tests the real check, with a fake transport, so it is left alone.
+    """
+    if request.module.__name__ == "test_updates":
+        return
+    monkeypatch.setattr(updates, "check", lambda **_: updates.UpdateInfo(current_version(), None))
 
 
 @pytest.fixture(autouse=True)
@@ -20,25 +32,6 @@ def _isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DEPUTY_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("DEPUTY_STATE", str(tmp_path / "state"))
     monkeypatch.delenv("DEPUTY_CONFIG", raising=False)
-
-
-def message(content: str = "", tool_calls: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    msg: dict[str, Any] = {"role": "assistant", "content": content}
-    if tool_calls:
-        msg["tool_calls"] = tool_calls
-    return {
-        "model": "fake-model",
-        "choices": [{"message": msg}],
-        "usage": {"prompt_tokens": 100, "completion_tokens": 20},
-    }
-
-
-def tool_call(name: str, arguments: dict[str, Any], call_id: str = "c1") -> dict[str, Any]:
-    return {
-        "id": call_id,
-        "type": "function",
-        "function": {"name": name, "arguments": json.dumps(arguments)},
-    }
 
 
 @pytest.fixture

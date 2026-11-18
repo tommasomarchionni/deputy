@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from conftest import message, tool_call
 from deputy import cli
 from deputy.agent import Metrics, Result
 from deputy.bench import (
@@ -24,6 +23,7 @@ from deputy.checks import CheckResult
 from deputy.cli.tuning import format_table
 from deputy.config import Backend, config_path, load_config
 from deputy.tune import merge_tuned, read_tuned, revert_tuned, tuned_path, write_tuned
+from helpers import message, tool_call
 
 
 def result(
