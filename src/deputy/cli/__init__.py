@@ -4,7 +4,18 @@ from __future__ import annotations
 
 import argparse
 
-from deputy.cli import connect, memory, optimise, serve, setup, stats, tuning, update, workspace
+from deputy.cli import (
+    connect,
+    discover,
+    memory,
+    optimise,
+    serve,
+    setup,
+    stats,
+    tuning,
+    update,
+    workspace,
+)
 from deputy.cli import lessons as lessons_cli
 from deputy.version import current_version
 
@@ -13,6 +24,7 @@ _COMMAND_MODULES = (
     connect,
     tuning,
     stats,
+    discover,
     lessons_cli,
     memory,
     optimise,
