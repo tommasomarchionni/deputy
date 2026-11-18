@@ -61,6 +61,22 @@ def suggested_max_turns(profile: ModelProfile | None) -> int:
     return max(MIN_MAX_TURNS, min(MAX_MAX_TURNS, wanted))
 
 
+RUN_BUDGET_HEADROOM = (
+    20  # real tasks took up to 7 times the benchmark's mean; this only stops a hang
+)
+
+
+def run_budget(floor_s: float, profile: ModelProfile | None) -> float:
+    """Seconds a whole delegation may take: the configured floor, or more for a measured slow model.
+
+    0 means no limit. The budget is a guard against a stuck run, never a speed target, so it
+    grows with the time this model was measured to need on this machine."""
+    if floor_s <= 0:
+        return 0.0
+    measured = profile.mean_elapsed_s * RUN_BUDGET_HEADROOM if profile else 0.0
+    return max(floor_s, measured)
+
+
 def changed_model(profile: ModelProfile | None, served: list[str]) -> str | None:
     """The model the server serves now, when it is not the one that was measured."""
     if profile and profile.served_model and served and profile.served_model not in served:
