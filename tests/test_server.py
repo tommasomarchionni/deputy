@@ -80,7 +80,8 @@ def test_delegate_runs_end_to_end_with_a_scripted_model(
     data = structured(out)
     assert data["status"] == "ok"
     assert data["answer"] == "beta, line 2"
-    assert data["checks"][0]["passed"] is True
+    assert data["checks"] == "1/1 passed"
+    assert "metrics" not in data  # they stay in the trace, not in what the orchestrator reads
 
 
 def test_profiles_and_status_tools() -> None:
@@ -152,7 +153,7 @@ def test_a_delegation_is_not_flagged_when_that_kind_of_task_pays_off(
     monkeypatch,  # type: ignore[no-untyped-def]
 ) -> None:
     data = _delegate_with_history(tmp_path, fake_client, monkeypatch, history_saved=900)
-    assert "not_worth_delegating" not in data["flags"]
+    assert "not_worth_delegating" not in (data.get("flags") or [])
 
 
 def _looping_model(fake_client, monkeypatch, steps: int) -> None:  # type: ignore[no-untyped-def]
@@ -160,13 +161,19 @@ def _looping_model(fake_client, monkeypatch, steps: int) -> None:  # type: ignor
     monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client(list(loop)))
 
 
+def _last_metrics() -> dict[str, Any]:
+    """The metrics of the last run, from the trace (a result no longer carries them)."""
+    lines = (state_dir() / "runs.jsonl").read_text().splitlines()
+    return [json.loads(x) for x in lines if '"event": "run"' in x][-1]["metrics"]
+
+
 def _turns_used(tmp_path: Path, **arguments: Any) -> int:
-    out = asyncio.run(
+    asyncio.run(
         build_server().call_tool(
             "delegate", {"task": "loop forever", "workdir": str(tmp_path), **arguments}
         )
     )
-    return structured(out)["metrics"]["turns"]
+    return _last_metrics()["turns"]
 
 
 def test_the_turn_limit_comes_from_the_measured_profile_unless_given(
@@ -214,12 +221,15 @@ def test_a_profile_sets_the_turn_limit_and_an_explicit_argument_still_wins(
     cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
     _project_profile(tmp_path, "tight", "max_turns: 3")
     _looping_model(fake_client, monkeypatch, steps=20)
-    assert _delegate_with(tmp_path, "tight")["metrics"]["turns"] == 3
+    _delegate_with(tmp_path, "tight")
+    assert _last_metrics()["turns"] == 3
     _looping_model(fake_client, monkeypatch, steps=20)
-    assert _delegate_with(tmp_path, "tight", max_turns=5)["metrics"]["turns"] == 5
+    _delegate_with(tmp_path, "tight", max_turns=5)
+    assert _last_metrics()["turns"] == 5
     _project_profile(tmp_path, "plain", "")
     _looping_model(fake_client, monkeypatch, steps=20)
-    assert _delegate_with(tmp_path, "plain")["metrics"]["turns"] == model_profiles.DEFAULT_MAX_TURNS
+    _delegate_with(tmp_path, "plain")
+    assert _last_metrics()["turns"] == model_profiles.DEFAULT_MAX_TURNS
 
 
 def test_a_profile_can_turn_the_correction_round_off(
@@ -240,7 +250,8 @@ def test_a_profile_can_turn_the_correction_round_off(
     _project_profile(tmp_path, "plain", "")
     assert run("strict")["status"] == "checks_failed"  # no second chance
     assert run("plain")["status"] == "ok"  # the default: one correction round
-    assert run("forgiving")["metrics"]["retries"] == 1  # a limit is a ceiling, not a quota
+    run("forgiving")
+    assert _last_metrics()["retries"] == 1  # a limit is a ceiling, not a quota
 
 
 def test_doctor_reports_what_is_wrong_in_a_profile_front_matter(

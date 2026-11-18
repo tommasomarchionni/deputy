@@ -13,7 +13,7 @@ trust.
 
 | Goal | How |
 | --- | --- |
-| **Fewer tokens for the frontier model** | Five tiny tool schemas (about 1,200 tokens), results by reference, checks instead of re-reading, and a measured `orchestrator_tokens_saved_est` on every run. |
+| **Fewer tokens for the frontier model** | Five tiny tool schemas (about 1,200 tokens), results by reference, checks instead of re-reading, and a measured saving estimate for every run (`deputy stats`). |
 | **Quality you can verify** | The worker has no shell and a confined sandbox. Every claim is checked by code: cited lines, required facts, forbidden leaks, files written, allow-listed commands. |
 | **Measured, then tuned** | `deputy bench` measures your model on a built-in suite; `deputy tune` recommends (or applies, if you allow it) request settings. Nothing changes without a measurement. Learning from feedback is planned: [how deputy improves](self-improvement.md). |
 

@@ -88,7 +88,7 @@ The guide is short on purpose (about 300 tokens). It says what to delegate and w
 ## 5. Try it
 
 Ask your agent: *"Use deputy to summarise README.md in five bullets, citing lines."* The result
-carries `status`, the checks that ran, metrics, and `orchestrator_tokens_saved_est`.
+carries `status`, a one-line summary of the checks that ran, and the answer; metrics and the saving estimate are in the trace (`deputy stats`).
 
 ## Troubleshooting
 
