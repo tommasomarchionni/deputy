@@ -178,9 +178,14 @@ def apply(agent: str, project: Path, *, read_hint: bool = True, skill: bool = Tr
             text=True,
             check=False,
         )
-        if done.returncode != 0:
-            raise RuntimeError((done.stderr or done.stdout).strip() or "claude mcp add failed")
-        report = "registered with Claude Code (user scope)"
+        message = (done.stderr or done.stdout).strip()
+        if done.returncode != 0 and "already exists" not in message:
+            raise RuntimeError(message or "claude mcp add failed")
+        report = (
+            "already registered with Claude Code (user scope)"
+            if done.returncode != 0
+            else "registered with Claude Code (user scope)"
+        )
         if skill:
             try:
                 report += "\n" + install_user_skill()
