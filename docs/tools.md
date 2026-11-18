@@ -139,7 +139,11 @@ gh run view <run-id> --log-failed > ci.log     # or --log for the whole run
 
 Add a `contains` check for anything you can predict (the job name, say). On the benchmark's
 1,000-line CI log (about 18,000 tokens) the local 27B worker named the job, the test and the
-assertion in 3 runs of 3, in about 2 minutes, with `summarise_log` and `grep`.
+assertion in 3 runs of 3, in about 2 minutes, with `summarise_log` and `grep`. On a real failed run
+it also explained that a second job failed only because the first did.
+
+If one search finds the answer (`grep -n "##\[error\]" ci.log`), run it yourself: a few hundred
+tokens and seconds. Delegate when the cause needs reading around the error.
 
 ## Large logs: `summarise_log`
 

@@ -33,6 +33,7 @@ Then read [Install and connect an agent](install.md).
 
 ## Status
 
-Alpha: it works end to end and is tested; expect breaking changes. Verified with Claude Code;
+Alpha, in daily use: it works end to end, is tested and measured on real repositories, and is used
+to develop a real multi-app project; expect breaking changes. Verified with Claude Code;
 GitHub Copilot, Cursor and Codex are configured by the installer but not yet verified. What is
 done and what is next: [roadmap](roadmap.md).
