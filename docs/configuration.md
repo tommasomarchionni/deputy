@@ -239,7 +239,9 @@ deputy optimise --revert ID      # undo
 
 Options: `--profile NAME` (default `helper`), `--backend`, `--runs N` (repeat each measurement).
 A proposal is saved under the state directory with `report.md` (the tables and a diff). It can
-only be applied if it also held up on the held-out tasks. It takes minutes on a local model: it
+only be applied if it also held up on the held-out tasks. A confirmed proposal's decision also states what it gains and
+what it costs (pass rates, time per task, output tokens), and says so when it brings no gain on the
+held-out tasks or is more than 25 % slower: confirmed only means it lost no accuracy. It takes minutes on a local model: it
 runs the selection tasks for the current profile and for each proposal, then the held-out tasks.
 
 ## Routing

@@ -222,3 +222,40 @@ def test_the_command_lists_applies_and_reports_errors(capsys: pytest.CaptureFixt
     assert cli.main(["optimise", "--revert", folder.name]) == 0
     assert cli.main(["optimise", "--apply", "nope"]) == 1
     assert "no proposal" in capsys.readouterr().err
+
+
+def _confirmed(candidate: Summary, held_base: Summary, held_win: Summary) -> optimiser.Report:
+    return optimiser.Report(
+        id="r",
+        profile="helper",
+        baseline=summary("current", pass_rate=0.93, mean_elapsed_s=19.7, mean_tokens_out=206.5),
+        candidates=[candidate],
+        winner=candidate.variant,
+        held_out=[held_base, held_win],
+        confirmed=True,
+    )
+
+
+def test_a_confirmed_proposal_shows_its_cost_next_to_its_gain() -> None:
+    # The real case: better on selection, equal on held-out, much slower.
+    report = _confirmed(
+        summary("fix", pass_rate=1.0, mean_elapsed_s=31.3, mean_tokens_out=298.4),
+        summary("current", pass_rate=0.83),
+        summary("fix", pass_rate=0.83),
+    )
+    text = optimiser.cost_and_gain(report)
+    assert "selection pass rate 93% -> 100%" in text
+    assert "held-out 83% -> 83%" in text
+    assert "time per task +59%" in text
+    assert "no held-out gain" in text
+    assert "over 25% slower per task" in text
+    assert text in optimiser.to_markdown(report)
+
+
+def test_a_clean_win_carries_no_warning() -> None:
+    report = _confirmed(
+        summary("fix", pass_rate=1.0, mean_elapsed_s=18.0, mean_tokens_out=200.0),
+        summary("current", pass_rate=0.8),
+        summary("fix", pass_rate=1.0),
+    )
+    assert "Note:" not in optimiser.cost_and_gain(report)
