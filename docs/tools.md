@@ -99,6 +99,21 @@ a citation; one wrong quote fails the check and the detail names the line and th
 and ask the worker, in the task, to quote the exact words of every line it cites. The check is
 about one file; run one per file.
 
+## Large logs: `summarise_log`
+
+For a big repetitive file (a log, a test run) the worker has a tool that needs no model at all:
+`summarise_log(path)` reduces every line to a template (digit runs become `#1`, `#2`, ...) and
+reports each distinct kind of line once: how many lines it stands for, their first and last line
+number, a real example, and the values of the numbers that vary little (a worker id, a status).
+Lines that occur at most three times are shown whole with their own line number, so a unique error
+is never folded away. Only repetition is removed; no kind of line is hidden. A 2,400-line log of
+34,500 tokens becomes about 120 tokens, in milliseconds. The worker is told to try it before
+`scan_file`, and to read the exact lines it points to.
+
+This is the opposite of a summariser that keeps only lines with a log level: measured on a real CI
+run of 215 lines, such a filter kept 54 tokens of 7,700 and called the log nearly empty, while
+`summarise_log` kept all 176 distinct kinds of line in 3,000 tokens.
+
 ## Large files: `scan_file`
 
 A model has a limited context, so a very large file cannot be read in one pass. The worker has a tool
