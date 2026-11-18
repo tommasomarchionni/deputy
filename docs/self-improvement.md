@@ -188,9 +188,18 @@ runners, build tools) and the rest. A result over 4,000 characters (about 1,000 
 as *large*: that is where a delegation can pay. The last lines give two upper bounds: the large
 reads a delegation could take, and the command output that a command-output compressor such as
 [rtk](https://github.com/rtk-ai/rtk) works on. Images are ignored. These are volumes, not costs:
-prompt caching makes a re-read cheaper, and a read made to edit a file cannot be delegated. The last line counts
-the calls to deputy's `delegate` next to the large reads the orchestrator still did itself: compare
-them over time to see whether the read hint (`deputy hook`) changes the habit.
+prompt caching makes a re-read cheaper.
+
+The last lines measure **adoption**, the number to watch over time:
+
+- **Adoption** is the share of delegations among the large file reads a delegation could have taken.
+  A file read through `Read`, `cat`, `sed -n`, `head`, `tail` or `nl` counts, unless the same file
+  was edited within the next 40 tool calls: that read needed the exact text.
+- **Read again** is what went into reading a file a second time with no edit and no compaction in
+  between, and how much of that was the very same part of the file.
+
+An edit made by a script (rather than an edit tool or `sed -i`) is not seen, so these numbers are
+estimates.
 
 Measured on 11 sessions of one real repository: large reads were 30 % of everything the orchestrator
 read, command output 15 %.
