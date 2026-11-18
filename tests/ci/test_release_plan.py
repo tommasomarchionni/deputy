@@ -1,7 +1,7 @@
 # pyright: basic
 import pytest
 
-from release_plan import MIN_HOURS, THRESHOLD, Commit, decide, next_version
+from release_plan import MIN_HOURS, THRESHOLD, Commit, decide, green_in, next_version
 
 
 def c(subject: str, body: str = "") -> Commit:
@@ -86,3 +86,15 @@ def test_a_manual_run_can_force_a_release_inside_the_window() -> None:
 
 def test_a_manual_run_without_force_follows_the_thresholds() -> None:
     assert not plan([c("fix: a")], event="workflow_dispatch", hours=100).release
+
+
+def test_ci_is_green_only_when_the_required_check_succeeded() -> None:
+    runs = [
+        {"name": "Docs", "conclusion": "success"},
+        {"name": "Required", "conclusion": "success"},
+    ]
+    assert green_in(runs)
+    assert not green_in([{"name": "Required", "conclusion": "failure"}])
+    assert not green_in([{"name": "Required", "conclusion": None}])
+    assert not green_in([{"name": "Docs", "conclusion": "success"}])
+    assert not green_in([])
