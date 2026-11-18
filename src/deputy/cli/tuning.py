@@ -9,7 +9,16 @@ import sys
 from collections.abc import Callable
 
 from deputy.agent import Result
-from deputy.bench import Summary, Variant, candidate_variants, choose_best, run_suite
+from deputy.bench import (
+    Summary,
+    Variant,
+    candidate_variants,
+    choose_best,
+    confirms,
+    holdout_names,
+    run_suite,
+    selection_names,
+)
 from deputy.cli._common import Subparsers
 from deputy.config import Backend, Config, ConfigError, load_config
 from deputy.tune import revert_tuned, save_model_profile, tuned_path, write_tuned
@@ -19,14 +28,22 @@ THINKING_HINT = (
     "is llama.cpp, cap the thinking with --reasoning-budget N (see docs/local-serving.md)."
 )
 THINKING_TOKENS_THRESHOLD = 800
+
+
+def _pass(r: Summary) -> str:
+    spread = f"\u00b1{r.pass_rate_stdev * 100:.0f}" if r.pass_rate_stdev else ""
+    return f"{r.pass_rate:.0%}{spread}"
+
+
 _COLUMNS: tuple[tuple[str, int, Callable[[Summary], str]], ...] = (
     ("variant", -14, lambda r: r.variant),
-    ("pass", 6, lambda r: f"{r.pass_rate:.0%}"),
+    ("pass", 9, _pass),
     ("cites", 7, lambda r: f"{r.citation_rate:.0%}"),
     ("turns", 7, lambda r: f"{r.mean_turns:.1f}"),
     ("tok out", 9, lambda r: f"{r.mean_tokens_out:.0f}"),
+    ("\u00b1tok", 6, lambda r: f"{r.stdev_tokens_out:.0f}"),
     ("sec", 8, lambda r: f"{r.mean_elapsed_s:.1f}"),
-    ("+-", 6, lambda r: f"{r.stdev_elapsed_s:.1f}"),
+    ("\u00b1sec", 6, lambda r: f"{r.stdev_elapsed_s:.1f}"),
     ("tok/s", 7, lambda r: f"{r.tokens_per_s:.1f}"),
     ("saved*", 8, lambda r: f"{r.mean_saved_tokens_est:.0f}"),
 )
@@ -64,10 +81,9 @@ def parse_variant(text: str) -> Variant:
 
 
 async def _measure(
-    config: Config, args: argparse.Namespace, variants: list[Variant]
+    config: Config, args: argparse.Namespace, variants: list[Variant], only: list[str] | None
 ) -> tuple[Backend, list[Summary]]:
     backend = config.backend(args.backend)
-    only = args.tasks.split(",") if args.tasks else None
     summaries: list[Summary] = []
     for variant in [Variant(name="baseline"), *variants]:
         print(f"== {variant.name}", file=sys.stderr, flush=True)
@@ -90,7 +106,8 @@ def bench(args: argparse.Namespace) -> int:
     try:
         raw: list[str] = args.variant or []
         extra = [parse_variant(v) for v in raw]
-        backend, summaries = asyncio.run(_measure(load_config(), args, extra))
+        only = args.tasks.split(",") if args.tasks else None
+        backend, summaries = asyncio.run(_measure(load_config(), args, extra, only))
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -115,14 +132,49 @@ def _settle(config: Config, backend: Backend, variant: Variant, *, apply_now: bo
     return f"to apply it: deputy tune --apply   (writes {tuned_path()})"
 
 
+async def _confirm(
+    config: Config, args: argparse.Namespace, winner: Variant, holdout: list[str]
+) -> list[Summary]:
+    """Baseline and winner on the held-out tasks, which the choice never saw."""
+    backend = config.backend(args.backend)
+    confirmed: list[Summary] = []
+    for variant in (Variant(name="baseline"), winner):
+        print(f"== held-out: {variant.name}", file=sys.stderr, flush=True)
+        confirmed.append(
+            await run_suite(
+                backend,
+                variant,
+                runs=args.runs,
+                only=holdout,
+                run_code=args.run_code,
+                use_lessons=args.lessons,
+                policy=config.policy,
+                on_result=_progress,
+            )
+        )
+    return confirmed
+
+
+def _tuning_tasks(args: argparse.Namespace) -> tuple[list[str], list[str]]:
+    """The tasks the choice is made on, and those that only confirm it (narrowed by --tasks)."""
+    wanted = args.tasks.split(",") if args.tasks else None
+    keep = [name for name in selection_names() if not wanted or name in wanted]
+    confirm = [name for name in holdout_names() if not wanted or name in wanted]
+    return keep, confirm
+
+
 def tune(args: argparse.Namespace) -> int:
     if args.revert:
         print(revert_tuned())
         return 0
     candidates = candidate_variants()
+    selection, holdout = _tuning_tasks(args)
+    if not selection:
+        print("error: no tuning task left after --tasks", file=sys.stderr)
+        return 1
     try:
         config = load_config()
-        backend, summaries = asyncio.run(_measure(config, args, candidates))
+        backend, summaries = asyncio.run(_measure(config, args, candidates, selection))
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -136,9 +188,20 @@ def tune(args: argparse.Namespace) -> int:
             print(THINKING_HINT)
         return 0
     winner = next(v for v in candidates if v.name == best.variant)
+    note = "not confirmed on held-out tasks (excluded by --tasks)"
+    if holdout:
+        held_baseline, held_winner = asyncio.run(_confirm(config, args, winner, holdout))
+        print("\nheld-out confirmation (tasks the choice never saw)")
+        print(format_table([held_baseline, held_winner]))
+        if not confirms(held_baseline, held_winner):
+            print(
+                f"\nrecommendation withdrawn: {winner.name} did not hold up on the held-out tasks."
+            )
+            return 0
+        note = "confirmed on held-out tasks"
     print(
         f"\nrecommendation: {winner.name} (same accuracy, "
-        f"{best.mean_elapsed_s}s vs {baseline.mean_elapsed_s}s)"
+        f"{best.mean_elapsed_s}s vs {baseline.mean_elapsed_s}s; {note})"
     )
     print(_settle(config, backend, winner, apply_now=args.apply))
     return 0

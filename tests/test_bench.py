@@ -10,13 +10,18 @@ from deputy import cli
 from deputy.agent import Metrics, Result
 from deputy.bench import (
     DECOY,
+    HOLDOUT,
     NEEDLE_LINE,
     Summary,
     Variant,
     apply_variant,
     build_project,
+    candidate_variants,
     choose_best,
+    confirms,
+    holdout_names,
     run_suite,
+    selection_names,
     summarise,
     tasks,
 )
@@ -251,3 +256,103 @@ def test_bench_json_prints_machine_readable_summaries(
     assert [s["variant"] for s in data["summaries"]] == ["baseline", "cool"]
     assert data["summaries"][0]["pass_rate"] == 1.0
     assert data["profile"].endswith(".json")
+
+
+def test_the_spread_of_every_metric_is_reported_across_repetitions() -> None:
+    results = [("a", result(out=100, elapsed=10)), ("a", result(out=300, elapsed=30))]
+    got = summarise("v", results, rep_pass_rates=[1.0, 0.5])
+    assert got.pass_rate_stdev == 0.25
+    assert got.stdev_tokens_out == 100.0
+    assert got.stdev_elapsed_s == 10.0
+    assert got.stdev_turns == 0.0
+    assert summarise("v", results).pass_rate_stdev == 0.0  # one repetition: no spread to speak of
+
+
+def test_repeating_the_suite_shows_the_pass_rate_varying_between_repetitions(fake_client) -> None:  # type: ignore[no-untyped-def]
+    replies = [message("short"), message("x" * 500), message("short")]  # pass, fail, pass
+    scripted = iter(replies)
+    got = asyncio.run(
+        run_suite(
+            Backend(name="b", base_url="http://x"),
+            Variant(name="v"),
+            runs=3,
+            only=["short-summary"],
+            client_factory=lambda backend: fake_client([next(scripted)]),
+        )
+    )
+    assert got.runs == 3
+    assert got.pass_rate == pytest.approx(2 / 3, abs=0.001)
+    assert got.pass_rate_stdev == pytest.approx(0.471, abs=0.001)  # per repetition: 1, 0, 1
+    assert "±47" in format_table([got])
+
+
+def test_the_held_out_tasks_are_fixed_apart_from_the_choice_and_never_run_code() -> None:
+    assert holdout_names()
+    assert selection_names()
+    assert set(holdout_names()) == set(HOLDOUT)
+    assert not set(selection_names()) & set(holdout_names())
+    assert "write-passing-test" not in selection_names() + holdout_names()
+
+
+def test_a_winner_holds_up_only_if_it_loses_no_accuracy_on_the_held_out_tasks() -> None:
+    base = summary("baseline")
+    assert confirms(base, summary("w"))
+    assert not confirms(base, summary("w", pass_rate=0.9))
+    assert not confirms(base, summary("w", citation_rate=0.5))
+
+
+def tune_with(
+    monkeypatch, calls: list[tuple[str, list[str] | None]], held_winner_pass: float = 1.0
+):  # type: ignore[no-untyped-def]
+    """A scripted suite: the 'thinking-off' candidate is faster on the choice tasks; on the
+    held-out tasks it scores `held_winner_pass`."""
+
+    async def fake_suite(backend, variant, **kw):  # type: ignore[no-untyped-def]
+        calls.append((variant.name, kw.get("only")))
+        if kw.get("only") == holdout_names() and variant.name == "thinking-off":
+            return summary(variant.name, pass_rate=held_winner_pass)
+        return summary(variant.name, mean_elapsed_s=40 if variant.name == "thinking-off" else 100)
+
+    monkeypatch.setattr("deputy.cli.tuning.run_suite", fake_suite)
+
+
+def test_tune_chooses_on_the_selection_tasks_and_confirms_on_the_held_out_ones(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
+    calls: list[tuple[str, list[str] | None]] = []
+    tune_with(monkeypatch, calls)
+    assert cli.main(["tune"]) == 0
+    out = capsys.readouterr().out
+    choosing = [c for c in calls if c[1] == selection_names()]
+    confirming = [c for c in calls if c[1] == holdout_names()]
+    assert choosing[0][0] == "baseline"
+    assert len(choosing) == 1 + len(candidate_variants())
+    assert [name for name, _ in confirming] == ["baseline", "thinking-off"]
+    assert "held-out confirmation" in out
+    assert "recommendation: thinking-off" in out
+    assert "confirmed on held-out tasks" in out
+
+
+def test_a_recommendation_that_fails_on_the_held_out_tasks_is_withdrawn(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
+    tune_with(monkeypatch, [], held_winner_pass=0.5)
+    assert cli.main(["tune", "--apply"]) == 0
+    out = capsys.readouterr().out
+    assert "recommendation withdrawn" in out
+    assert not tuned_path().exists()  # nothing applied
+
+
+def test_narrowing_with_tasks_keeps_the_held_out_ones_out_or_refuses(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://h:1", "--model", "m"])
+    tune_with(monkeypatch, [])
+    assert cli.main(["tune", "--tasks", "cited-extract,short-summary"]) == 0
+    assert "not confirmed on held-out tasks" in capsys.readouterr().out
+    assert (
+        cli.main(["tune", "--tasks", "needle-in-long-file"]) == 1
+    )  # only held-out left: nothing to choose on
+    assert "no tuning task left" in capsys.readouterr().err
