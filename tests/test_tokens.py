@@ -43,8 +43,12 @@ def run(fake_client, tmp_path: Path, script, **kw):  # type: ignore[no-untyped-d
     )  # fmt: skip
 
 
+def trace() -> list[dict]:
+    return [json.loads(x) for x in (state_dir() / "runs.jsonl").read_text().splitlines()]
+
+
 def last_run() -> dict:
-    return json.loads((state_dir() / "runs.jsonl").read_text().splitlines()[-1])
+    return [e for e in trace() if e["event"] == "run"][-1]
 
 
 def test_saving_is_what_the_worker_read_minus_what_the_orchestrator_paid(  # type: ignore[no-untyped-def]
@@ -124,3 +128,23 @@ def test_a_failed_run_records_a_loss_of_its_cost(fake_client, tmp_path: Path) ->
     assert result.status == "checks_failed"
     assert event["read_est"] > 5000  # it read a lot
     assert result.orchestrator_tokens_saved_est == event["saved_est"] == -event["cost_est"]
+
+
+def test_a_handed_back_run_records_a_rejection_by_itself(fake_client, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    result = run(fake_client, tmp_path, [message("no"), message("still no")])
+    assert result.status == "checks_failed"
+    verdict = trace()[-1]
+    assert verdict["event"] == "feedback"
+    assert verdict["run_id"] == result.run_id
+    assert verdict["verdict"] == "rejected"
+    assert verdict["source"] == "auto"
+    assert verdict["reason"].startswith("handed back, checks failed: contains")
+
+
+def test_a_passing_run_and_a_benchmark_run_get_no_automatic_verdict(
+    fake_client, tmp_path: Path
+) -> None:  # type: ignore[no-untyped-def]
+    run(fake_client, tmp_path, [message("alpha")])
+    assert trace()[-1]["event"] == "run"
+    run(fake_client, tmp_path, [message("no"), message("no")], source="bench")
+    assert trace()[-1]["event"] == "run"

@@ -24,6 +24,7 @@ How:
    stop delegating it. `small_input` means the files were short: read such files yourself.
 4. The worker's output is a draft: review it before it reaches the repository. For edits, work in a
    copy (`deputy workspace create NAME PATH...`).
-5. Call `feedback` with the `run_id`: `accepted` or `rejected`, and why.
+5. For every result you used, call `feedback` with the `run_id`: `accepted` or `rejected`, and
+   why. deputy learns only from these verdicts.
 
 The worker answers in English.
