@@ -110,9 +110,8 @@ data in the benchmark.
 ## The benchmark design
 
 The suite covers extraction, paging, writing, refusing, summarising, translating and writing a
-test. Repeats with a held-out split and a frontier baseline are planned
-([#6](https://github.com/tommasomarchionni/deputy/issues/6),
-[#8](https://github.com/tommasomarchionni/deputy/issues/8)). The design:
+test, with repetitions, a spread for every metric and a held-out split (below). A frontier baseline
+is planned ([#8](https://github.com/tommasomarchionni/deputy/issues/8)). The design:
 
 - Tasks from real work: cited extraction, required-facts coverage, code that must pass a test,
   translation with terms and numbers preserved, a file larger than the context, a task that must
@@ -122,3 +121,27 @@ test. Repeats with a held-out split and a frontier baseline are planned
 - A held-out set never used to tune, to avoid fitting the benchmark.
 - Metrics: `tokens_saved` for the orchestrator (the headline number), pass rate, citation accuracy, fact coverage, turns, tokens, wall-clock, escalations.
 - A frontier baseline on synthetic tasks only, never with private code, and only when allowed.
+
+## Reading the spread, and the held-out tasks
+
+A model is not deterministic, so one pass proves little. `deputy bench --runs N` repeats the suite N
+times and reports, for the pass rate, turns, output tokens and seconds, the mean and the spread
+(the population standard deviation: `±` on the pass rate is in percentage points, `±tok` and
+`±sec` are in tokens and seconds).
+
+```text
+variant          pass  cites  turns  tok out  ±tok     sec  ±sec  tok/s  saved*
+baseline      80%±10   100%    2.4      912     85    61.5    7.2   14.8    1530
+thinking-off  80%±10   100%    2.2      311     40    24.0    3.1   13.0    1530
+```
+
+How to read it: if two variants differ by less than their spread, the difference is noise, not
+signal. Here the pass rate is the same, but thinking-off produces a third of the tokens in 40% of the
+time and the gap (37 s) is far larger than the spread (7 s), so it is real. With `--runs 1` there is
+no pass-rate spread to show; use at least `--runs 3` before you trust a close call.
+
+**Held-out tasks.** `deputy tune` picks a setting on one set of tasks (the *selection*) and only
+then confirms it on tasks the choice never saw (`needle-in-long-file` and `translate-keep-terms`,
+fixed in the code). A setting that merely suits the tasks it was judged on fails the confirmation
+and the recommendation is withdrawn, so it is never applied. If you narrow the run with `--tasks`
+so that no held-out task is left, the recommendation says it was not confirmed.

@@ -170,7 +170,29 @@ class Summary(BaseModel):
     tokens_per_s: float
     mean_saved_tokens_est: float = 0.0
     served_model: str = ""
+    pass_rate_stdev: float = 0.0  # spread of the pass rate between repetitions of the suite
+    stdev_turns: float = 0.0
+    stdev_tokens_out: float = 0.0
     failures: dict[str, int] = {}
+
+
+# Tasks kept out of the choice: `deputy tune` picks a setting on the other tasks and then confirms
+# it on these, so a setting that merely suits the tasks it was judged on does not get through.
+HOLDOUT = frozenset({"needle-in-long-file", "translate-keep-terms"})
+
+
+def selection_names() -> list[str]:
+    """The tasks a tuning choice is made on (never the held-out ones, never those that run code)."""
+    return [t.name for t in tasks() if t.name not in HOLDOUT and not t.executes_code]
+
+
+def holdout_names() -> list[str]:
+    return [t.name for t in tasks() if t.name in HOLDOUT]
+
+
+def confirms(baseline: Summary, winner: Summary) -> bool:
+    """The winner holds up on the held-out tasks: it loses no accuracy against the baseline."""
+    return winner.pass_rate >= baseline.pass_rate and winner.citation_rate >= baseline.citation_rate
 
 
 def apply_variant(backend: Backend, variant: Variant) -> Backend:
@@ -182,8 +204,13 @@ def apply_variant(backend: Backend, variant: Variant) -> Backend:
     )
 
 
-def summarise(variant: str, results: list[tuple[str, Result]]) -> Summary:
-    """Aggregate runs. `results` is (task name, result) pairs."""
+def summarise(
+    variant: str,
+    results: list[tuple[str, Result]],
+    rep_pass_rates: list[float] | None = None,
+) -> Summary:
+    """Aggregate runs. `results` is (task name, result) pairs; `rep_pass_rates` is the pass rate of
+    each repetition of the suite, from which the spread of the pass rate is computed."""
     n = len(results)
     if n == 0:
         return Summary(
@@ -212,6 +239,9 @@ def summarise(variant: str, results: list[tuple[str, Result]]) -> Summary:
             statistics.fmean(r.orchestrator_tokens_saved_est for _, r in results), 1
         ),
         served_model=_most_common(r.metrics.model for _, r in results),
+        pass_rate_stdev=round(statistics.pstdev(rep_pass_rates), 3) if rep_pass_rates else 0.0,
+        stdev_turns=round(statistics.pstdev(r.metrics.turns for _, r in results), 2),
+        stdev_tokens_out=round(statistics.pstdev(out), 1),
         failures=failures,
     )
 
@@ -277,7 +307,9 @@ async def run_suite(  # noqa: PLR0913
         t for t in tasks() if (not only or t.name in only) and (run_code or not t.executes_code)
     ]
     results: list[tuple[str, Result]] = []
+    rep_pass_rates: list[float] = []
     for _ in range(runs):
+        first = len(results)
         for task in selected:
             with tempfile.TemporaryDirectory(prefix="deputy-bench-") as tmp:
                 root = Path(tmp)
@@ -301,4 +333,7 @@ async def run_suite(  # noqa: PLR0913
             results.append((task.name, result))
             if on_result:
                 on_result(task.name, result)
-    return summarise(variant.name, results)
+        done = results[first:]
+        if done:
+            rep_pass_rates.append(sum(r.status == "ok" for _, r in done) / len(done))
+    return summarise(variant.name, results, rep_pass_rates)
