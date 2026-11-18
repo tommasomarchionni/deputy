@@ -2,6 +2,7 @@
 import asyncio
 from pathlib import Path
 
+from deputy import agent
 from deputy.agent import run_task
 from deputy.checks import CitesLines, Contains
 from deputy.config import Policy
@@ -93,3 +94,31 @@ def test_the_worker_can_write_a_file_in_the_sandbox(fake_client, tmp_path: Path)
     result = go(fake_client([message(tool_calls=[call]), message("written")]), tmp_path)
     assert result.files_written == ["out.txt"]
     assert (tmp_path / "out.txt").read_text() == "hello"
+
+
+def test_a_long_failed_answer_is_returned_as_a_short_excerpt() -> None:
+    long = "x" * 2_000
+    out = agent.excerpt_of_failed(long)
+    assert len(out) < 400
+    assert out.endswith("failed its checks]")
+
+
+def test_a_short_failed_answer_is_returned_whole() -> None:
+    assert agent.excerpt_of_failed("no") == "no"
+
+
+def test_the_result_of_a_failed_run_carries_a_short_answer(fake_client, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    client = fake_client([message("a" * 2_000), message("b" * 2_000)])
+    result = go(client, tmp_path, [Contains(values=["needle"])])
+    assert result.status == "checks_failed"
+    assert len(result.answer) < 400
+    assert not result.checks[0].passed
+
+
+def test_the_result_of_a_passing_run_keeps_its_whole_long_answer(
+    fake_client, tmp_path: Path
+) -> None:  # type: ignore[no-untyped-def]
+    long = "needle " + "a" * 2_000
+    result = go(fake_client([message(long)]), tmp_path, [Contains(values=["needle"])])
+    assert result.status == "ok"
+    assert result.answer == long

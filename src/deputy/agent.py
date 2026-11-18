@@ -133,6 +133,16 @@ def _execute(sandbox: Sandbox, name: str, raw_args: str) -> str:  # noqa: PLR091
     return f"ERROR: unknown tool '{name}'; use read_file, write_file, grep or scan_file"
 
 
+FAILED_ANSWER_CHARS = 300  # a failed answer is cut here: the orchestrator will redo the task
+
+
+def excerpt_of_failed(answer: str) -> str:
+    """A short start of an answer that failed its checks, with a note saying so."""
+    if len(answer) <= FAILED_ANSWER_CHARS:
+        return answer
+    return answer[:FAILED_ANSWER_CHARS] + "\n[...cut: this answer failed its checks]"
+
+
 def task_class(profile: str, checks: list[Check]) -> str:
     """Group runs that ask for the same kind of work: the profile and the kinds of checks."""
     kinds = sorted({check.type for check in checks})
@@ -271,7 +281,9 @@ class AgentRun:
         result = Result(
             run_id=run_id,
             status=self._status,
-            answer=self._answer,
+            answer=excerpt_of_failed(self._answer)
+            if self._status == "checks_failed"
+            else self._answer,
             files_written=list(self._sandbox.files_written),
             checks=self._check_results,
             flags=self._flags,
