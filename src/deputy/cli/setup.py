@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
-from deputy import updates
+from deputy import confinement, updates
 from deputy.backends import ChatClient
 from deputy.cli._common import Subparsers
-from deputy.config import ConfigError, config_path, load_config, state_dir
+from deputy.config import ConfigError, Policy, config_path, load_config, state_dir
 from deputy.profiles import load_profiles
 from deputy.version import current_version
 
@@ -27,13 +28,27 @@ kind = "local"
 {key_line}
 # [policy]
 # allowed_commands = [["node", "--test"], ["python", "-m", "pytest"]]
-"""
+{wrapper_block}"""
 
 
 def _ask(prompt: str, default: str, interactive: bool) -> str:
     if not interactive:
         return default
     return input(f"{prompt} [{default}]: ").strip() or default
+
+
+def _wrapper_block(*, confine: bool) -> str:
+    """The `command_wrapper` lines for the config: active with --confine, a comment otherwise."""
+    wrapper = confinement.suggested_wrapper()
+    if wrapper is None:
+        return "# command_wrapper: no sandbox tool found (macOS: sandbox-exec, Linux: bwrap)\n"
+    if sys.platform == "darwin":
+        confinement.write_profile()
+    line = f"command_wrapper = {json.dumps(wrapper)}"
+    if confine:
+        return f"[policy]\n{line}\n"
+    note = "# To confine `command` checks (writes only in the work folder, no network), add:"
+    return f"{note}\n# [policy]\n# {line}\n"
 
 
 def init(args: argparse.Namespace) -> int:
@@ -46,9 +61,12 @@ def init(args: argparse.Namespace) -> int:
     model = args.model or _ask("Model name", "default", interactive)
     key_file = args.key_file or _ask("API key file (blank for none)", "", interactive)
     key_line = f'api_key_file = "{key_file}"' if key_file else ""
+    wrapper_block = _wrapper_block(confine=args.confine)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        CONFIG_TEMPLATE.format(name=args.name, url=url, model=model, key_line=key_line),
+        CONFIG_TEMPLATE.format(
+            name=args.name, url=url, model=model, key_line=key_line, wrapper_block=wrapper_block
+        ),
         encoding="utf-8",
     )
     target.chmod(0o600)
@@ -94,6 +112,22 @@ def _print_update_notice() -> None:
         print(f"update: {info.latest} is available (you have {info.current}); run: deputy update")
 
 
+def _confinement_line(policy: Policy) -> tuple[str, bool]:
+    """Whether `command` checks are confined, said plainly, and whether that is a failure."""
+    if policy.command_wrapper:
+        program = policy.command_wrapper[0]
+        if confinement.wrapper_tool(policy.command_wrapper) is None:
+            return f"commands: FAIL - the wrapper program '{program}' was not found", True
+        return f"commands: confined by {program}", False
+    if not policy.allowed_commands:
+        return "commands: no `command` check is allowed (policy.allowed_commands is empty)", False
+    return (
+        "commands: NOT confined - a `command` check runs worker-written code with your rights; "
+        "see `deputy init --confine`",
+        False,
+    )
+
+
 def doctor(_: argparse.Namespace) -> int:
     print(f"deputy {current_version()}  python {sys.version.split()[0]}")
     try:
@@ -105,6 +139,9 @@ def doctor(_: argparse.Namespace) -> int:
     failed = asyncio.run(_check_backends())
     print(f"profiles: {', '.join(load_profiles(Path.cwd()))}")
     failed += _check_state()
+    line, broken = _confinement_line(load_config().policy)
+    print(line)
+    failed += broken
     _print_update_notice()
     return 1 if failed else 0
 
@@ -116,6 +153,9 @@ def register(sub: Subparsers) -> None:
     init_parser.add_argument("--model")
     init_parser.add_argument("--key-file")
     init_parser.add_argument("--force", action="store_true")
+    init_parser.add_argument(
+        "--confine", action="store_true", help="run `command` checks inside an OS sandbox"
+    )
     init_parser.add_argument("--yes", action="store_true", help="never ask; use flags and defaults")
     init_parser.set_defaults(func=init)
 

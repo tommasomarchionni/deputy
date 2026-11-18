@@ -148,6 +148,14 @@ class FileContains(BaseModel):
         return _result(name, f"missing: {missing}" if missing else "")
 
 
+def _confined(argv: list[str], ctx: CheckContext) -> list[str]:
+    """The command, behind the policy's wrapper (if any), with {workdir} filled in."""
+    prefix = [
+        part.replace("{workdir}", str(ctx.sandbox.root)) for part in ctx.policy.command_wrapper
+    ]
+    return [*prefix, *argv]
+
+
 class Command(BaseModel):
     """An allow-listed argv exits 0 in the workdir."""
 
@@ -162,7 +170,7 @@ class Command(BaseModel):
         process: asyncio.subprocess.Process | None = None
         try:
             process = await asyncio.create_subprocess_exec(
-                *self.argv,
+                *_confined(self.argv, ctx),
                 cwd=ctx.sandbox.root,
                 env=env,
                 stdout=asyncio.subprocess.PIPE,

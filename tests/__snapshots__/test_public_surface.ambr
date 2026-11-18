@@ -30,7 +30,7 @@
 # name: test_each_command_help_is_stable[init]
   '''
   usage: deputy init [-h] [--name NAME] [--url URL] [--model MODEL]
-                     [--key-file KEY_FILE] [--force] [--yes]
+                     [--key-file KEY_FILE] [--force] [--confine] [--yes]
   
   options:
     -h, --help           show this help message and exit
@@ -39,6 +39,7 @@
     --model MODEL
     --key-file KEY_FILE
     --force
+    --confine            run `command` checks inside an OS sandbox
     --yes                never ask; use flags and defaults
   
   '''
