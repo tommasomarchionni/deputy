@@ -13,7 +13,8 @@ memory works; background tasks work; routing works. Expect breaking changes.
 ## Highlights
 
 - **Fewer tokens for the frontier model.** Five tiny tool schemas (about 1,200 tokens), results
-  by reference, checks instead of re-reading, and an estimate of the tokens saved on every run.
+  by reference, checks instead of re-reading, and an estimate of the tokens saved on every run. Measured on a real repository: about 5,500
+  tokens saved per read-heavy task, and none for tiny ones ([evidence](docs/evidence.md)).
 - **Quality you can verify.** The worker has no shell and a confined sandbox; every claim is checked
   by code (cited lines, required facts, forbidden leaks, files written, allow-listed commands).
 - **Measured, then tuned.** `deputy bench` measures your model and `deputy tune` recommends or, if you
