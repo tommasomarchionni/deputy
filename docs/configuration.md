@@ -44,11 +44,27 @@ Several backends can be listed; pick one per call with the `backend` argument.
 
 ## Profiles
 
-A profile is a markdown file with a short front matter and the instructions the worker follows.
-Bundled: `helper`. Add your own in `~/.config/deputy/profiles/` (yours) or `.deputy/profiles/`
-(per project; the project wins). See
-[`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md)
-for a template.
+A **profile** is the worker's standing instructions: a Markdown file whose front matter names it and
+whose body becomes the worker's system prompt. The orchestrator picks one with the `profile`
+argument of `delegate` (default `helper`); the `profiles` tool lists the ones available.
+
+- **Where they live, and which wins.** deputy ships one profile, `helper`, inside the package. You
+  can add your own in `~/.config/deputy/profiles/` (yours, every project) or in `.deputy/profiles/`
+  inside the folder you delegate in (that project). For the same name the project's wins over yours,
+  and yours over the bundled one.
+- **Who creates them.** Nobody, automatically: there is no command that writes a new profile. You
+  copy the template
+  [`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md)
+  and fill it in. The one exception is `deputy optimise --apply`, which installs an improved copy of
+  a profile as yours (and keeps the previous one for `--revert`).
+- **What else reaches the worker.** On top of the profile, deputy adds the lessons learned from use
+  (`deputy learn`) and the project memory (`deputy memory`), which points to your repository's own
+  rule files instead of copying them.
+- **Copies fall behind.** A copy of `helper` (yours, a project's, or one installed by `deputy
+  optimise --apply`) replaces the bundled one, so deputy's later improvements to `helper` (its tool
+  list, its rules) do not reach you. `deputy doctor` says when that happens. Prefer `helper` plus
+  project memory, and write your own profile only for a kind of work `helper` does not cover; keep it
+  short and in step with the template.
 
 The front matter can set the profile's limits:
 

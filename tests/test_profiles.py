@@ -5,7 +5,7 @@ import pytest
 
 from deputy.agent import TOOLS
 from deputy.config import config_dir
-from deputy.profiles import load_profiles, parse_profile
+from deputy.profiles import load_profiles, overrides, parse_profile
 
 
 def test_front_matter_is_parsed() -> None:
@@ -65,3 +65,23 @@ def test_the_bundled_profile_names_every_worker_tool() -> None:
     text = load_profiles()["helper"].body
     for tool in TOOLS:
         assert f"`{tool['function']['name']}`" in text
+
+
+def test_the_template_profile_names_every_worker_tool() -> None:
+    text = (Path(__file__).parents[1] / "examples" / "project-dev.md").read_text()
+    for tool in TOOLS:
+        assert f"`{tool['function']['name']}`" in text
+
+
+def test_a_copy_that_replaces_a_bundled_profile_is_reported(tmp_path: Path) -> None:
+    user = config_dir() / "profiles"
+    user.mkdir(parents=True, exist_ok=True)
+    (user / "helper.md").write_text("---\nname: helper\ndescription: an old copy\n---\nold body\n")
+    (user / "mine.md").write_text("---\nname: mine\ndescription: my own\n---\nbody\n")
+    warnings = overrides(load_profiles())
+    assert len(warnings) == 1
+    assert warnings[0].startswith("profile helper: your user copy replaces the bundled one")
+
+
+def test_no_warning_without_copies() -> None:
+    assert overrides(load_profiles()) == []

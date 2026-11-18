@@ -82,3 +82,20 @@ def load_profiles(project_dir: Path | None = None) -> dict[str, Profile]:
     if project_dir is not None:
         found.update(_from_dir(project_dir / ".deputy" / "profiles", "project"))
     return found
+
+
+def bundled_names() -> set[str]:
+    folder = resources.files("deputy") / "profiles"
+    return {entry.name[:-3] for entry in folder.iterdir() if entry.name.endswith(".md")}
+
+
+def overrides(profiles: dict[str, Profile]) -> list[str]:
+    """A warning for each bundled profile that a user or project copy replaces. Such a copy does
+    not get deputy's later improvements to that profile (tools, rules), so say so."""
+    return [
+        f"profile {name}: your {profiles[name].source} copy replaces the bundled one, so deputy's "
+        f"later improvements to it do not reach you; delete the copy (or `deputy optimise "
+        f"--revert ID`) to use the current one"
+        for name in sorted(bundled_names())
+        if name in profiles and profiles[name].source != "bundled"
+    ]
