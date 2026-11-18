@@ -17,8 +17,7 @@ evidence** (a failing case, a measurement) and **review of the design** in `docs
   p1, p2, p3, lowest number first. Moving an issue or changing its priority needs a comment with
   the reason.
 - **Project.** The [Roadmap board](https://github.com/users/tommasomarchionni/projects/3) groups the
-  issues. A workflow adds new ones when the `PROJECT_TOKEN` secret exists; otherwise add them by
-  hand.
+  issues; the project's own "auto-add" workflow puts new issues on it.
 - **Pull requests.** One issue, one pull request; branch `<type>/<N>-<slug>`; the title is a
   Conventional Commit with the area as scope (`fix(checks): ...`) and the body says `Closes #N`
   (or `Refs #N` if partial). `feat`, `fix` and `perf` must change the product (`src/deputy/` or
@@ -71,8 +70,7 @@ behaviour, polymorphism instead of long `if` chains, no comments that restate th
 Releases are tags, and the version lives in `pyproject.toml`.
 
 1. Open a pull request "chore: release vX.Y.Z" that runs `uv version X.Y.Z` (this also updates
-   `uv.lock`) and moves the `[Unreleased]` entries of `CHANGELOG.md` under the new version; merge
-   it once CI is green.
+   `uv.lock`); merge it once CI is green.
 2. Tag the merge commit and push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. The `Release` workflow checks that the tag matches the version, runs the tests, builds the wheel
    and the sdist, attests their provenance, and publishes a GitHub release with generated notes.
