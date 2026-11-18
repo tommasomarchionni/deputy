@@ -209,7 +209,7 @@ The yardstick is the size in UTF-8 bytes divided by four, rounded up. It is the 
 for English prose, and it is wrong by up to about a quarter either way: code and JSON are denser than
 this says, other languages vary. Because both sides use it, the difference is meaningful as an order
 of magnitude and a trend, not as an invoice. Not counted: the tool schemas the orchestrator carries
-for the session (about 970 tokens for all five tools, a fixed cost with or without delegation), and
+for the session (about 970 tokens for the whole tool list, a fixed cost with or without delegation), and
 its own reasoning.
 
 ## The measured model profile

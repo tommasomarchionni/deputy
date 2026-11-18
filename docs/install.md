@@ -85,7 +85,8 @@ deputy instructions --for agents --apply        # AGENTS.md (Codex, Copilot and 
 | `cursor` | `.cursor/rules/deputy.mdc` | owned; attached when relevant |
 | `agents` | `AGENTS.md` | a marked block |
 
-Without `--apply` the command only prints what it would write. Files deputy owns are rewritten each
+Without `--apply` the command only prints what it would write; `--write FILE` inserts the guide as
+a marked block in any file you name. Files deputy owns are rewritten each
 time; in shared files only the block between the `deputy:start` and `deputy:end` markers is touched,
 so your own text is safe. Prefer `claude` over `claude-md`: a skill is loaded on demand, a
 `CLAUDE.md` block on every turn.

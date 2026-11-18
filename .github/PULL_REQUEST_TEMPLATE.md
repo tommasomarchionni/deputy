@@ -11,3 +11,6 @@
 - [ ] Docs updated if behaviour or design changed
 - [ ] No secrets, private code or personal data
 - [ ] Sandbox, allow-list and secret handling not weakened
+
+<!-- feat or fix: a test in the diff, or this line with a reason of 20 characters or more: -->
+Regression: none - <reason>

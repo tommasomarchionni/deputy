@@ -39,7 +39,8 @@ is flagged `small_input`.
 
 ## The worker profile
 
-The 10 fast tasks of the built-in suite, 3 runs each (30 runs per profile), on the local worker:
+The 10 fast tasks the built-in suite had at the time, 3 runs each (30 runs per profile), on the local
+worker:
 
 | Profile | Passed | Citations correct | Mean time | Output tokens |
 | --- | ---: | ---: | ---: | ---: |
@@ -50,8 +51,9 @@ The 10 fast tasks of the built-in suite, 3 runs each (30 runs per profile), on t
 Telling a small model which tools it has makes it faster at equal quality. Adding rules made this
 27B model worse, so the profile stays short; those ideas went into the orchestrator's guide instead.
 
-The whole suite today (12 fast tasks, including CI-log triage and a code outline, 3 runs each, 33
-runs with the code tasks): 100 % passed, 100 % of citations correct, 34.6 s per task on average.
+The whole suite today (11 fast tasks with the code task, including CI-log triage, 3 runs each, 33
+runs): 100 % passed, 100 % of citations correct, 34.6 s per task on average. The code-outline task,
+added after that run, passed 3 of 3 on its own.
 
 The frontier references, one pass each by hand: Claude Opus 5.5 passed all 12 fast tasks, Claude
 Sonnet 5.5 the first 8 of 8. On the two newest tasks Opus needed only about 120 to 150 tokens,

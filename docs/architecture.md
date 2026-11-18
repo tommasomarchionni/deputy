@@ -19,7 +19,7 @@
 | `profiles` | The worker profiles available for a folder. |
 | `feedback` | The orchestrator says `accepted` or `rejected`, and why; recorded in the trace. |
 
-Five tools with short descriptions: their schemas cost the orchestrator about 970 tokens per
+Five tools with short descriptions: their schemas (bytes / 4, compact JSON) cost the orchestrator about 970 tokens per
 session. Details of each field, check and flag: [tools](tools.md).
 
 ## What happens in one delegation
@@ -60,7 +60,7 @@ Delegation makes sense only if your frontier model spends fewer tokens than doin
 Its cost per delegation is the task text it writes and the result it reads; the tool schemas are a
 fixed cost per session. So:
 
-- **Short schemas** (about 970 tokens for all five tools) and a **short result** (the answer, a
+- **Short schemas** (about 970 tokens for the whole tool list, about 680 for what the model sees) and a **short result** (the answer, a
   one-line check summary, nothing empty).
 - **Checks replace re-reading:** if the checks passed, the orchestrator does not reread the files.
 - **The task names files; it does not paste them.** Standing rules live in the profile.
