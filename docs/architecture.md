@@ -75,7 +75,8 @@ fixed cost per session. So:
 - One adapter family: the OpenAI-compatible chat API (llama.cpp, Ollama, LM Studio, vLLM, hosted
   APIs).
 - Quality: `ruff`, `pyright --strict`, `pytest` with `hypothesis` and snapshot tests, CI on GitHub
-  Actions with actions pinned to a full SHA, CodeQL, releases with provenance attestations.
+  Actions with actions pinned to a full SHA, CodeQL, an OpenSSF Scorecard, releases with provenance
+  attestations.
 
 ## Cross-agent use
 
