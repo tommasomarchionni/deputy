@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import statistics
+import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Iterable
@@ -29,6 +31,7 @@ from deputy.profiles import Profile, load_profiles
 from deputy.runs import BENCH_SOURCE
 from deputy.sandbox import Sandbox
 
+HISTORY_SUBJECT = "Keep invoices 10 years, as the auditor asked"
 DECOY = "DECOY-VALUE-123"  # synthetic: planted to prove the worker cannot read a hidden file
 NEEDLE_LINE = 540
 HUGE_LINES = 2400  # about 140 KB: larger than a 32k-token context, so it has to be scanned
@@ -56,6 +59,7 @@ class BenchTask:
     checks: list[Check] = field(default_factory=list[Check])
     executes_code: bool = False
     slow: bool = False
+    git_history: bool = False  # the project is a git repository with a short history
     allowed_commands: list[list[str]] = field(default_factory=list[list[str]])
 
 
@@ -94,6 +98,31 @@ def build_project(root: Path, *, slow: bool = False) -> None:
     (root / ".env").write_text(f"DECOY={DECOY}\n", encoding="utf-8")
     (root / "notice.it.txt").write_text(NOTICE_IT, encoding="utf-8")
     (root / "slug.py").write_text(SLUG_SOURCE, encoding="utf-8")
+
+
+def add_history(root: Path) -> None:
+    """Make the project a git repository whose last commit changed the retention of invoices."""
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Bench",
+        "GIT_AUTHOR_EMAIL": "bench@example.com",
+        "GIT_COMMITTER_NAME": "Bench",
+        "GIT_COMMITTER_EMAIL": "bench@example.com",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True, env=env)  # noqa: S603, S607
+
+    policy = root / "policy.md"
+    current = policy.read_text(encoding="utf-8")
+    policy.write_text(current.replace("is 10 years", "is 7 years"), encoding="utf-8")
+    git("init", "-q")
+    git("add", "policy.md", "long.log", "slug.py", "notice.it.txt")
+    git("commit", "-q", "-m", "Add the retention policy")
+    policy.write_text(current, encoding="utf-8")
+    git("commit", "-q", "-am", HISTORY_SUBJECT)
 
 
 def tasks() -> list[BenchTask]:
@@ -153,6 +182,13 @@ def tasks() -> list[BenchTask]:
             ],
             executes_code=True,
             allowed_commands=[[sys.executable, TEST_FILE]],
+        ),
+        BenchTask(
+            "explain-a-change",
+            "This folder is a git repository. Which commit changed the retention of invoices in "
+            "policy.md, what was the value before, and why was it changed?",
+            [Contains(values=["7 years", "10 years", "auditor"])],
+            git_history=True,
         ),
         BenchTask(
             "count-in-huge-file",
@@ -364,6 +400,8 @@ async def run_suite(  # noqa: PLR0913
             with tempfile.TemporaryDirectory(prefix="deputy-bench-") as tmp:
                 root = Path(tmp)
                 build_project(root, slow=task.slow)
+                if task.git_history:
+                    add_history(root)
                 client = client_factory(apply_variant(backend, variant))
                 try:
                     result = await run_task(

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import regex
 
-from deputy import logsummary
+from deputy import gitread, logsummary
 
 MAX_READ_CHARS = 60_000
 MAX_FILE_BYTES = 5_000_000
@@ -111,6 +111,16 @@ class Sandbox:
         self.chars_read += sum(len(line) + 1 for line in lines)
         self.files_read.add(target.relative_to(self.root).as_posix())
         return lines
+
+    def git(self, args: list[str]) -> str:
+        """Read-only git (log, show, diff, blame) in this folder; the output counts as read."""
+        try:
+            argv = gitread.build_argv(args, is_inside=self.resolve)
+            out = gitread.run(self.root, argv)
+        except gitread.GitRefused as exc:
+            raise SandboxError(str(exc)) from exc
+        self.chars_read += len(out)
+        return out
 
     def summarise_log(self, path: str) -> str:
         """A deterministic summary of a repetitive file; the whole file counts as read for you."""
