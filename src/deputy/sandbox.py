@@ -181,18 +181,20 @@ class Sandbox:
                 lines = _read_text(file).splitlines()
             except SandboxError:
                 continue
-            counted = False
             for number, line in enumerate(lines, start=1):
                 if time.monotonic() > deadline:
-                    return "\n".join([*hits, "[search stopped: its time budget was used up]"])
+                    return self._seen([*hits, "[search stopped: its time budget was used up]"])
                 if _matches(compiled, line):
-                    if not counted:  # the orchestrator would have had to read this file
-                        self.chars_read += sum(len(row) + 1 for row in lines)
-                        counted = True
                     hits.append(f"{rel}:{number}: {line[:200]}")
                     if len(hits) >= MAX_GREP_HITS:
-                        return "\n".join([*hits, f"[stopped at {MAX_GREP_HITS} hits]"])
-        return "\n".join(hits) if hits else "no matches"
+                        return self._seen([*hits, f"[stopped at {MAX_GREP_HITS} hits]"])
+        return self._seen(hits or ["no matches"])
+
+    def _seen(self, rows: list[str]) -> str:
+        """What a search shows: the orchestrator doing it itself would read these rows, no more."""
+        out = "\n".join(rows)
+        self.chars_read += len(out) + 1
+        return out
 
 
 def _open_regular(

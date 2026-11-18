@@ -111,13 +111,14 @@ def test_a_very_long_read_is_cut_and_says_where_to_continue(tmp_path: Path) -> N
     assert "read more with offset=" in out
 
 
-def test_a_grep_hit_counts_the_whole_file_as_seen_by_the_worker(tmp_path: Path) -> None:
+def test_a_grep_hit_counts_only_the_hit_lines_not_the_whole_file(tmp_path: Path) -> None:
     box = make(tmp_path)
-    (box.root / "big.log").write_text("\n".join(["noise"] * 999 + ["needle"]))
+    (box.root / "big.log").write_text("\n".join(["noise"] * 99_999 + ["needle"]))
     (box.root / "other.log").write_text("nothing here\n" * 50)
     assert box.chars_read == 0
-    box.grep("needle")
-    assert box.chars_read >= 999 * 6
+    out = box.grep("needle")
+    assert box.chars_read == len(out) + 1
+    assert box.chars_read < 100
 
 
 def test_grep_never_reads_through_a_symlink_that_points_outside(tmp_path: Path) -> None:
