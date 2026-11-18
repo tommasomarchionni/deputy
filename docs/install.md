@@ -81,14 +81,15 @@ time; in shared files only the block between the `deputy:start` and `deputy:end`
 so your own text is safe. Prefer `claude` over `claude-md`: a skill is loaded on demand, a
 `CLAUDE.md` block on every turn.
 
-The guide is short on purpose (about 300 tokens). It says what to delegate and what not, how to write
+The guide is short on purpose (about 400 tokens). It says what to delegate and what not, how to write
 `checks`, what to trust (`status: ok`) and what to do yourself, to review worker output, and to send
 `feedback`.
 
 ## 5. Try it
 
 Ask your agent: *"Use deputy to summarise README.md in five bullets, citing lines."* The result
-carries `status`, a one-line summary of the checks that ran, and the answer; metrics and the saving estimate are in the trace (`deputy stats`).
+carries `status`, the answer and a one-line summary of the checks that ran; metrics and the saving
+estimate are in the trace (`deputy stats`).
 
 ## Troubleshooting
 
