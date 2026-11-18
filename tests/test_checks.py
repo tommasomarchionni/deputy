@@ -10,6 +10,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from deputy.checks import (
+    CheckContext,
     CheckSpec,
     CitesLines,
     CitesText,
@@ -20,6 +21,7 @@ from deputy.checks import (
     FileWritten,
     JsonSchema,
     MaxChars,
+    appears,
     cited_numbers,
     quoted_citations,
     run_checks,
@@ -310,3 +312,33 @@ def test_a_list_of_integers_validates_and_one_stray_string_never_does(numbers, p
         assert json_schema(json.dumps(numbers), box, schema).passed
         spoiled = [*numbers[:position], "stray", *numbers[position:]]
         assert not json_schema(json.dumps(spoiled), box, schema).passed
+
+
+@pytest.mark.parametrize(
+    ("value", "answer", "found"),
+    [
+        ("12", "There are 11 files; the largest is 12,599 bytes.", False),  # the real false pass
+        ("12", "There are 12 files.", True),
+        ("12", "112 files", False),
+        ("12", "version 1.12", False),
+        ("log", "it logs everything", False),
+        ("log", "run git log -n 5", True),
+        ("30 days", "kept for 30 days.", True),
+        ("#100", "(#100)", True),
+        ("docs/x.md", "see docs/x.md:3", True),
+        ("Apache", "APACHE License", True),
+        ("22.22.3", "pins 22.22.3 (line 1)", True),
+        ("7", "17 years", False),
+    ],
+)
+def test_contains_matches_a_value_only_as_a_whole(value: str, answer: str, found: bool) -> None:
+    assert appears(value, answer) is found
+
+
+def test_excludes_still_catches_a_secret_inside_a_longer_word() -> None:
+    result = asyncio.run(
+        Excludes(values=["SECRET"]).evaluate(
+            CheckContext(answer="TOPSECRETVALUE", sandbox=None, policy=None)  # type: ignore[arg-type]
+        )
+    )
+    assert not result.passed
