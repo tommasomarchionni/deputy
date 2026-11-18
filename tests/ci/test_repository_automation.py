@@ -177,11 +177,15 @@ def test_every_issue_form_sets_a_type_label_and_asks_for_area_and_priority() -> 
     assert {f.name for f in forms} == {"bug_report.yml", "feature_request.yml", "task.yml"}
     for form in forms:
         text = form.read_text()
-        labels = re.findall(r'"([^"]+)"', re.search(r"^labels: \[(.*)\]$", text, re.M).group(1))
+        found = re.search(r"^labels: \[(.*)\]$", text, re.M)
+        assert found, form.name
+        labels = re.findall(r'"([^"]+)"', found.group(1))
         assert labels, form.name
         assert all(label in known for label in labels), form.name
         assert any(label.startswith("type: ") for label in labels), form.name
         for field, prefix in (("area", "area: "), ("priority", "priority: ")):
             block = text.split(f"id: {field}\n", 1)[1]
-            options = re.search(r"options: \[(.*)\]", block).group(1).split(", ")
+            listed = re.search(r"options: \[(.*)\]", block)
+            assert listed, (form.name, field)
+            options = listed.group(1).split(", ")
             assert all(f"{prefix}{option}" in known for option in options), (form.name, field)
