@@ -222,14 +222,41 @@ def _matching(name: str, paths: list[str]) -> list[str]:
     return exact or [p for p in paths if p.endswith(f"/{name}")]
 
 
+_TRAILING_QUOTE = re.compile(r'^[\s,:)\-\u2013]*"(?P<words>.+)"\s*\)?[.,;]?\s*$')
+_MIN_QUOTE_CHARS = 8
+
+
 def _quote_near(answer: str, start: int, end: int) -> str | None:
-    """The quoted words right after a citation, or right before it."""
-    following = _QUOTE.match(answer[end : end + 240].lstrip(" ,:)-\u2013"))
-    if following is None:
-        before = answer[max(0, start - 240) : start].rstrip(" ,:(-\u2013")
-        preceding = [q for q in _QUOTE.finditer(before) if q.end() == len(before)]
-        following = preceding[-1] if preceding else None
-    return next(g for g in following.groups() if g) if following else None
+    """The quoted words after a citation (they may hold quotes themselves), or right before it."""
+    rest = answer[end:].split("\n", 1)[0]
+    closing = _TRAILING_QUOTE.match(rest)
+    if closing:
+        return closing["words"] if len(closing["words"]) >= _MIN_QUOTE_CHARS else None
+    before = answer[max(0, start - 240) : start].rstrip(" ,:(-\u2013")
+    preceding = [q for q in _QUOTE.finditer(before) if q.end() == len(before)]
+    return next(g for g in preceding[-1].groups() if g) if preceding else None
+
+
+def _loose(text: str) -> str:
+    """Compare quotes as a reader would, and forgive the backslashes of an escaped quote."""
+    return _normal(text.replace("\\", ""))
+
+
+def _quote_is_on(quote: str, text: list[str], first: int, last: int) -> bool:
+    """The words are on the cited lines; they may run on to the line before or after (wrapped
+    text), but words found only on a neighbouring line do not count."""
+    before = _loose(text[first - 2]) if first > 1 else ""
+    cited = _loose(" ".join(text[first - 1 : last]))
+    after = _loose(text[last]) if last < len(text) else ""
+    whole = f"{before} {cited} {after}"
+    words = _loose(quote)
+    start = len(before) + 1
+    found = whole.find(words)
+    while found >= 0:
+        if found < start + len(cited) and found + len(words) > start:
+            return True
+        found = whole.find(words, found + 1)
+    return False
 
 
 class CitesFiles(BaseModel):
@@ -252,7 +279,7 @@ class CitesFiles(BaseModel):
         quote = _quote_near(answer, match.start(), match.end())
         if quote is None:
             return f'{cited}:{first} has no quoted words (expected: {cited}:{first} "exact words")'
-        if _normal(quote) not in _normal(" ".join(text[first - 1 : last])):
+        if not _quote_is_on(quote, text, first, last):
             return f"{cited}:{first} does not contain {quote[:40]!r}"
         return ""
 
