@@ -22,6 +22,10 @@
   config, the traces or the model prompt.
 - **Hosted backends send your files to that provider.** Mark them `kind = "hosted"` and use them
   only for data you may share.
+- **The read hint** (Claude Code, on by default) is a hook in `~/.claude/settings.json` that runs
+  `deputy-hook` before each read: it only looks at the size of the file Claude Code is about to read,
+  never its content, never blocks the read, and adds at most one line to the model's context.
+  `deputy hook off` removes it; other hooks and settings are kept.
 - **Traces** (`runs.jsonl`) hold run metadata and check results, not file contents or answers.
 
 ## Review of the sandbox (2026-11-18)
