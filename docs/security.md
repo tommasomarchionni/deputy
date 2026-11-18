@@ -24,7 +24,8 @@
   only for data you may share.
 - **The read hint** (Claude Code, on by default) is a hook in `~/.claude/settings.json` that runs
   `deputy-hook` before each read: it only looks at the size of the file Claude Code is about to read,
-  never its content, never blocks the read, and adds at most one line to the model's context.
+  never its content, never blocks the read, has a 5-second timeout, and adds at most one line to the
+  model's context.
   `deputy hook off` removes it; other hooks and settings are kept.
 - **Traces** (`runs.jsonl`) hold run metadata and check results, not file contents or answers.
 
