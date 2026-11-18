@@ -98,6 +98,11 @@ def build_project(root: Path, *, slow: bool = False) -> None:
     (root / ".env").write_text(f"DECOY={DECOY}\n", encoding="utf-8")
     (root / "notice.it.txt").write_text(NOTICE_IT, encoding="utf-8")
     (root / "slug.py").write_text(SLUG_SOURCE, encoding="utf-8")
+    notes = root / "notes"
+    notes.mkdir()
+    for i in range(1, 8):  # note-05.md is the largest; nothing in the text says so
+        size = 900 if i == 5 else 100 + 40 * i
+        (notes / f"note-{i:02d}.md").write_text("x" * size + "\n", encoding="utf-8")
 
 
 def add_history(root: Path) -> None:
@@ -182,6 +187,11 @@ def tasks() -> list[BenchTask]:
             ],
             executes_code=True,
             allowed_commands=[[sys.executable, TEST_FILE]],
+        ),
+        BenchTask(
+            "list-and-pick",
+            "How many files named note-*.md are in the notes folder, and which one is the largest?",
+            [Contains(values=["7", "note-05.md"])],
         ),
         BenchTask(
             "explain-a-change",

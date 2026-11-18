@@ -57,7 +57,7 @@ The result is short: `status`, `answer`, a one-line check summary, and files or 
 there are any.
 
 **What the worker can use:** `read_file`, `write_file`, `grep` (respects `.gitignore`; groups large
-results by file), read-only `git` (`log`, `show`, `diff`, `blame`), `summarise_log` (a model-free
+results by file), `list_files` (files with sizes), read-only `git` (`log`, `show`, `diff`, `blame`), `summarise_log` (a model-free
 summary of a big log that drops only repetition) and `scan_file` (a file larger than the model's
 context, read in parts).
 

@@ -104,6 +104,13 @@ a citation; one wrong quote fails the check and the detail names the line and th
 and ask the worker, in the task, to quote the exact words of every line it cites. The check is
 about one file; run one per file.
 
+## Listing files: `list_files`
+
+`list_files(path, pattern)` returns the files under a folder with their sizes, leaving out what git
+ignores, node_modules and secret-looking files. `pattern` is a glob matched against the file name or
+its path from `path` (`*.md`, `adr/ADR-*.md`). Up to 200 files are listed one per line; more are
+grouped by folder with a count, so the worker narrows the path instead of reading a long list.
+
 ## History: read-only `git`
 
 The worker can read the history of a git repository: `git` with args such as
