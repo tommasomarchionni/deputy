@@ -21,7 +21,7 @@ from typing import Any, cast
 import httpx
 
 from deputy import runs
-from deputy.agent import Metrics, Result
+from deputy.agent import Metrics, Result, outcome_of
 from deputy.checks import Check, CheckResult, Command, run_checks
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS, Gateway
@@ -263,9 +263,33 @@ def _prepare(workdir: Path, copy: Path) -> str:
 
 def _forget_old(folder: Path) -> None:
     cutoff = time.time() - KEEP_PATCHES_S
-    for leftover in folder.glob("*.patch"):
+    for leftover in (*folder.glob("*.patch"), *folder.glob("*.result.json")):
         if leftover.stat().st_mtime < cutoff:
             leftover.unlink(missing_ok=True)
+
+
+def result_file(run_id: str) -> Path:
+    return state_dir() / "agents" / f"{run_id}.result.json"
+
+
+def _report(result: Result) -> Result:
+    """Leave the result where `deputy wait` finds it, written whole or not at all."""
+    target = result_file(result.run_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    draft = target.with_suffix(".part")
+    draft.write_text(outcome_of(result).model_dump_json(exclude_none=True), encoding="utf-8")
+    draft.replace(target)
+    return result
+
+
+def wait_for(run_id: str, timeout_s: float, poll_s: float = 2.0) -> str | None:
+    """The result of a run as JSON, as soon as it ends; nothing when the time is up."""
+    target, deadline = result_file(run_id), time.monotonic() + timeout_s
+    while not target.is_file():
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(poll_s)
+    return target.read_text(encoding="utf-8")
 
 
 def _discard(workdir: Path, copy: Path) -> None:
@@ -604,7 +628,25 @@ async def run(  # noqa: PLR0913, PLR0917
     undone and named, without losing the others. When the work fails the checks, the agent gets
     the failures and tries again, up to REPAIR_ROUNDS times, so that the frontier receives work
     that passes or a real problem."""
-    steps = steps or []
+    try:
+        return _report(await _run(task, workdir, backend, checks, policy, run_id, steps or []))
+    except BaseException as exc:  # `deputy wait` must hear about a run that ends in any way
+        cancelled = isinstance(exc, asyncio.CancelledError)
+        note = "cancelled" if cancelled else f"the run failed: {exc}"[:300]
+        status = "cancelled" if cancelled else "error"
+        _report(Result.model_validate({"run_id": run_id, "status": status, "answer": note}))
+        raise
+
+
+async def _run(  # noqa: PLR0913, PLR0917
+    task: str,
+    workdir: Path,
+    backend: Backend,
+    checks: list[Check],
+    policy: Policy,
+    run_id: str,
+    steps: list[str],
+) -> Result:
     started = time.monotonic()
     folder = state_dir() / "agents"
     copy = folder / run_id

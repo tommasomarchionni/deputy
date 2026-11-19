@@ -234,6 +234,19 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[wait]
+  '''
+  usage: deputy wait [-h] [--timeout TIMEOUT] run_id
+  
+  positional arguments:
+    run_id             the run_id that `delegate` returned
+  
+  options:
+    -h, --help         show this help message and exit
+    --timeout TIMEOUT  seconds to wait (default: longer than a run can take)
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[workspace]
   '''
   usage: deputy workspace [-h] [--repo REPO]
@@ -275,6 +288,7 @@
     'stats',
     'tune',
     'update',
+    'wait',
     'workspace',
   ])
 # ---

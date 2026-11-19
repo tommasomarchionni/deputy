@@ -212,6 +212,14 @@ async def _backend_status(config: Config) -> dict[str, str]:
     return out
 
 
+def _agent_started(run_id: str) -> str:
+    return (
+        "started; it can take an hour. Do not poll: run `deputy wait "
+        f"{run_id}` in a background shell, go on with other work, and read the result it prints "
+        "when the run ends (or call collect then)."
+    )
+
+
 def _agent_problem(backend: Backend, steps: list[str], *, has_room: bool) -> str:
     """Why a local agent cannot start, or nothing."""
     if len(steps) > localagent.MAX_STEPS:
@@ -250,7 +258,8 @@ def build_server() -> MCPServer:
             return outcome_of(_setup_error(run_id, str(exc)))
         policy = prepared.config.policy
         work = localagent.run(task, Path(workdir), backend, prepared.checks, policy, run_id, steps)
-        return outcome_of(pending.submit(run_id, prepared.sandbox, work))
+        started = pending.submit(run_id, prepared.sandbox, work)
+        return outcome_of(started.model_copy(update={"answer": _agent_started(run_id)}))
 
     @server.tool(
         description=(

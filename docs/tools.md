@@ -74,8 +74,11 @@ Claude Code subagent, but no request reaches a hosted model.
   so it leaves no half-made change, and the answer names it: `Left for you: step 6`. With the
   flag `partial` the checks pass on the steps that are done: apply the patch and do only the
   steps that are left.
-- **It runs in the background.** The call returns `status: running` at once; get the result with
-  `collect`. A run may take up to 3 hours: a local model is much slower than a hosted one.
+- **It runs in the background, and you do not poll it.** The call returns `status: running` at
+  once. Run `deputy wait <run_id>` in a background shell: it prints the result when the run
+  ends, so the orchestrator spends one turn on it instead of one for every "is it done?". The
+  exit code is 0 for `ok`, 1 for anything else, 124 if the time is up. `collect` still works. A
+  run may take up to 3 hours: a local model is much slower than a hosted one.
 - **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
   work. A `command` check runs with the copy's code first on the Python path, and with `uv` told
   never to sync or download, so it tests the copy and never changes your environment. Declare the

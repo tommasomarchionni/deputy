@@ -10,7 +10,7 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from deputy import localagent
+from deputy import cli, localagent
 from deputy.checks import CheckResult, Command, Contains
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS
@@ -248,6 +248,28 @@ def test_failed_checks_of_steps_go_to_a_new_conversation_that_knows_the_steps(
     assert "After 1 repair round(s)" in result.answer
     assert "Other runs just made these changes in this copy:\n1. one\n2. two" in log.read_text()
     assert _rounds(tmp_path) == 3
+
+
+def test_the_result_is_left_for_deputy_wait(repo: Path, fake_claude, capsys) -> None:
+    fake_claude("echo two >> a.txt")
+    assert localagent.wait_for("run-1", timeout_s=0) is None
+    assert cli.main(["wait", "run-1", "--timeout", "0"]) == 124
+    assert _run(repo).status == "ok"
+    capsys.readouterr()
+    assert cli.main(["wait", "run-1"]) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["status"] == "ok"
+    assert "git apply" in printed["answer"]
+
+
+def test_a_run_that_fails_to_start_is_reported_to_deputy_wait(tmp_path: Path, fake_claude) -> None:
+    fake_claude("true")
+    with pytest.raises(ConfigError):
+        _run(tmp_path)  # not a repository
+    printed = json.loads(localagent.wait_for("run-1", timeout_s=0) or "{}")
+    assert printed["status"] == "error"
+    assert "git rev-parse failed" in printed["answer"]
+    assert cli.main(["wait", "run-1"]) == 1
 
 
 def test_command_checks_test_the_copy(repo: Path, fake_claude) -> None:
