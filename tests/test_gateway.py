@@ -1,0 +1,90 @@
+# pyright: basic
+import asyncio
+import json
+
+import httpx
+
+from deputy.config import Backend
+from deputy.gateway import MAX_TOKENS, create_app, normalise
+
+BACKEND = Backend(name="b", base_url="http://model", model="local-model")
+
+
+def test_a_request_is_reduced_to_what_the_model_server_accepts() -> None:
+    body = normalise(
+        {
+            "model": "claude",
+            "max_tokens": 64_000,
+            "system": [{"type": "text", "text": "one", "cache_control": {"type": "ephemeral"}}],
+            "messages": [
+                {"role": "system", "content": "two"},
+                {"role": "assistant", "content": [{"type": "thinking", "thinking": "hm"}]},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "a",
+                            "cache_control": {"type": "ephemeral"},
+                            "content": [{"type": "text", "text": "out"}, {"type": "image"}],
+                        }
+                    ],
+                },
+            ],
+            "tools": [
+                {"name": "Read", "description": "d", "input_schema": {}, "defer_loading": True},
+                {"type": "web_search", "name": "server side"},
+            ],
+        },
+        BACKEND,
+    )
+    assert body["model"] == "local-model"
+    assert body["max_tokens"] == MAX_TOKENS
+    assert body["system"] == "one\n\ntwo"
+    assert body["messages"] == [
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "a", "content": "out\n[image]"}],
+        }
+    ]
+    assert body["tools"] == [{"name": "Read", "description": "d", "input_schema": {}}]
+
+
+def _post(app: object, headers: dict[str, str], path: str = "/v1/messages") -> httpx.Response:
+    async def go() -> httpx.Response:
+        transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]
+        async with httpx.AsyncClient(transport=transport, base_url="http://gateway") as client:
+            return await client.post(path, headers=headers, json={"messages": []})
+
+    return asyncio.run(go())
+
+
+def test_the_gateway_answers_only_to_its_token() -> None:
+    app = create_app(BACKEND, "secret", httpx.MockTransport(lambda _: httpx.Response(500)))
+    assert _post(app, {}).status_code == 401
+    assert _post(app, {"authorization": "Bearer wrong"}).status_code == 401
+
+
+def test_the_gateway_forwards_to_the_backend_with_its_own_key(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LOCAL_KEY", "model-key")
+    seen: list[httpx.Request] = []
+
+    def upstream(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, stream=httpx.ByteStream(b'{"ok": true}'))
+
+    backend = BACKEND.model_copy(update={"api_key_env": "LOCAL_KEY"})
+    reply = _post(
+        create_app(backend, "secret", httpx.MockTransport(upstream)), {"x-api-key": "secret"}
+    )
+    assert reply.json() == {"ok": True}
+    assert str(seen[0].url) == "http://model/v1/messages"
+    assert seen[0].headers["authorization"] == "Bearer model-key"
+    assert json.loads(seen[0].content)["model"] == "local-model"
+
+
+def test_counting_tokens_needs_no_model() -> None:
+    app = create_app(BACKEND, "secret", httpx.MockTransport(lambda _: httpx.Response(500)))
+    reply = _post(app, {"x-api-key": "secret"}, "/v1/messages/count_tokens")
+    assert reply.status_code == 200
+    assert reply.json()["input_tokens"] > 0

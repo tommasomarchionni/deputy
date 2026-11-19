@@ -19,6 +19,7 @@ from deputy import (
 )
 from deputy import (
     lessons,
+    localagent,
     model_profiles,
     project_memory,
     router,
@@ -224,10 +225,26 @@ def build_server() -> MCPServer:
             return outcome_of(_setup_error(request.run_id, message))
         return outcome_of(pending.submit(request.run_id, prepared.sandbox, work))
 
+    async def start_agent(prepared: _Delegation, task: str, workdir: str, run_id: str) -> Outcome:
+        backend = prepared.routes[0].backend
+        if backend.kind != "local":
+            return outcome_of(_setup_error(run_id, "the local agent needs a local backend"))
+        if not pending.has_room():
+            message = f"{background.MAX_ACTIVE} jobs are already running"
+            return outcome_of(_setup_error(run_id, message))
+        try:
+            await localagent.require_context(backend)
+        except ConfigError as exc:
+            return outcome_of(_setup_error(run_id, str(exc)))
+        policy = prepared.config.policy
+        work = localagent.run(task, Path(workdir), backend, prepared.checks, policy, run_id)
+        return outcome_of(pending.submit(run_id, prepared.sandbox, work))
+
     @server.tool(
         description=(
-            "Run a task on a worker in the absolute `workdir`, verified by `checks`. "
-            "wait=False returns at once; then use `collect`."
+            "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: "
+            "then `collect`. agent=True: a local agent changes code in a private copy and returns "
+            "a patch."
         )
     )
     async def delegate(  # noqa: PLR0913, PLR0917
@@ -238,6 +255,7 @@ def build_server() -> MCPServer:
         backend: str | None = None,
         max_turns: int | None = None,
         wait: bool = True,
+        agent: bool = False,
     ) -> Outcome:
         run_id = runs.new_run_id()
         try:
@@ -255,14 +273,16 @@ def build_server() -> MCPServer:
             "max_turns": max_turns,
             "checks": [c.model_dump(exclude_none=True) for c in checks or []],
         }
+        if agent:
+            return await start_agent(prepared, task, workdir, run_id)
         args = _Request(task, max_turns, tokens.estimate_value(request), run_id)
         return await launch(prepared, args, wait)
 
     @server.tool(  # the result shape is already described by `delegate`
         structured_output=False,
         description=(
-            "Ask about files in the absolute `workdir` instead of reading them: a short answer, "
-            "every line citing a proven file line."
+            "Ask about files in the absolute `workdir` instead of reading them: every line of the "
+            "answer cites a proven file line."
         ),
     )
     async def digest(files: list[str], question: str, workdir: str) -> Outcome:
@@ -277,7 +297,7 @@ def build_server() -> MCPServer:
 
     @server.tool(structured_output=False)  # the result shape is already described by `delegate`
     async def collect(run_id: str, cancel: bool = False) -> Outcome:
-        """Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it."""
+        """Result of a background delegation (waits 20 s); cancel=True stops it."""
         return outcome_of(await pending.collect(run_id, cancel=cancel))
 
     @server.tool()
@@ -288,9 +308,9 @@ def build_server() -> MCPServer:
         except ConfigError as exc:
             return {"error": str(exc)}
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def profiles(workdir: str | None = None) -> dict[str, str]:
-        """Available profiles (name: description)."""
+        """Available profiles."""
         found = load_profiles(Path(workdir) if workdir else None)
         return {name: p.description for name, p in found.items()}
 

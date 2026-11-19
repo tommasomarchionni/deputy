@@ -285,7 +285,7 @@
   '''
   {
     "collect": {
-      "description": "Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it.",
+      "description": "Result of a background delegation (waits 20 s); cancel=True stops it.",
       "input": {
         "properties": {
           "cancel": {
@@ -306,7 +306,7 @@
       }
     },
     "delegate": {
-      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False returns at once; then use `collect`.",
+      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: then `collect`. agent=True: a local agent changes code in a private copy and returns a patch.",
       "input": {
         "$defs": {
           "CheckSpec": {
@@ -418,6 +418,11 @@
           }
         },
         "properties": {
+          "agent": {
+            "default": false,
+            "title": "Agent",
+            "type": "boolean"
+          },
           "backend": {
             "anyOf": [
               {
@@ -485,7 +490,7 @@
       }
     },
     "digest": {
-      "description": "Ask about files in the absolute `workdir` instead of reading them: a short answer, every line citing a proven file line.",
+      "description": "Ask about files in the absolute `workdir` instead of reading them: every line of the answer cites a proven file line.",
       "input": {
         "properties": {
           "files": {
@@ -544,7 +549,7 @@
       }
     },
     "profiles": {
-      "description": "Available profiles (name: description).",
+      "description": "Available profiles.",
       "input": {
         "properties": {
           "workdir": {

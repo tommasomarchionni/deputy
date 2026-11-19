@@ -3,14 +3,15 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
-from deputy import cli, model_profiles, server
+from deputy import cli, localagent, model_profiles, server
+from deputy.agent import Result
 from deputy.backends import Probe
 from deputy.bench import Summary
-from deputy.config import Backend, state_dir
+from deputy.config import Backend, ConfigError, state_dir
 from deputy.server import build_server
 from deputy.tune import save_model_profile
 from helpers import message, tool_call
@@ -87,7 +88,7 @@ def test_delegate_runs_end_to_end_with_a_scripted_model(
 
 def test_profiles_and_status_tools() -> None:
     profiles = asyncio.run(build_server().call_tool("profiles", {}))
-    assert "helper" in structured(profiles)
+    assert "helper" in json.loads(cast("Any", profiles).content[0].text)
     status = asyncio.run(build_server().call_tool("status", {}))
     assert "deputy init" in structured(status)["error"]
 
@@ -383,3 +384,45 @@ def test_digest_refuses_bad_requests_before_any_model_call(
     data = _digest(tmp_path, **overrides)
     assert data["status"] == "error"
     assert expected in data["answer"]
+
+
+def test_delegate_starts_a_local_agent_in_the_background(tmp_path: Path, monkeypatch) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    seen = {}
+
+    async def run(task, workdir, backend, checks, policy, run_id):
+        seen.update(task=task, workdir=workdir, model=backend.model)
+        return Result(run_id=run_id, status="ok", answer="patch ready")
+
+    async def enough(backend) -> None:
+        return None
+
+    monkeypatch.setattr(localagent, "run", run)
+    monkeypatch.setattr(localagent, "require_context", enough)
+
+    async def go() -> tuple[dict, dict]:
+        tools: Any = build_server()
+        arguments = {"task": "change it", "workdir": str(tmp_path), "agent": True}
+        started = structured(await tools.call_tool("delegate", arguments))
+        done = await tools.call_tool("collect", {"run_id": started["run_id"]})
+        return started, json.loads(done.content[0].text)
+
+    started, done = asyncio.run(go())
+    assert started["status"] == "running"
+    assert done["answer"] == "patch ready"
+    assert seen == {"task": "change it", "workdir": tmp_path, "model": "m"}
+
+
+def test_a_local_agent_is_refused_when_the_context_is_too_small(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+
+    async def small(backend) -> None:
+        raise ConfigError("restart it with --ctx-size 131072")
+
+    monkeypatch.setattr(localagent, "require_context", small)
+    arguments = {"task": "change it", "workdir": str(tmp_path), "agent": True}
+    data = structured(asyncio.run(build_server().call_tool("delegate", arguments)))
+    assert data["status"] == "error"
+    assert "--ctx-size" in data["answer"]
