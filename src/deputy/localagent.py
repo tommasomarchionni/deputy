@@ -34,6 +34,14 @@ BUDGET_S = 10_800.0
 KEEP_PATCHES_S = 7 * 86_400  # patches nobody applied are removed after a week
 SUMMARY_CHARS = 1_500
 COMMAND_LIMIT_S = 300  # the longest one shell command of the agent may run
+STALL_CALLS = 40  # this many tool calls in a row without changing a file: the agent is stuck
+NUDGES = 2  # times a stuck agent is told to leave that change and go on
+_CHANGES_FILES = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
+STALL_PROMPT = (
+    f"deputy stopped you: you used {STALL_CALLS} tools in a row without changing a file. Leave "
+    "the change you are stuck on as it is, finish the other changes, and in your summary name "
+    "the change that is left and why."
+)
 REPAIR_ROUNDS = 3  # failed checks go back to the agent this many times before the frontier
 TOOLS = "Bash,Read,Edit,Write,Grep,Glob"
 _GIT = shutil.which("git") or "git"
@@ -306,18 +314,29 @@ def _read_stream(line: bytes, seen: dict[str, Any]) -> None:
         return
     if event.get("type") == "result":
         seen["result"] = event
+    if event.get("session_id"):
+        seen["session"] = str(event["session_id"])
     message = event.get("message")
     content = cast("dict[str, Any]", message).get("content") if isinstance(message, dict) else None
     for block in cast("list[dict[str, Any]]", content) if isinstance(content, list) else []:
         if block.get("type") == "tool_use":
             seen["tools"].add(block.get("id"))
+            changes = block.get("name") in _CHANGES_FILES
+            seen["since_change"] = 0 if changes else seen["since_change"] + 1
 
 
 async def _drive(
     command: list[str], copy: Path, env: dict[str, str], budget_s: float
 ) -> dict[str, Any]:
     """Run the agent until it ends or the budget runs out; a cancelled job stops it."""
-    seen: dict[str, Any] = {"tools": set(), "result": {}, "timed_out": False}
+    seen: dict[str, Any] = {
+        "tools": set(),
+        "result": {},
+        "session": "",
+        "since_change": 0,
+        "stalled": False,
+        "timed_out": False,
+    }
     process = await asyncio.create_subprocess_exec(
         *command,
         cwd=copy,
@@ -333,6 +352,9 @@ async def _drive(
         assert process.stdout is not None
         async for line in process.stdout:
             _read_stream(line, seen)
+            if seen["since_change"] >= STALL_CALLS:
+                seen["stalled"] = True
+                return  # the process is stopped below
         await process.wait()
 
     try:
@@ -377,6 +399,7 @@ class _Work:
     finished: bool = False
     tool_calls: int = 0
     repairs: int = 0
+    nudges: int = 0
 
 
 async def _work(  # noqa: PLR0913, PLR0917
@@ -387,7 +410,8 @@ async def _work(  # noqa: PLR0913, PLR0917
     checks: list[Check],
     policy: Policy,
 ) -> _Work:
-    """The agent's rounds: the task, then a repair round for each failure of the checks."""
+    """The agent's rounds: the task, a nudge when it is stuck, then a repair round for each
+    failure of the checks."""
     started = time.monotonic()
     work = _Work()
     window = compact_window(await require_context(backend))
@@ -398,6 +422,11 @@ async def _work(  # noqa: PLR0913, PLR0917
             left = BUDGET_S - (time.monotonic() - started)
             work.seen = await _drive([*command, *prompt], copy, env, left)
             work.tool_calls += len(work.seen["tools"])
+            session = str(work.seen["session"])
+            if work.seen["stalled"] and work.nudges < NUDGES and session:
+                work.nudges += 1
+                prompt = ["--resume", session, STALL_PROMPT]
+                continue
             final = cast("dict[str, Any]", work.seen["result"])
             work.summaries.append(str(final.get("result") or ""))
             work.finished = final.get("subtype") == "success" and not final.get("is_error")
@@ -405,7 +434,6 @@ async def _work(  # noqa: PLR0913, PLR0917
             work.results = await run_checks(
                 checks, answer, Sandbox(copy), policy, copy_environment(copy)
             )
-            session = str(final.get("session_id") or "")
             if (
                 work.seen["timed_out"]
                 or not work.finished
@@ -473,6 +501,8 @@ async def run(  # noqa: PLR0913, PLR0917
         flags: list[str] = []
         if seen["timed_out"]:
             status, flags = "error", ["time_limit", "needs_frontier"]
+        elif seen["stalled"]:
+            status, flags = "error", ["stuck", "needs_frontier"]
         elif not finished:
             status, flags = "error", ["backend_error", "needs_frontier"]
         elif not all(result.passed for result in results):
@@ -485,6 +515,7 @@ async def run(  # noqa: PLR0913, PLR0917
                 "status": status,
                 "tool_calls": work.tool_calls,
                 "repairs": work.repairs,
+                "nudges": work.nudges,
                 "elapsed_s": elapsed,
             }
         )

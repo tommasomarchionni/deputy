@@ -59,9 +59,15 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     folder.mkdir()
 
     def install(
-        shell: str, subtype: str = "success", summary: str = "added the file", repair: str = "true"
+        shell: str,
+        subtype: str = "success",
+        summary: str = "added the file",
+        repair: str = "true",
+        *,
+        stuck: int = 0,
     ) -> None:
-        """`shell` runs for the task; `repair` for each round resumed after failed checks."""
+        """`shell` runs for the task; `repair` for each resumed round. The first `stuck` rounds
+        only read, with no result, and would hang if deputy did not stop them."""
         event = json.dumps(
             {"type": "result", "subtype": subtype, "result": summary, "session_id": "s1"}
         )
@@ -69,8 +75,16 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             {"message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash"}]}}
         )
         program = folder / "claude"
+        read = json.dumps(
+            {"message": {"content": [{"type": "tool_use", "id": "r", "name": "Read"}]}}
+        )
+        stalled = (
+            f'if [ "$(grep -c x {tmp_path}/rounds)" -le {stuck} ]; then '
+            'echo \'{"type": "system", "session_id": "s1"}\'; '
+            f"for i in $(seq {localagent.STALL_CALLS}); do echo '{read}'; done; sleep 30; fi\n"
+        )
         program.write_text(
-            f"#!/bin/sh\necho x >> {tmp_path}/rounds\n"
+            f"#!/bin/sh\necho x >> {tmp_path}/rounds\n{stalled if stuck else ''}"
             f'case " $* " in *" --resume s1 "*) {repair};; *) {shell};; esac\n'
             f"echo '{tool}'\necho '{event}'\n"
         )
@@ -144,6 +158,26 @@ def test_repairs_stop_after_a_few_rounds(repo: Path, fake_claude, tmp_path: Path
     result = _run(repo, [Contains(values=["never said"])])
     assert result.status == "checks_failed"
     assert _rounds(tmp_path) == 1 + localagent.REPAIR_ROUNDS
+
+
+def test_a_stuck_agent_is_stopped_and_told_to_move_on(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    fake_claude("true", repair="echo done > done.txt", stuck=1)
+    result = _run(repo)
+    assert result.status == "ok"
+    assert _rounds(tmp_path) == 2  # stopped once, then resumed with the nudge
+    assert "done.txt" in (state_dir() / "agents" / "run-1.patch").read_text()
+
+
+def test_an_agent_that_stays_stuck_hands_the_task_back(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    fake_claude("true", stuck=1 + localagent.NUDGES)
+    result = _run(repo)
+    assert result.status == "error"
+    assert result.flags == ["stuck", "needs_frontier"]
+    assert _rounds(tmp_path) == 1 + localagent.NUDGES
 
 
 def test_command_checks_test_the_copy(repo: Path, fake_claude) -> None:
