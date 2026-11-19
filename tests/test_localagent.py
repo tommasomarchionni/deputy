@@ -187,6 +187,15 @@ def test_temporary_files_are_outside_the_copy_and_any_repository(repo: Path, fak
     assert not (state_dir() / "agents" / "run-1.tmp").exists()
 
 
+def test_the_agent_is_told_which_commands_will_check_its_work() -> None:
+    gates = [Command(argv=["uv", "run", "pytest", "-q"]), Contains(values=["x"])]
+    prompt = localagent.task_prompt("do it", gates)
+    assert prompt.startswith("do it\n\n")
+    assert "`uv run pytest -q`" in prompt
+    assert "only the tests of the code you change" in prompt
+    assert localagent.task_prompt("do it", [Contains(values=["x"])]) == "do it"
+
+
 def test_the_repair_prompt_forbids_working_around_the_environment() -> None:
     failed = CheckResult(name="command: pytest", passed=False, detail="1 failed")
     prompt = localagent.repair_prompt([failed, CheckResult(name="other", passed=True)])

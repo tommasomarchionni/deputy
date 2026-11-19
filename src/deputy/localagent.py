@@ -22,7 +22,7 @@ import httpx
 
 from deputy import runs
 from deputy.agent import Metrics, Result
-from deputy.checks import Check, CheckResult, run_checks
+from deputy.checks import Check, CheckResult, Command, run_checks
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS, Gateway
 from deputy.sandbox import Sandbox
@@ -164,6 +164,20 @@ def _scratch(copy: Path) -> Path:
 
 def _conversations(copy: Path) -> Path:
     return copy.with_name(f"{copy.name}.claude")
+
+
+def task_prompt(task: str, checks: list[Check]) -> str:
+    """The task, with the commands deputy will run at the end: the agent knows what it must pass,
+    and does not wait for a whole test suite that its sandbox makes slow or stuck."""
+    commands = [" ".join(check.argv) for check in checks if isinstance(check, Command)]
+    if not commands:
+        return task
+    listed = "; ".join(f"`{command}`" for command in commands)
+    return (
+        f"{task}\n\nWhen you finish, deputy runs these checks on your copy, outside your sandbox, "
+        f"and sends back any failure: {listed}. While you work, run only the tests of the code "
+        "you change: the whole test suite is slow in your sandbox and deputy runs it for you."
+    )
 
 
 def repair_prompt(results: list[CheckResult]) -> str:
@@ -354,7 +368,7 @@ async def _work(  # noqa: PLR0913, PLR0917
     work = _Work()
     async with Gateway(backend) as gateway:
         env = agent_environment(gateway, backend, copy)
-        prompt = [task]
+        prompt = [task_prompt(task, checks)]
         while True:
             left = BUDGET_S - (time.monotonic() - started)
             work.seen = await _drive([*command, *prompt], copy, env, left)
