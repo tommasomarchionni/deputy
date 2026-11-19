@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from deputy import localagent
-from deputy.checks import Command, Contains
+from deputy.checks import CheckResult, Command, Contains
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS
 
@@ -178,8 +178,28 @@ def test_a_folder_that_is_not_a_repository_is_refused(tmp_path: Path, fake_claud
         _run(tmp_path)
 
 
+def test_temporary_files_are_outside_the_copy_and_any_repository(repo: Path, fake_claude) -> None:
+    # a test's temporary folder inside the copy is inside a repository: tests that create a
+    # folder outside every repository then fail, and the agent was led to "fix" correct code
+    fake_claude('cd "$TMPDIR" && ! git rev-parse 2>/dev/null && touch made && cd - && echo ok > ok')
+    assert _run(repo).status == "ok"
+    assert "ok" in (state_dir() / "agents" / "run-1.patch").read_text()
+    assert not (state_dir() / "agents" / "run-1.tmp").exists()
+
+
+def test_the_repair_prompt_forbids_working_around_the_environment() -> None:
+    failed = CheckResult(name="command: pytest", passed=False, detail="1 failed")
+    prompt = localagent.repair_prompt([failed, CheckResult(name="other", passed=True)])
+    assert "command: pytest: 1 failed" in prompt
+    assert "other" not in prompt
+    assert "from the environment" in prompt
+    assert "Never weaken" in prompt
+
+
 def test_generated_files_are_not_part_of_the_patch(repo: Path, fake_claude) -> None:
-    fake_claude("mkdir __pycache__; echo x > __pycache__/a.pyc; echo t > .tmp/t; echo two >> a.txt")
+    fake_claude(
+        "mkdir __pycache__ .tmp; echo x > __pycache__/a.pyc; echo t > .tmp/t; echo two >> a.txt"
+    )
     assert _run(repo).status == "ok"
     patch = (state_dir() / "agents" / "run-1.patch").read_text()
     assert "a.txt" in patch
@@ -202,6 +222,7 @@ def test_the_shell_of_the_agent_is_confined(tmp_path: Path) -> None:
     assert sandbox["allowUnsandboxedCommands"] is False
     assert sandbox["network"]["allowedDomains"] == []
     assert {"~/.ssh", "~/.config/deputy", "~/.claude"} <= set(sandbox["filesystem"]["denyRead"])
+    assert sandbox["filesystem"]["allowWrite"] == [f"/{tmp_path.resolve()}.tmp"]
     assert localagent.agent_settings(tmp_path)["disableAllHooks"] is True
 
 
@@ -215,7 +236,7 @@ def test_the_agent_gets_no_credential_of_the_user(monkeypatch: pytest.MonkeyPatc
     assert env["ANTHROPIC_AUTH_TOKEN"] == "gateway-token"
     assert env["ANTHROPIC_BASE_URL"] == FakeGateway.url
     assert env["PYTHONPATH"] == "/copy/src"
-    assert env["TMPDIR"] == "/copy/.tmp"
+    assert env["TMPDIR"] == "/copy.tmp"
     assert env["CLAUDE_CONFIG_DIR"] == "/copy.claude"
 
 

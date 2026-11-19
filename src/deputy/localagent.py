@@ -81,8 +81,10 @@ SYSTEM_PROMPT = (
 
 
 def agent_settings(copy: Path) -> dict[str, Any]:
-    """Claude Code settings of the agent: neither its tools nor its shell can leave the copy."""
+    """Claude Code settings of the agent: neither its tools nor its shell can leave the copy and
+    its folder for temporary files."""
     inside = f"/{copy.resolve()}/**"
+    scratch = f"/{_scratch(copy).resolve()}"
     return {
         "disableAllHooks": True,
         "permissions": {
@@ -94,6 +96,9 @@ def agent_settings(copy: Path) -> dict[str, Any]:
                 f"Read({inside})",
                 f"Edit({inside})",
                 f"Write({inside})",
+                f"Read({scratch}/**)",
+                f"Edit({scratch}/**)",
+                f"Write({scratch}/**)",
             ],
             "deny": [f"Read({path})" for path in _SECRET_PATHS],
         },
@@ -102,7 +107,7 @@ def agent_settings(copy: Path) -> dict[str, Any]:
             "failIfUnavailable": True,
             "autoAllowBashIfSandboxed": True,
             "allowUnsandboxedCommands": False,
-            "filesystem": {"denyRead": _SECRET_PATHS},
+            "filesystem": {"denyRead": _SECRET_PATHS, "allowWrite": [scratch]},
             "network": {"allowedDomains": []},
         },
     }
@@ -147,8 +152,14 @@ def copy_environment(copy: Path) -> dict[str, str]:
         "UV_OFFLINE": "1",
         "UV_CACHE_DIR": str(copy / ".uv-cache"),
         "PYTHONPATH": str(copy / "src"),
-        "TMPDIR": str(copy / ".tmp"),
+        "TMPDIR": str(_scratch(copy)),
     }
+
+
+def _scratch(copy: Path) -> Path:
+    """Temporary files of the run: next to the copy, never inside it, so that a test's temporary
+    folder is not inside a repository and a linter does not read what the tests leave behind."""
+    return copy.with_name(f"{copy.name}.tmp")
 
 
 def _conversations(copy: Path) -> Path:
@@ -161,8 +172,10 @@ def repair_prompt(results: list[CheckResult]) -> str:
     return (
         "deputy ran the checks of this task on your copy and these fail:\n"
         f"{failed}\n"
-        "Fix the code so that they pass. Never weaken, skip or delete a check or a test. "
-        "Run them yourself, then end with a short summary of what you changed."
+        "Fix your work so that they pass. Never weaken, skip or delete a check or a test, and "
+        "never change code that the task is not about to make one pass: when a failure comes "
+        "from the environment and not from your work, change nothing and say so. Run the "
+        "checks yourself, then end with a short summary of what you changed."
     )
 
 
@@ -181,7 +194,7 @@ def _prepare(workdir: Path, copy: Path) -> str:
     start = _git("stash", "create", cwd=root) or _git("rev-parse", "HEAD", cwd=root)
     copy.parent.mkdir(parents=True, exist_ok=True)
     _git("worktree", "add", "--quiet", "--detach", str(copy), start, cwd=root)
-    (copy / ".tmp").mkdir()  # the sandbox lets the shell write only inside the copy
+    _scratch(copy).mkdir(exist_ok=True)
     for name in _DEPENDENCIES:  # the shell has no network, so it cannot install them again
         if (root / name).is_dir() and not (copy / name).exists():
             (copy / name).symlink_to(root / name)
@@ -448,5 +461,6 @@ async def run(  # noqa: PLR0913, PLR0917
         )
     finally:
         shutil.rmtree(_conversations(copy), ignore_errors=True)
+        shutil.rmtree(_scratch(copy), ignore_errors=True)
         if not keep:
             _discard(workdir, copy)
