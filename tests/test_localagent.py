@@ -120,11 +120,12 @@ def test_a_folder_that_is_not_a_repository_is_refused(tmp_path: Path, fake_claud
 
 
 def test_generated_files_are_not_part_of_the_patch(repo: Path, fake_claude) -> None:
-    fake_claude("mkdir __pycache__; echo x > __pycache__/a.pyc; echo two >> a.txt")
+    fake_claude("mkdir __pycache__; echo x > __pycache__/a.pyc; echo t > .tmp/t; echo two >> a.txt")
     assert _run(repo).status == "ok"
     patch = (state_dir() / "agents" / "run-1.patch").read_text()
     assert "a.txt" in patch
     assert "pyc" not in patch
+    assert ".tmp" not in patch
 
 
 def test_the_tools_of_the_agent_stay_in_its_copy(tmp_path: Path) -> None:
@@ -153,6 +154,7 @@ def test_the_agent_gets_no_credential_of_the_user(monkeypatch: pytest.MonkeyPatc
     assert env["ANTHROPIC_AUTH_TOKEN"] == "gateway-token"
     assert env["ANTHROPIC_BASE_URL"] == FakeGateway.url
     assert env["PYTHONPATH"] == "/copy/src"
+    assert env["TMPDIR"] == "/copy/.tmp"
 
 
 def _context(monkeypatch: pytest.MonkeyPatch, reply: httpx.Response) -> None:
