@@ -32,6 +32,10 @@ KEEP_PATCHES_S = 7 * 86_400  # patches nobody applied are removed after a week
 SUMMARY_CHARS = 1_500
 TOOLS = "Bash,Read,Edit,Write,Grep,Glob"
 _GIT = shutil.which("git") or "git"
+# deputy's own Python environment must not leak into the repository's tools
+_OTHER_ENVIRONMENTS = frozenset(
+    {"VIRTUAL_ENV", "PYTHONHOME", "CONDA_PREFIX", "UV_PROJECT_ENVIRONMENT"}
+)
 _DEPENDENCIES = ("node_modules", ".venv")
 _NOT_THE_WORK = (
     *_DEPENDENCIES,
@@ -107,6 +111,7 @@ def agent_environment(gateway: Gateway, backend: Backend, copy: Path) -> dict[st
         key: value
         for key, value in os.environ.items()
         if not key.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "AWS_", "GITHUB_", "GH_"))
+        and key not in _OTHER_ENVIRONMENTS
     }
     model = backend.model
     return {

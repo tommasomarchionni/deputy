@@ -149,8 +149,10 @@ def test_the_shell_of_the_agent_is_confined(tmp_path: Path) -> None:
 def test_the_agent_gets_no_credential_of_the_user(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in ("ANTHROPIC_API_KEY", "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY"):
         monkeypatch.setenv(name, "secret")
+    monkeypatch.setenv("VIRTUAL_ENV", "/deputy/.venv")
     env = localagent.agent_environment(cast("Any", FakeGateway(BACKEND)), BACKEND, Path("/copy"))
     assert "secret" not in env.values()
+    assert "VIRTUAL_ENV" not in env
     assert env["ANTHROPIC_AUTH_TOKEN"] == "gateway-token"
     assert env["ANTHROPIC_BASE_URL"] == FakeGateway.url
     assert env["PYTHONPATH"] == "/copy/src"
