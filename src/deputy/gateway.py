@@ -86,16 +86,39 @@ def _message(message: Json) -> Json | None:
     return {**message, "content": kept} if kept else None
 
 
+def _in_place(raw: list[Json]) -> list[Json]:
+    """System messages inside the conversation become text of the user turn they follow.
+
+    Moving them to the system prompt would change the start of the prompt each time Claude Code
+    adds one, and the model server would process the whole conversation again."""
+    placed: list[Json] = []
+    for message in raw:
+        if message.get("role") != "system":
+            placed.append(message)
+            continue
+        note: Json = {"type": "text", "text": _system_text(message.get("content"))}
+        if placed and placed[-1].get("role") == "user":
+            before = placed[-1].get("content")
+            blocks: list[Json] = (
+                cast("list[Json]", before)
+                if isinstance(before, list)
+                else [{"type": "text", "text": str(before)}]
+            )
+            placed[-1] = {**placed[-1], "content": [*blocks, note]}
+        else:
+            placed.append({"role": "user", "content": [note]})
+    return placed
+
+
 def normalise(request: Json, backend: Backend) -> Json:
     """The request reduced to what a local model server accepts."""
-    raw = cast("list[Json]", request.get("messages") or [])
-    extra = [str(m.get("content")) for m in raw if m.get("role") == "system"]
-    messages = [m for m in (_message(x) for x in raw if x.get("role") != "system") if m]
+    raw = _in_place(cast("list[Json]", request.get("messages") or []))
+    messages = [m for m in (_message(x) for x in raw) if m]
     body: Json = {
         "model": backend.model,
         "max_tokens": min(int(request.get("max_tokens") or MAX_TOKENS), MAX_TOKENS),
         "stream": bool(request.get("stream")),
-        "system": "\n\n".join([_system_text(request.get("system")), *extra]).strip(),
+        "system": _system_text(request.get("system")).strip(),
         "messages": _without_cache_marks(messages),
         # Reasoning costs the agent minutes per turn on a local model and its work is checked by
         # tests anyway, so it is off unless the backend's extra_body asks for it.

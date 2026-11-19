@@ -28,6 +28,8 @@ from deputy.gateway import MAX_TOKENS, Gateway
 from deputy.sandbox import Sandbox
 
 CONTEXT_NEEDED = 110_000  # Claude Code compacts at its smallest window, 100,000 tokens
+SMALLEST_WINDOW = 100_000
+COMPACT_MARGIN = 10_000  # past Claude Code's threshold, room for one more turn's tool output
 BUDGET_S = 10_800.0
 KEEP_PATCHES_S = 7 * 86_400  # patches nobody applied are removed after a week
 SUMMARY_CHARS = 1_500
@@ -118,7 +120,17 @@ def agent_settings(copy: Path) -> dict[str, Any]:
     }
 
 
-def agent_environment(gateway: Gateway, backend: Backend, copy: Path) -> dict[str, str]:
+def compact_window(context: int) -> int:
+    """Claude Code's compaction window for a server with this context: as late as is safe.
+
+    After a compaction the model server reads the summary and the files Claude Code attaches
+    again from scratch (63,000 tokens took 12 minutes on a 27B model), so later is cheaper."""
+    return max(context - COMPACT_MARGIN, SMALLEST_WINDOW)
+
+
+def agent_environment(
+    gateway: Gateway, backend: Backend, copy: Path, window: int = SMALLEST_WINDOW
+) -> dict[str, str]:
     """The environment of the agent: no credential of the user, only the gateway's token, and
     Python tools that use the installed dependencies with the code of the copy."""
     kept = {
@@ -137,7 +149,7 @@ def agent_environment(gateway: Gateway, backend: Backend, copy: Path) -> dict[st
         "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "ANTHROPIC_SMALL_FAST_MODEL": model,
-        "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "100000",
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW": str(window),
         # Claude Code keeps room for a reply of this size before it compacts: 20,000 tokens by
         # default, which compacted at 67,000. The gateway never asks for more than MAX_TOKENS.
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(MAX_TOKENS),
@@ -266,8 +278,9 @@ def _patch(copy: Path, start: str, target: Path) -> str:
     return _git("diff", "--cached", "--shortstat", start, cwd=copy)
 
 
-async def require_context(backend: Backend) -> None:
-    """Refuse a model server whose context cannot hold the agent's conversation."""
+async def require_context(backend: Backend) -> int:
+    """Refuse a model server whose context cannot hold the agent's conversation; returns its
+    context, or 0 when the server does not say."""
     key = backend.api_key()
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     try:
@@ -275,7 +288,7 @@ async def require_context(backend: Backend) -> None:
             reply = await client.get(f"{backend.base_url.rstrip('/')}/props", headers=headers)
         props = cast("dict[str, Any]", reply.json()) if reply.status_code == 200 else {}
     except (httpx.HTTPError, ValueError):
-        return
+        return 0
     settings = cast("dict[str, Any]", props.get("default_generation_settings") or {})
     size = int(settings.get("n_ctx") or 0)
     if 0 < size < CONTEXT_NEEDED:
@@ -283,6 +296,7 @@ async def require_context(backend: Backend) -> None:
             f"the local agent needs a context of at least {CONTEXT_NEEDED:,} tokens and this "
             f"server has {size:,}: restart it with --ctx-size 131072"
         )
+    return size
 
 
 def _read_stream(line: bytes, seen: dict[str, Any]) -> None:
@@ -376,8 +390,9 @@ async def _work(  # noqa: PLR0913, PLR0917
     """The agent's rounds: the task, then a repair round for each failure of the checks."""
     started = time.monotonic()
     work = _Work()
+    window = compact_window(await require_context(backend))
     async with Gateway(backend) as gateway:
-        env = agent_environment(gateway, backend, copy)
+        env = agent_environment(gateway, backend, copy, window)
         prompt = [task_prompt(task, checks)]
         while True:
             left = BUDGET_S - (time.monotonic() - started)

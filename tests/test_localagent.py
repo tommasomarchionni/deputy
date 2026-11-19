@@ -78,6 +78,11 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
     monkeypatch.setattr(localagent, "Gateway", FakeGateway)
+
+    async def context(_: Backend) -> int:
+        return 131_072
+
+    monkeypatch.setattr(localagent, "require_context", context)
     return install
 
 
@@ -258,6 +263,15 @@ def test_the_agent_compacts_late_enough(monkeypatch: pytest.MonkeyPatch) -> None
     assert int(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"]) < localagent.CONTEXT_NEEDED
 
 
+def test_the_agent_compacts_as_late_as_the_server_allows() -> None:
+    assert localagent.compact_window(131_072) == 121_072
+    assert localagent.compact_window(0) == localagent.SMALLEST_WINDOW  # the server did not say
+    assert localagent.compact_window(110_000) == localagent.SMALLEST_WINDOW
+    gateway = cast("Any", FakeGateway(BACKEND))
+    env = localagent.agent_environment(gateway, BACKEND, Path("/copy"), 121_072)
+    assert env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] == "121072"
+
+
 def test_a_command_that_does_not_end_is_stopped_not_sent_to_the_background() -> None:
     env = localagent.agent_environment(cast("Any", FakeGateway(BACKEND)), BACKEND, Path("/copy"))
     assert env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
@@ -288,7 +302,8 @@ def test_a_large_or_unknown_context_is_accepted(
     monkeypatch: pytest.MonkeyPatch, reply: httpx.Response
 ) -> None:
     _context(monkeypatch, reply)
-    asyncio.run(localagent.require_context(BACKEND))
+    expected = 131_072 if reply.status_code == 200 else 0
+    assert asyncio.run(localagent.require_context(BACKEND)) == expected
 
 
 def test_ignored_dependencies_linked_into_the_copy_do_not_break_the_patch(

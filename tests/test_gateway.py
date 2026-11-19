@@ -1,6 +1,7 @@
 # pyright: basic
 import asyncio
 import json
+from typing import Any
 
 import httpx
 
@@ -41,14 +42,44 @@ def test_a_request_is_reduced_to_what_the_model_server_accepts() -> None:
     assert body["model"] == "local-model"
     assert body["chat_template_kwargs"] == {"enable_thinking": False}
     assert body["max_tokens"] == MAX_TOKENS
-    assert body["system"] == "one\n\ntwo"
+    assert body["system"] == "one"
     assert body["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "two"}]},
         {
             "role": "user",
             "content": [{"type": "tool_result", "tool_use_id": "a", "content": "out\n[image]"}],
-        }
+        },
     ]
     assert body["tools"] == [{"name": "Read", "description": "d", "input_schema": {}}]
+
+
+def test_system_messages_stay_where_they_are_in_the_conversation() -> None:
+    # Claude Code sends system messages inside `messages`, first with a list of blocks and then
+    # as a string; moved to the system prompt they changed its start and forced a full re-read
+    def request(*messages: dict[str, Any]) -> dict[str, Any]:
+        return normalise({"system": "rules", "messages": list(messages)}, BACKEND)
+
+    first = {"role": "user", "content": [{"type": "text", "text": "task"}]}
+    turn = [
+        {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "id": "a", "name": "Bash", "input": {}}],
+        },
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "a", "content": "out"}],
+        },
+    ]
+    one = request(first, {"role": "system", "content": [{"type": "text", "text": "env"}]})
+    two = request(first, {"role": "system", "content": "env"}, *turn)
+    assert one["system"] == two["system"] == "rules"
+    assert one["messages"] == two["messages"][:1]
+    assert two["messages"][0]["content"][-1] == {"type": "text", "text": "env"}
+    three = request(
+        first, {"role": "system", "content": "env"}, *turn, {"role": "system", "content": "late"}
+    )
+    assert three["messages"][:2] == two["messages"][:2]
+    assert three["messages"][2]["content"][0]["content"] == "out\n\nlate"
 
 
 def _post(app: object, headers: dict[str, str], path: str = "/v1/messages") -> httpx.Response:
