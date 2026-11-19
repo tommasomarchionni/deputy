@@ -193,6 +193,7 @@ def test_the_agent_is_told_which_commands_will_check_its_work() -> None:
     assert prompt.startswith("do it\n\n")
     assert "`uv run pytest -q`" in prompt
     assert "only the tests of the code you change" in prompt
+    assert "even if the task asks for it" in prompt
     assert localagent.task_prompt("do it", [Contains(values=["x"])]) == "do it"
 
 
@@ -255,6 +256,12 @@ def test_the_agent_compacts_late_enough(monkeypatch: pytest.MonkeyPatch) -> None
     # Claude Code compacts at the window minus room for one reply: the gateway's cap, not 20,000.
     assert env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(MAX_TOKENS)
     assert int(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"]) < localagent.CONTEXT_NEEDED
+
+
+def test_a_command_that_does_not_end_is_stopped_not_sent_to_the_background() -> None:
+    env = localagent.agent_environment(cast("Any", FakeGateway(BACKEND)), BACKEND, Path("/copy"))
+    assert env["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"] == "1"
+    assert int(env["BASH_MAX_TIMEOUT_MS"]) == localagent.COMMAND_LIMIT_S * 1000
 
 
 def _context(monkeypatch: pytest.MonkeyPatch, reply: httpx.Response) -> None:

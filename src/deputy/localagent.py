@@ -31,6 +31,7 @@ CONTEXT_NEEDED = 110_000  # Claude Code compacts at its smallest window, 100,000
 BUDGET_S = 10_800.0
 KEEP_PATCHES_S = 7 * 86_400  # patches nobody applied are removed after a week
 SUMMARY_CHARS = 1_500
+COMMAND_LIMIT_S = 300  # the longest one shell command of the agent may run
 REPAIR_ROUNDS = 3  # failed checks go back to the agent this many times before the frontier
 TOOLS = "Bash,Read,Edit,Write,Grep,Glob"
 _GIT = shutil.which("git") or "git"
@@ -137,6 +138,10 @@ def agent_environment(gateway: Gateway, backend: Backend, copy: Path) -> dict[st
         # default, which compacted at 67,000. The gateway never asks for more than MAX_TOKENS.
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(MAX_TOKENS),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        # a command that does not end is stopped at its timeout, never moved to the background:
+        # a local model then waits for its output in a loop instead of going on with the task
+        "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
+        "BASH_MAX_TIMEOUT_MS": str(COMMAND_LIMIT_S * 1000),
         "API_TIMEOUT_MS": str(int(BUDGET_S * 1000)),
         # its conversations stay with the run, out of the user's own Claude Code history
         "CLAUDE_CONFIG_DIR": str(_conversations(copy)),
@@ -176,7 +181,8 @@ def task_prompt(task: str, checks: list[Check]) -> str:
     return (
         f"{task}\n\nWhen you finish, deputy runs these checks on your copy, outside your sandbox, "
         f"and sends back any failure: {listed}. While you work, run only the tests of the code "
-        "you change: the whole test suite is slow in your sandbox and deputy runs it for you."
+        "you change. Do not run the whole test suite yourself, even if the task asks for it: in "
+        "your sandbox some tests cannot finish, and deputy runs the whole suite for you."
     )
 
 
