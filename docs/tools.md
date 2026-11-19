@@ -41,6 +41,7 @@ other than answering a question about files.
 | `backend` | A configured backend; default is `default_backend`. |
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
 | `wait` | `true` by default. With `false` it returns at once with `status: running`; get the result with `collect`. |
+| `agent` | `false` by default. With `true`, a local agent does a code change in a private copy (below). |
 
 Returns: `run_id`, `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs
 `running`, `cancelled`), `answer`, a one-line `checks` summary (`3/3 passed`, or what failed with its
@@ -52,6 +53,25 @@ The result is short on purpose. Metrics (turns, tokens, seconds, model) and the 
 recorded in the trace and shown by `deputy stats`, not sent: a typical passing result is about 16 %
 smaller (558 to 471 tokens in a measured case), and the tool's output schema is smaller too.
 The worker always answers in English (the bundled profile says so), unless asked to translate.
+
+### A local agent for a code change (`agent=true`)
+
+With `agent=true`, `delegate` hands the whole task to Claude Code's own agent loop, running on your
+local model through a small gateway inside deputy. The agent searches, edits and runs tests like a
+Claude Code subagent, but no request reaches a hosted model.
+
+- **It never touches your repository.** It works in a private copy (a git worktree of your current
+  state, uncommitted changes included), and what comes back is a patch:
+  `Review, then apply: git apply <path>`. Generated files (`__pycache__`, `.venv`, `node_modules`)
+  are left out of the patch.
+- **It runs in the background.** The call returns `status: running` at once; get the result with
+  `collect`. A run may take up to 3 hours: a local model is much slower than a hosted one.
+- **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
+  work. A failing check, or an agent that does not finish, comes back with `needs_frontier`.
+- **What it needs:** the `claude` command, a git repository, and a local backend whose context
+  holds at least 110,000 tokens (llama.cpp: `--ctx-size 131072`). A smaller one is refused with
+  that message.
+- **What it cannot do** is in [security](security.md#the-local-agent).
 
 ## `collect`
 

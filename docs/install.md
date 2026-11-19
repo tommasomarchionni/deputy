@@ -42,6 +42,9 @@ deputy doctor        # checks the config and that the server answers
 Non-interactive: `deputy init --yes --url http://127.0.0.1:8080 --model default`.
 Details and examples for each kind of server: [configuration](configuration.md).
 
+For the local agent (`delegate` with `agent=true`), the server needs a context of at least 110,000
+tokens: with llama.cpp, start it with `--ctx-size 131072`. The `claude` command must be installed.
+
 ## 3. Connect your agent
 
 `deputy install <agent>` prints the exact configuration; add `--apply` to do it for you.

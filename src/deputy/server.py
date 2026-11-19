@@ -45,7 +45,8 @@ INSTRUCTIONS = (
     "answer: deputy proved that each quoted source is on its line, not that the model understood "
     "it, so read the cited line before you act on a fact. If the status is not ok, read the files "
     "yourself. Read directly a file you are about to edit, a short file, or what one search "
-    "answers. For other work with your own checks, use `delegate`."
+    "answers. For other work with your own checks, use `delegate`; for a well-defined code "
+    "change with tests, `delegate` with agent=true does it on the local model and returns a patch."
 )
 
 
