@@ -59,6 +59,19 @@ def _flat_tool_result(block: Json) -> Json:
     return {**block, "content": text}
 
 
+def _fold_notes(blocks: list[Json]) -> list[Json]:
+    """Text that Claude Code adds next to tool results goes inside the last result. A chat
+    template counts a user message with text as a new question and renders the turns before it
+    differently, so the model server would process most of the conversation again each turn."""
+    results = [b for b in blocks if b.get("type") == "tool_result"]
+    notes = [str(b.get("text", "")) for b in blocks if b.get("type") == "text"]
+    if not results or not notes:
+        return blocks
+    last = results[-1]
+    folded = {**last, "content": "\n\n".join([str(last.get("content") or ""), *notes]).strip()}
+    return [folded if b is last else b for b in blocks if b.get("type") != "text"]
+
+
 def _message(message: Json) -> Json | None:
     content = message.get("content")
     if not isinstance(content, list):
@@ -68,6 +81,8 @@ def _message(message: Json) -> Json | None:
         for block in cast("list[Json]", content)
         if block.get("type") not in ("thinking", "redacted_thinking")
     ]
+    if message.get("role") == "user":
+        kept = _fold_notes(kept)
     return {**message, "content": kept} if kept else None
 
 

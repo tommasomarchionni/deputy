@@ -103,3 +103,27 @@ def test_the_first_change_between_two_requests_is_located() -> None:
     }
     assert first_change(base, edited)["where"] == "user:tool_result"
     assert first_change(base, {**base, "system": "t"})["where"] == "system"
+
+
+def test_notes_next_to_tool_results_go_inside_the_last_result() -> None:
+    body = normalise(
+        {
+            "messages": [
+                {"role": "user", "content": "the task"},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "a", "content": "one"},
+                        {"type": "tool_result", "tool_use_id": "b", "content": "two"},
+                        {"type": "text", "text": "<system-reminder>note</system-reminder>"},
+                    ],
+                },
+                {"role": "user", "content": [{"type": "text", "text": "a real question"}]},
+            ]
+        },
+        BACKEND,
+    )
+    turn = body["messages"][1]["content"]
+    assert [b["type"] for b in turn] == ["tool_result", "tool_result"]
+    assert turn[1]["content"] == "two\n\n<system-reminder>note</system-reminder>"
+    assert body["messages"][2]["content"] == [{"type": "text", "text": "a real question"}]
