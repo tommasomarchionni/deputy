@@ -35,10 +35,11 @@ _GIT = shutil.which("git") or "git"
 _DEPENDENCIES = ("node_modules", ".venv")
 _NOT_THE_WORK = (
     *_DEPENDENCIES,
-    "**/__pycache__/**",
-    "**/*.pyc",
-    "**/.pytest_cache/**",
-    ".uv-cache/**",
+    "__pycache__/",
+    "*.pyc",
+    ".pytest_cache/",
+    ".uv-cache/",
+    ".tmp/",
 )
 _SECRET_PATHS = [
     "~/.ssh",
