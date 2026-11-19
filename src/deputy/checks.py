@@ -10,7 +10,8 @@ import asyncio
 import json
 import os
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal
 
 import jsonschema
@@ -40,6 +41,8 @@ class CheckContext:
     answer: str
     sandbox: Sandbox
     policy: Policy
+    env: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Added to a `command` check's environment: the local agent's copy needs its own."""
 
 
 def _result(name: str, problem: str = "") -> CheckResult:
@@ -435,7 +438,7 @@ class Command(BaseModel):
         name = f"command: {' '.join(self.argv)}"
         if not self._allowed_by(ctx.policy):
             return _result(name, "command not allowed by the policy")
-        env = {k: v for k, v in os.environ.items() if k in _COMMAND_ENV}
+        env = {k: v for k, v in os.environ.items() if k in _COMMAND_ENV} | dict(ctx.env)
         process: asyncio.subprocess.Process | None = None
         try:
             process = await asyncio.create_subprocess_exec(
@@ -516,9 +519,13 @@ def to_check(spec: CheckSpec) -> Check:
 
 
 async def run_checks(
-    checks: list[Check], answer: str, sandbox: Sandbox, policy: Policy
+    checks: list[Check],
+    answer: str,
+    sandbox: Sandbox,
+    policy: Policy,
+    env: Mapping[str, str] | None = None,
 ) -> list[CheckResult]:
-    context = CheckContext(answer=answer, sandbox=sandbox, policy=policy)
+    context = CheckContext(answer=answer, sandbox=sandbox, policy=policy, env=env or {})
     return [await check.evaluate(context) for check in checks]
 
 

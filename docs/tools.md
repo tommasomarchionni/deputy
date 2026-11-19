@@ -68,7 +68,13 @@ Claude Code subagent, but no request reaches a hosted model.
 - **It runs in the background.** The call returns `status: running` at once; get the result with
   `collect`. A run may take up to 3 hours: a local model is much slower than a hosted one.
 - **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
-  work. A failing check, or an agent that does not finish, comes back with `needs_frontier`.
+  work. A `command` check runs with the copy's code first on the Python path, and with `uv` told
+  never to sync or download, so it tests the copy and never changes your environment. Declare the
+  project's gates as checks (tests, linter, formatter, type checker): the agent finishes the job
+  before you see it.
+- **Failed checks go back to the agent.** It resumes its own conversation with the failures, up
+  to 3 times, and is told never to weaken or skip a check. Only then does a failure come back as
+  `checks_failed` with `needs_frontier`; an agent that does not finish comes back the same way.
 - **What it needs:** the `claude` command, a git repository, and a local backend whose context
   holds at least 110,000 tokens (llama.cpp: `--ctx-size 131072`). deputy reads the size from a
   llama.cpp server and refuses a smaller one; with other servers (Ollama sets a small context by

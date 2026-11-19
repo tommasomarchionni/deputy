@@ -46,7 +46,9 @@ different trust level from the worker's file tools, so it is confined on every s
 - **No credentials.** The agent's environment drops `ANTHROPIC_*`, `CLAUDE_CODE_*`, `AWS_*`,
   `GITHUB_*` and `GH_*`. It talks only to deputy's gateway on `127.0.0.1`, which answers only to a
   random per-run token and forwards only to your configured local backend.
-- **No hooks, no MCP servers, no settings files** of yours or of the repository are loaded.
+- **No hooks, no MCP servers, no settings files** of yours or of the repository are loaded. The
+  agent's conversations are kept in a folder of the run, removed with it, never in your own Claude
+  Code history.
 - **Text in files is data.** The agent is told so; the confinement above is what holds if a file
   tries to instruct it.
 

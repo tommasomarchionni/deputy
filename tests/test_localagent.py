@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from deputy import localagent
-from deputy.checks import Contains
+from deputy.checks import Command, Contains
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS
 
@@ -58,13 +58,22 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     folder = tmp_path / "bin"
     folder.mkdir()
 
-    def install(shell: str, subtype: str = "success", summary: str = "added the file") -> None:
-        event = json.dumps({"type": "result", "subtype": subtype, "result": summary})
+    def install(
+        shell: str, subtype: str = "success", summary: str = "added the file", repair: str = "true"
+    ) -> None:
+        """`shell` runs for the task; `repair` for each round resumed after failed checks."""
+        event = json.dumps(
+            {"type": "result", "subtype": subtype, "result": summary, "session_id": "s1"}
+        )
         tool = json.dumps(
             {"message": {"content": [{"type": "tool_use", "id": "t1", "name": "Bash"}]}}
         )
         program = folder / "claude"
-        program.write_text(f"#!/bin/sh\n{shell}\necho '{tool}'\necho '{event}'\n")
+        program.write_text(
+            f"#!/bin/sh\necho x >> {tmp_path}/rounds\n"
+            f'case " $* " in *" --resume s1 "*) {repair};; *) {shell};; esac\n'
+            f"echo '{tool}'\necho '{event}'\n"
+        )
         program.chmod(program.stat().st_mode | stat.S_IXUSR)
 
     monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ['PATH']}")
@@ -105,6 +114,55 @@ def test_a_failing_check_hands_the_task_back(repo: Path, fake_claude) -> None:
     result = _run(repo, [Contains(values=["never said"])])
     assert result.status == "checks_failed"
     assert "needs_frontier" in result.flags
+
+
+def _rounds(tmp_path: Path) -> int:
+    return (tmp_path / "rounds").read_text().count("x")
+
+
+def test_failed_checks_go_back_to_the_agent(repo: Path, fake_claude, tmp_path: Path) -> None:
+    fake_claude("echo bad > out.txt", repair="echo good > out.txt")
+    check = Command(argv=["grep", "-q", "good", "out.txt"])
+    result = asyncio.run(
+        localagent.run(
+            "do it", repo, BACKEND, [check], Policy(allowed_commands=[["grep"]]), "run-1"
+        )
+    )
+    assert result.status == "ok"
+    assert _rounds(tmp_path) == 2
+    assert "After 1 repair round(s)" in result.answer
+    assert "+good" in (state_dir() / "agents" / "run-1.patch").read_text()
+
+
+def test_repairs_stop_after_a_few_rounds(repo: Path, fake_claude, tmp_path: Path) -> None:
+    fake_claude("echo two >> a.txt")
+    result = _run(repo, [Contains(values=["never said"])])
+    assert result.status == "checks_failed"
+    assert _rounds(tmp_path) == 1 + localagent.REPAIR_ROUNDS
+
+
+def test_command_checks_test_the_copy(repo: Path, fake_claude) -> None:
+    fake_claude("true")
+    copy_src = state_dir() / "agents" / "run-1" / "src"
+    probe = f'test "$UV_NO_SYNC" = 1 && test "$PYTHONPATH" = "{copy_src}"'
+    result = asyncio.run(
+        localagent.run(
+            "do it",
+            repo,
+            BACKEND,
+            [Command(argv=["sh", "-c", probe])],
+            Policy(allowed_commands=[["sh"]]),
+            "run-1",
+        )
+    )
+    assert result.status == "ok", result.checks
+
+
+def test_the_conversations_stay_out_of_the_user_history(repo: Path, fake_claude) -> None:
+    fake_claude('mkdir -p "$CLAUDE_CONFIG_DIR/projects" && echo seen > seen.txt')
+    assert _run(repo).status == "ok"
+    assert "seen.txt" in (state_dir() / "agents" / "run-1.patch").read_text()
+    assert not (state_dir() / "agents" / "run-1.claude").exists()
 
 
 def test_an_agent_that_does_not_finish_hands_the_task_back(repo: Path, fake_claude) -> None:
@@ -158,6 +216,7 @@ def test_the_agent_gets_no_credential_of_the_user(monkeypatch: pytest.MonkeyPatc
     assert env["ANTHROPIC_BASE_URL"] == FakeGateway.url
     assert env["PYTHONPATH"] == "/copy/src"
     assert env["TMPDIR"] == "/copy/.tmp"
+    assert env["CLAUDE_CONFIG_DIR"] == "/copy.claude"
 
 
 def test_the_agent_compacts_late_enough(monkeypatch: pytest.MonkeyPatch) -> None:

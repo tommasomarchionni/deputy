@@ -14,6 +14,7 @@ import shutil
 import signal
 import subprocess
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
@@ -21,7 +22,7 @@ import httpx
 
 from deputy import runs
 from deputy.agent import Metrics, Result
-from deputy.checks import Check, run_checks
+from deputy.checks import Check, CheckResult, run_checks
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS, Gateway
 from deputy.sandbox import Sandbox
@@ -30,6 +31,7 @@ CONTEXT_NEEDED = 110_000  # Claude Code compacts at its smallest window, 100,000
 BUDGET_S = 10_800.0
 KEEP_PATCHES_S = 7 * 86_400  # patches nobody applied are removed after a week
 SUMMARY_CHARS = 1_500
+REPAIR_ROUNDS = 3  # failed checks go back to the agent this many times before the frontier
 TOOLS = "Bash,Read,Edit,Write,Grep,Glob"
 _GIT = shutil.which("git") or "git"
 # deputy's own Python environment must not leak into the repository's tools
@@ -131,12 +133,37 @@ def agent_environment(gateway: Gateway, backend: Backend, copy: Path) -> dict[st
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(MAX_TOKENS),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         "API_TIMEOUT_MS": str(int(BUDGET_S * 1000)),
+        # its conversations stay with the run, out of the user's own Claude Code history
+        "CLAUDE_CONFIG_DIR": str(_conversations(copy)),
+        **copy_environment(copy),
+    }
+
+
+def copy_environment(copy: Path) -> dict[str, str]:
+    """What the repository's tools need to work on the copy and not on the original: the
+    installed dependencies with the copy's code, nothing installed or downloaded."""
+    return {
         "UV_NO_SYNC": "1",
         "UV_OFFLINE": "1",
         "UV_CACHE_DIR": str(copy / ".uv-cache"),
         "PYTHONPATH": str(copy / "src"),
         "TMPDIR": str(copy / ".tmp"),
     }
+
+
+def _conversations(copy: Path) -> Path:
+    return copy.with_name(f"{copy.name}.claude")
+
+
+def repair_prompt(results: list[CheckResult]) -> str:
+    """What the agent is told when its work fails the checks."""
+    failed = "\n".join(f"- {r.name}: {r.detail}" for r in results if not r.passed)
+    return (
+        "deputy ran the checks of this task on your copy and these fail:\n"
+        f"{failed}\n"
+        "Fix the code so that they pass. Never weaken, skip or delete a check or a test. "
+        "Run them yourself, then end with a short summary of what you changed."
+    )
 
 
 def _git(*args: str, cwd: Path) -> str:
@@ -235,7 +262,9 @@ def _read_stream(line: bytes, seen: dict[str, Any]) -> None:
             seen["tools"].add(block.get("id"))
 
 
-async def _drive(command: list[str], copy: Path, env: dict[str, str]) -> dict[str, Any]:
+async def _drive(
+    command: list[str], copy: Path, env: dict[str, str], budget_s: float
+) -> dict[str, Any]:
     """Run the agent until it ends or the budget runs out; a cancelled job stops it."""
     seen: dict[str, Any] = {"tools": set(), "result": {}, "timed_out": False}
     process = await asyncio.create_subprocess_exec(
@@ -256,7 +285,7 @@ async def _drive(command: list[str], copy: Path, env: dict[str, str]) -> dict[st
         await process.wait()
 
     try:
-        await asyncio.wait_for(consume(), BUDGET_S)
+        await asyncio.wait_for(consume(), max(budget_s, 0.0))
     except TimeoutError:
         seen["timed_out"] = True
     finally:
@@ -264,6 +293,77 @@ async def _drive(command: list[str], copy: Path, env: dict[str, str]) -> dict[st
             os.killpg(process.pid, signal.SIGKILL)
             await process.wait()
     return seen
+
+
+def _command(backend: Backend, settings: Path) -> list[str]:
+    return [
+        str(shutil.which("claude") or "claude"),
+        "-p",
+        "--model",
+        backend.model,
+        "--system-prompt",
+        SYSTEM_PROMPT,
+        "--settings",
+        str(settings),
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--mcp-config",
+        '{"mcpServers":{}}',
+        "--tools",
+        TOOLS,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+    ]
+
+
+@dataclass
+class _Work:
+    seen: dict[str, Any] = field(default_factory=dict[str, Any])
+    results: list[CheckResult] = field(default_factory=list[CheckResult])
+    summaries: list[str] = field(default_factory=list[str])
+    finished: bool = False
+    tool_calls: int = 0
+    repairs: int = 0
+
+
+async def _work(  # noqa: PLR0913, PLR0917
+    task: str,
+    copy: Path,
+    backend: Backend,
+    command: list[str],
+    checks: list[Check],
+    policy: Policy,
+) -> _Work:
+    """The agent's rounds: the task, then a repair round for each failure of the checks."""
+    started = time.monotonic()
+    work = _Work()
+    async with Gateway(backend) as gateway:
+        env = agent_environment(gateway, backend, copy)
+        prompt = [task]
+        while True:
+            left = BUDGET_S - (time.monotonic() - started)
+            work.seen = await _drive([*command, *prompt], copy, env, left)
+            work.tool_calls += len(work.seen["tools"])
+            final = cast("dict[str, Any]", work.seen["result"])
+            work.summaries.append(str(final.get("result") or ""))
+            work.finished = final.get("subtype") == "success" and not final.get("is_error")
+            answer = "\n\n".join(work.summaries)
+            work.results = await run_checks(
+                checks, answer, Sandbox(copy), policy, copy_environment(copy)
+            )
+            session = str(final.get("session_id") or "")
+            if (
+                work.seen["timed_out"]
+                or not work.finished
+                or all(result.passed for result in work.results)
+                or work.repairs == REPAIR_ROUNDS
+                or not session
+            ):
+                return work
+            work.repairs += 1
+            prompt = ["--resume", session, repair_prompt(work.results)]
 
 
 async def run(  # noqa: PLR0913, PLR0917
@@ -274,7 +374,10 @@ async def run(  # noqa: PLR0913, PLR0917
     policy: Policy,
     run_id: str,
 ) -> Result:
-    """Do the task in a private copy and report a patch; the real repository stays as it is."""
+    """Do the task in a private copy and report a patch; the real repository stays as it is.
+
+    When the work fails the checks, the same agent gets the failures and tries again, up to
+    REPAIR_ROUNDS times, so that the frontier receives work that passes or a real problem."""
     started = time.monotonic()
     folder = state_dir() / "agents"
     copy = folder / run_id
@@ -285,29 +388,7 @@ async def run(  # noqa: PLR0913, PLR0917
     try:
         settings = folder / f"{run_id}.settings.json"
         settings.write_text(json.dumps(agent_settings(copy)), encoding="utf-8")
-        command = [
-            str(shutil.which("claude") or "claude"),
-            "-p",
-            "--model",
-            backend.model,
-            "--system-prompt",
-            SYSTEM_PROMPT,
-            "--settings",
-            str(settings),
-            "--setting-sources",
-            "",
-            "--strict-mcp-config",
-            "--mcp-config",
-            '{"mcpServers":{}}',
-            "--tools",
-            TOOLS,
-            "--output-format",
-            "stream-json",
-            "--verbose",
-            task,
-        ]
-        async with Gateway(backend) as gateway:
-            seen = await _drive(command, copy, agent_environment(gateway, backend, copy))
+        work = await _work(task, copy, backend, _command(backend, settings), checks, policy)
         settings.unlink(missing_ok=True)
         patch_file = folder / f"{run_id}.patch"
         try:
@@ -318,14 +399,18 @@ async def run(  # noqa: PLR0913, PLR0917
             return Result.model_validate(
                 {"run_id": run_id, "status": "error", "answer": note, "flags": ["needs_frontier"]}
             )
-        final = cast("dict[str, Any]", seen["result"])
-        summary = str(final.get("result") or "")[:SUMMARY_CHARS]
-        results = await run_checks(checks, summary, Sandbox(copy), policy)
-        finished = final.get("subtype") == "success" and not final.get("is_error")
+        seen, results, finished = work.seen, work.results, work.finished
+        repaired = (
+            f"After {work.repairs} repair round(s) for failed checks: "
+            f"{work.summaries[-1][:SUMMARY_CHARS]}"
+            if work.repairs
+            else ""
+        )
         answer = "\n\n".join(
             part
             for part in (
-                summary,
+                work.summaries[0][:SUMMARY_CHARS],
+                repaired,
                 f"Changes: {changed}. Review, then apply: git apply {patch_file}"
                 if changed
                 else "",
@@ -346,7 +431,8 @@ async def run(  # noqa: PLR0913, PLR0917
                 "event": "local_agent",
                 "run_id": run_id,
                 "status": status,
-                "tool_calls": len(seen["tools"]),
+                "tool_calls": work.tool_calls,
+                "repairs": work.repairs,
                 "elapsed_s": elapsed,
             }
         )
@@ -357,9 +443,10 @@ async def run(  # noqa: PLR0913, PLR0917
                 "answer": answer,
                 "checks": results,
                 "flags": flags,
-                "metrics": Metrics(elapsed_s=elapsed, tool_calls=len(seen["tools"])),
+                "metrics": Metrics(elapsed_s=elapsed, tool_calls=work.tool_calls),
             }
         )
     finally:
+        shutil.rmtree(_conversations(copy), ignore_errors=True)
         if not keep:
             _discard(workdir, copy)
