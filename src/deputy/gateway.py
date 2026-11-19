@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import secrets
 import socket
 import threading
@@ -95,8 +96,35 @@ def normalise(request: Json, backend: Backend) -> Json:
     return body
 
 
+def first_change(previous: Json | None, body: Json) -> dict[str, Any]:
+    """Where a request stops repeating the one before it: what decides how much of the prompt
+    the model server must process again. No content, only positions and kinds."""
+    if previous is None:
+        return {"messages": len(body["messages"]), "first_changed": 0, "where": "start"}
+    if previous.get("system") != body.get("system"):
+        return {"messages": len(body["messages"]), "first_changed": -1, "where": "system"}
+    if previous.get("tools") != body.get("tools"):
+        return {"messages": len(body["messages"]), "first_changed": -1, "where": "tools"}
+    old, new = cast("list[Json]", previous["messages"]), cast("list[Json]", body["messages"])
+    index = next((i for i, (a, b) in enumerate(zip(old, new, strict=False)) if a != b), None)
+    if index is None:
+        index = min(len(old), len(new))
+        where = "appended" if len(new) >= len(old) else "removed"
+    else:
+        content = new[index].get("content")
+        kinds = (
+            [str(b.get("type")) for b in cast("list[Json]", content)]
+            if isinstance(content, list)
+            else ["text"]
+        )
+        where = f"{new[index].get('role')}:{'+'.join(sorted(set(kinds)))}"
+    return {"messages": len(new), "first_changed": index, "of": len(old), "where": where}
+
+
 def create_app(backend: Backend, token: str, transport: httpx.AsyncBaseTransport | None = None):
     """The gateway application; `transport` replaces the network in tests."""
+    trace = os.environ.get("DEPUTY_GATEWAY_TRACE")
+    last: list[Json] = []
 
     def allowed(request: Request) -> bool:
         given = request.headers.get("authorization", "").removeprefix("Bearer ")
@@ -108,6 +136,10 @@ def create_app(backend: Backend, token: str, transport: httpx.AsyncBaseTransport
         if request.url.path.endswith("/count_tokens"):
             return JSONResponse({"input_tokens": len(await request.body()) // 4})
         body = normalise(cast("Json", json.loads(await request.body())), backend)
+        if trace:
+            with open(trace, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(first_change(last[0] if last else None, body)) + "\n")
+            last[:] = [body]
         key = backend.api_key()
         headers = {"anthropic-version": "2023-06-01", **({"x-api-key": key} if key else {})}
         if key:

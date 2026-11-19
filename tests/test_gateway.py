@@ -5,7 +5,7 @@ import json
 import httpx
 
 from deputy.config import Backend
-from deputy.gateway import MAX_TOKENS, create_app, normalise
+from deputy.gateway import MAX_TOKENS, create_app, first_change, normalise
 
 BACKEND = Backend(name="b", base_url="http://model", model="local-model")
 
@@ -88,3 +88,18 @@ def test_counting_tokens_needs_no_model() -> None:
     reply = _post(app, {"x-api-key": "secret"}, "/v1/messages/count_tokens")
     assert reply.status_code == 200
     assert reply.json()["input_tokens"] > 0
+
+
+def test_the_first_change_between_two_requests_is_located() -> None:
+    base = {"system": "s", "tools": [], "messages": [{"role": "user", "content": "a"}]}
+    longer = {**base, "messages": [*base["messages"], {"role": "assistant", "content": "b"}]}
+    edited = {**base, "messages": [{"role": "user", "content": [{"type": "tool_result"}]}]}
+    assert first_change(None, base)["where"] == "start"
+    assert first_change(base, longer) == {
+        "messages": 2,
+        "first_changed": 1,
+        "of": 1,
+        "where": "appended",
+    }
+    assert first_change(base, edited)["where"] == "user:tool_result"
+    assert first_change(base, {**base, "system": "t"})["where"] == "system"
