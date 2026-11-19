@@ -13,6 +13,7 @@ import pytest
 from deputy import localagent
 from deputy.checks import Contains
 from deputy.config import Backend, ConfigError, Policy, state_dir
+from deputy.gateway import MAX_TOKENS
 
 BACKEND = Backend(name="b", base_url="http://model", model="local-model")
 
@@ -157,6 +158,14 @@ def test_the_agent_gets_no_credential_of_the_user(monkeypatch: pytest.MonkeyPatc
     assert env["ANTHROPIC_BASE_URL"] == FakeGateway.url
     assert env["PYTHONPATH"] == "/copy/src"
     assert env["TMPDIR"] == "/copy/.tmp"
+
+
+def test_the_agent_compacts_late_enough(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "64000")
+    env = localagent.agent_environment(cast("Any", FakeGateway(BACKEND)), BACKEND, Path("/copy"))
+    # Claude Code compacts at the window minus room for one reply: the gateway's cap, not 20,000.
+    assert env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == str(MAX_TOKENS)
+    assert int(env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"]) < localagent.CONTEXT_NEEDED
 
 
 def _context(monkeypatch: pytest.MonkeyPatch, reply: httpx.Response) -> None:

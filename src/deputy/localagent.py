@@ -23,7 +23,7 @@ from deputy import runs
 from deputy.agent import Metrics, Result
 from deputy.checks import Check, run_checks
 from deputy.config import Backend, ConfigError, Policy, state_dir
-from deputy.gateway import Gateway
+from deputy.gateway import MAX_TOKENS, Gateway
 from deputy.sandbox import Sandbox
 
 CONTEXT_NEEDED = 110_000  # Claude Code compacts at its smallest window, 100,000 tokens
@@ -126,6 +126,9 @@ def agent_environment(gateway: Gateway, backend: Backend, copy: Path) -> dict[st
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "ANTHROPIC_SMALL_FAST_MODEL": model,
         "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "100000",
+        # Claude Code keeps room for a reply of this size before it compacts: 20,000 tokens by
+        # default, which compacted at 67,000. The gateway never asks for more than MAX_TOKENS.
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS": str(MAX_TOKENS),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         "API_TIMEOUT_MS": str(int(BUDGET_S * 1000)),
         "UV_NO_SYNC": "1",
