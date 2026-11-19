@@ -97,6 +97,9 @@ def normalise(request: Json, backend: Backend) -> Json:
         "stream": bool(request.get("stream")),
         "system": "\n\n".join([_system_text(request.get("system")), *extra]).strip(),
         "messages": _without_cache_marks(messages),
+        # Reasoning costs the agent minutes per turn on a local model and its work is checked by
+        # tests anyway, so it is off unless the backend's extra_body asks for it.
+        "chat_template_kwargs": {"enable_thinking": False},
         **backend.extra_body,
     }
     tools = [

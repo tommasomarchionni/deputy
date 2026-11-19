@@ -39,6 +39,7 @@ def test_a_request_is_reduced_to_what_the_model_server_accepts() -> None:
         BACKEND,
     )
     assert body["model"] == "local-model"
+    assert body["chat_template_kwargs"] == {"enable_thinking": False}
     assert body["max_tokens"] == MAX_TOKENS
     assert body["system"] == "one\n\ntwo"
     assert body["messages"] == [
@@ -127,3 +128,11 @@ def test_notes_next_to_tool_results_go_inside_the_last_result() -> None:
     assert [b["type"] for b in turn] == ["tool_result", "tool_result"]
     assert turn[1]["content"] == "two\n\n<system-reminder>note</system-reminder>"
     assert body["messages"][2]["content"] == [{"type": "text", "text": "a real question"}]
+
+
+def test_a_backend_can_turn_reasoning_back_on() -> None:
+    backend = BACKEND.model_copy(
+        update={"extra_body": {"chat_template_kwargs": {"enable_thinking": True}}}
+    )
+    body = normalise({"messages": []}, backend)
+    assert body["chat_template_kwargs"] == {"enable_thinking": True}
