@@ -213,3 +213,18 @@ def test_the_copy_is_kept_when_the_patch_cannot_be_made(
     assert result.status == "error"
     assert str(copy) in result.answer
     assert (copy / "a.txt").read_text() == "one\ntwo\n"
+
+
+def test_patches_older_than_a_week_are_removed(repo: Path, fake_claude) -> None:
+    folder = state_dir() / "agents"
+    folder.mkdir(parents=True)
+    old = folder / "old.patch"
+    old.write_text("x")
+    week = localagent.KEEP_PATCHES_S + 60
+    os.utime(old, (old.stat().st_atime - week, old.stat().st_mtime - week))
+    fresh = folder / "fresh.patch"
+    fresh.write_text("x")
+    fake_claude("true")
+    _run(repo)
+    assert not old.exists()
+    assert fresh.exists()

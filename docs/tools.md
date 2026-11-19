@@ -61,7 +61,8 @@ local model through a small gateway inside deputy. The agent searches, edits and
 Claude Code subagent, but no request reaches a hosted model.
 
 - **It never touches your repository.** It works in a private copy (a git worktree of your current
-  state, uncommitted changes included), and what comes back is a patch:
+  state, including uncommitted changes to tracked files; new untracked files are not copied), and
+  what comes back is a patch:
   `Review, then apply: git apply <path>`. Generated files (`__pycache__`, `.venv`, `node_modules`)
   are left out of the patch.
 - **It runs in the background.** The call returns `status: running` at once; get the result with
@@ -69,8 +70,9 @@ Claude Code subagent, but no request reaches a hosted model.
 - **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
   work. A failing check, or an agent that does not finish, comes back with `needs_frontier`.
 - **What it needs:** the `claude` command, a git repository, and a local backend whose context
-  holds at least 110,000 tokens (llama.cpp: `--ctx-size 131072`). A smaller one is refused with
-  that message.
+  holds at least 110,000 tokens (llama.cpp: `--ctx-size 131072`). deputy reads the size from a
+  llama.cpp server and refuses a smaller one; with other servers (Ollama sets a small context by
+  default) make sure of it yourself. Patches older than a week are removed.
 - **What it cannot do** is in [security](security.md#the-local-agent).
 
 ## `collect`

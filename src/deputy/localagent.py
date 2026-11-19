@@ -28,6 +28,7 @@ from deputy.sandbox import Sandbox
 
 CONTEXT_NEEDED = 110_000  # Claude Code compacts at its smallest window, 100,000 tokens
 BUDGET_S = 10_800.0
+KEEP_PATCHES_S = 7 * 86_400  # patches nobody applied are removed after a week
 SUMMARY_CHARS = 1_500
 TOOLS = "Bash,Read,Edit,Write,Grep,Glob"
 _GIT = shutil.which("git") or "git"
@@ -144,6 +145,13 @@ def _prepare(workdir: Path, copy: Path) -> str:
     return start
 
 
+def _forget_old(folder: Path) -> None:
+    cutoff = time.time() - KEEP_PATCHES_S
+    for leftover in folder.glob("*.patch"):
+        if leftover.stat().st_mtime < cutoff:
+            leftover.unlink(missing_ok=True)
+
+
 def _discard(workdir: Path, copy: Path) -> None:
     subprocess.run(  # noqa: S603  (fixed program, arguments built here)
         [_GIT, "worktree", "remove", "--force", str(copy)],
@@ -152,6 +160,9 @@ def _discard(workdir: Path, copy: Path) -> None:
         check=False,
     )
     shutil.rmtree(copy, ignore_errors=True)
+    subprocess.run(  # noqa: S603  (fixed program, arguments built here)
+        [_GIT, "worktree", "prune"], cwd=workdir, capture_output=True, check=False
+    )
 
 
 def _patch(copy: Path, start: str, target: Path) -> str:
@@ -251,6 +262,8 @@ async def run(  # noqa: PLR0913, PLR0917
     started = time.monotonic()
     folder = state_dir() / "agents"
     copy = folder / run_id
+    if folder.is_dir():
+        _forget_old(folder)
     start = _prepare(workdir, copy)
     keep = False
     try:
