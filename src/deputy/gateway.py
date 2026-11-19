@@ -24,7 +24,7 @@ from starlette.routing import Route
 
 from deputy.config import Backend
 
-MAX_TOKENS = 8_192
+MAX_TOKENS = 4_096  # measured: real replies stayed under 1,300 tokens; longer ones were runaway
 REPLY_TIMEOUT_S = 3_600.0  # a local model can take long over one long reply
 _START_WAIT_S = 10.0
 
