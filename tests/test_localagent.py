@@ -180,6 +180,76 @@ def test_an_agent_that_stays_stuck_hands_the_task_back(
     assert _rounds(tmp_path) == 1 + localagent.NUDGES
 
 
+_LAST = "for word; do prompt=$word; done; "  # the prompt is the last argument of `claude`
+
+
+def _stall() -> str:
+    """Shell for a fake agent that only reads and never ends: deputy has to stop it."""
+    read = json.dumps({"message": {"content": [{"type": "tool_use", "id": "r", "name": "Read"}]}})
+    return (
+        'echo \'{"type": "system", "session_id": "s1"}\'; '
+        f"for i in $(seq {localagent.STALL_CALLS}); do echo '{read}'; done; sleep 30"
+    )
+
+
+def _run_steps(repo: Path, steps: list[str], checks: list | None = None, policy=None):
+    return asyncio.run(
+        localagent.run(
+            "shared rules", repo, BACKEND, checks or [], policy or Policy(), "run-1", steps
+        )
+    )
+
+
+def test_each_step_gets_a_conversation_of_its_own(repo: Path, fake_claude, tmp_path: Path) -> None:
+    log = tmp_path / "prompts"
+    fake_claude(f'{_LAST}echo "$prompt" | grep -o "You do step [0-9]*" >> {log}; echo x >> a.txt')
+    result = _run_steps(repo, ["first change", "second change"])
+    assert result.status == "ok"
+    assert log.read_text().splitlines() == ["You do step 1", "You do step 2"]
+    assert _rounds(tmp_path) == 2
+    assert result.answer.startswith("1. added the file\n2. added the file")
+    assert "+x\n+x" in (state_dir() / "agents" / "run-1.patch").read_text()
+
+
+def test_a_step_prompt_holds_the_shared_task_and_only_its_step() -> None:
+    prompt = localagent.step_prompt("shared rules", ["first change", "second change"], 1, [])
+    assert prompt.startswith("shared rules\n\n")
+    assert "Step 2: second change" in prompt
+    assert "first change" not in prompt
+
+
+def test_a_step_the_agent_cannot_do_is_undone_and_named(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    stuck = f"echo half > half.txt; echo broken >> a.txt; {_stall()}"
+    work = f'{_LAST}case "$prompt" in *"You do step 2"*) {stuck};; *) echo ok >> a.txt;; esac'
+    fake_claude(work, repair=_stall())  # the nudges resume the conversation, still stuck
+    result = _run_steps(repo, ["one", "two", "three"])
+    assert result.status == "error"
+    assert result.flags == ["stuck", "partial", "needs_frontier"]
+    assert "2. NOT DONE (stuck)" in result.answer
+    assert "Left for you: step 2." in result.answer
+    patch = (state_dir() / "agents" / "run-1.patch").read_text()
+    assert "half.txt" not in patch
+    assert "broken" not in patch
+    assert "+ok\n+ok" in patch  # steps one and three are in the patch
+    assert _rounds(tmp_path) == 3 + localagent.NUDGES
+
+
+def test_failed_checks_of_steps_go_to_a_new_conversation_that_knows_the_steps(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    log = tmp_path / "repairs"
+    repair = f'echo "$prompt" > {log}; echo good > out.txt'
+    fake_claude(f'{_LAST}case "$prompt" in *"these fail"*) {repair};; *) echo bad > out.txt;; esac')
+    check = Command(argv=["grep", "-q", "good", "out.txt"])
+    result = _run_steps(repo, ["one", "two"], [check], Policy(allowed_commands=[["grep"]]))
+    assert result.status == "ok"
+    assert "After 1 repair round(s)" in result.answer
+    assert "Other runs just made these changes in this copy:\n1. one\n2. two" in log.read_text()
+    assert _rounds(tmp_path) == 3
+
+
 def test_command_checks_test_the_copy(repo: Path, fake_claude) -> None:
     fake_claude("true")
     copy_src = state_dir() / "agents" / "run-1" / "src"

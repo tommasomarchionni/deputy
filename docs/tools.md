@@ -42,11 +42,13 @@ other than answering a question about files.
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
 | `wait` | `true` by default. With `false` it returns at once with `status: running`; get the result with `collect`. |
 | `agent` | `false` by default. With `true`, a local agent does a code change in a private copy (below). |
+| `steps` | With `agent`: the separate changes, one per item; each is done in a conversation of its own. |
 
 Returns: `run_id`, `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs
 `running`, `cancelled`), `answer`, a one-line `checks` summary (`3/3 passed`, or what failed with its
 detail), and, only when there are any, `files_written` and `flags` (`needs_frontier`, `turn_limit`,
-`backend_error`, `setup_error`, `time_limit`, `not_worth_delegating`, `small_input`).
+`backend_error`, `setup_error`, `time_limit`, `stuck`, `partial`, `not_worth_delegating`,
+`small_input`).
 
 The result is short on purpose. Metrics (turns, tokens, seconds, model) and the saving estimate
 (`orchestrator_tokens_saved_est`, a rough bytes / 4 estimate of what you did not have to read) are
@@ -65,6 +67,13 @@ Claude Code subagent, but no request reaches a hosted model.
   what comes back is a patch:
   `Review, then apply: git apply <path>`. Generated files (`__pycache__`, `.venv`, `node_modules`)
   are left out of the patch.
+- **Give it steps.** Put each separate change in `steps` (up to 20) and what they share in
+  `task`: every step gets a conversation of its own in the same copy. A local model reads a short
+  conversation fast and handles it well; one long conversation for eight changes made a 27B model
+  spend a third of its time reading its own history again. A step the agent cannot do is undone,
+  so it leaves no half-made change, and the answer names it: `Left for you: step 6`. With the
+  flag `partial` the checks pass on the steps that are done: apply the patch and do only the
+  steps that are left.
 - **It runs in the background.** The call returns `status: running` at once; get the result with
   `collect`. A run may take up to 3 hours: a local model is much slower than a hosted one.
 - **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
@@ -72,8 +81,9 @@ Claude Code subagent, but no request reaches a hosted model.
   never to sync or download, so it tests the copy and never changes your environment. Declare the
   project's gates as checks (tests, linter, formatter, type checker): the agent finishes the job
   before you see it.
-- **Failed checks go back to the agent.** It resumes its own conversation with the failures, up
-  to 3 times, and is told never to weaken or skip a check. Only then does a failure come back as
+- **Failed checks go back to the agent.** It resumes its own conversation with the failures (a
+  task in steps: a new conversation that is told the steps), up to 3 times, and is told never to
+  weaken or skip a check. Only then does a failure come back as
   `checks_failed` with `needs_frontier`; an agent that does not finish comes back the same way.
 - **What it needs:** the `claude` command, a git repository, and a local backend whose context
   holds at least 110,000 tokens (llama.cpp: `--ctx-size 131072`). deputy reads the size from a

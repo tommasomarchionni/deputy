@@ -306,7 +306,7 @@
       }
     },
     "delegate": {
-      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: then `collect`. agent=True: a local agent changes code in a private copy and returns a patch.",
+      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: then `collect`. agent=True: a local agent changes code in a private copy and returns a patch; one change per item of `steps`, what they share in `task`.",
       "input": {
         "$defs": {
           "CheckSpec": {
@@ -466,6 +466,21 @@
             "default": "helper",
             "title": "Profile",
             "type": "string"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Steps"
           },
           "task": {
             "title": "Task",

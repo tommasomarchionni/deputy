@@ -390,8 +390,8 @@ def test_delegate_starts_a_local_agent_in_the_background(tmp_path: Path, monkeyp
     cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
     seen = {}
 
-    async def run(task, workdir, backend, checks, policy, run_id):
-        seen.update(task=task, workdir=workdir, model=backend.model)
+    async def run(task, workdir, backend, checks, policy, run_id, steps):
+        seen.update(task=task, workdir=workdir, model=backend.model, steps=steps)
         return Result(run_id=run_id, status="ok", answer="patch ready")
 
     async def enough(backend) -> None:
@@ -402,7 +402,12 @@ def test_delegate_starts_a_local_agent_in_the_background(tmp_path: Path, monkeyp
 
     async def go() -> tuple[dict, dict]:
         tools: Any = build_server()
-        arguments = {"task": "change it", "workdir": str(tmp_path), "agent": True}
+        arguments = {
+            "task": "change it",
+            "workdir": str(tmp_path),
+            "agent": True,
+            "steps": ["one", "two"],
+        }
         started = structured(await tools.call_tool("delegate", arguments))
         done = await tools.call_tool("collect", {"run_id": started["run_id"]})
         return started, json.loads(done.content[0].text)
@@ -410,7 +415,7 @@ def test_delegate_starts_a_local_agent_in_the_background(tmp_path: Path, monkeyp
     started, done = asyncio.run(go())
     assert started["status"] == "running"
     assert done["answer"] == "patch ready"
-    assert seen == {"task": "change it", "workdir": tmp_path, "model": "m"}
+    assert seen == {"task": "change it", "workdir": tmp_path, "model": "m", "steps": ["one", "two"]}
 
 
 def test_a_local_agent_is_refused_when_the_context_is_too_small(

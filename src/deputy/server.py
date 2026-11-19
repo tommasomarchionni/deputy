@@ -212,6 +212,17 @@ async def _backend_status(config: Config) -> dict[str, str]:
     return out
 
 
+def _agent_problem(backend: Backend, steps: list[str], *, has_room: bool) -> str:
+    """Why a local agent cannot start, or nothing."""
+    if len(steps) > localagent.MAX_STEPS:
+        return f"at most {localagent.MAX_STEPS} steps: split the work in two delegations"
+    if backend.kind != "local":
+        return "the local agent needs a local backend"
+    if not has_room:
+        return f"{background.MAX_ACTIVE} jobs are already running"
+    return ""
+
+
 def build_server() -> MCPServer:
     server = MCPServer("deputy", instructions=INSTRUCTIONS)
     pending = background.Jobs()
@@ -226,26 +237,26 @@ def build_server() -> MCPServer:
             return outcome_of(_setup_error(request.run_id, message))
         return outcome_of(pending.submit(request.run_id, prepared.sandbox, work))
 
-    async def start_agent(prepared: _Delegation, task: str, workdir: str, run_id: str) -> Outcome:
+    async def start_agent(
+        prepared: _Delegation, task: str, workdir: str, run_id: str, steps: list[str]
+    ) -> Outcome:
         backend = prepared.routes[0].backend
-        if backend.kind != "local":
-            return outcome_of(_setup_error(run_id, "the local agent needs a local backend"))
-        if not pending.has_room():
-            message = f"{background.MAX_ACTIVE} jobs are already running"
-            return outcome_of(_setup_error(run_id, message))
+        problem = _agent_problem(backend, steps, has_room=pending.has_room())
+        if problem:
+            return outcome_of(_setup_error(run_id, problem))
         try:
             await localagent.require_context(backend)
         except ConfigError as exc:
             return outcome_of(_setup_error(run_id, str(exc)))
         policy = prepared.config.policy
-        work = localagent.run(task, Path(workdir), backend, prepared.checks, policy, run_id)
+        work = localagent.run(task, Path(workdir), backend, prepared.checks, policy, run_id, steps)
         return outcome_of(pending.submit(run_id, prepared.sandbox, work))
 
     @server.tool(
         description=(
             "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: "
             "then `collect`. agent=True: a local agent changes code in a private copy and returns "
-            "a patch."
+            "a patch; one change per item of `steps`, what they share in `task`."
         )
     )
     async def delegate(  # noqa: PLR0913, PLR0917
@@ -257,6 +268,7 @@ def build_server() -> MCPServer:
         max_turns: int | None = None,
         wait: bool = True,
         agent: bool = False,
+        steps: list[str] | None = None,
     ) -> Outcome:
         run_id = runs.new_run_id()
         try:
@@ -274,8 +286,8 @@ def build_server() -> MCPServer:
             "max_turns": max_turns,
             "checks": [c.model_dump(exclude_none=True) for c in checks or []],
         }
-        if agent:
-            return await start_agent(prepared, task, workdir, run_id)
+        if agent or steps:  # `steps` are only for the local agent
+            return await start_agent(prepared, task, workdir, run_id, steps or [])
         args = _Request(task, max_turns, tokens.estimate_value(request), run_id)
         return await launch(prepared, args, wait)
 

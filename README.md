@@ -64,7 +64,8 @@ after its build provenance is verified, never a new major version or a release m
 3. The server runs the checks. A failing answer gets one correction round; if it still fails, the
    result says `needs_frontier` and your agent does the task itself.
 4. For a code change, `delegate` with `agent=true` runs Claude Code's own agent loop on your local
-   model, confined to a private copy of the repository, and returns a patch to review.
+   model, confined to a private copy of the repository, and returns a patch to review. Your agent
+   lists the changes as `steps`: the local model does each one in a short conversation of its own.
 
 The result is short: `status`, `answer`, a one-line check summary, and files or flags only when
 there are any.

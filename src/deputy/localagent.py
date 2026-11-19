@@ -42,6 +42,8 @@ STALL_PROMPT = (
     "the change you are stuck on as it is, finish the other changes, and in your summary name "
     "the change that is left and why."
 )
+STEP_SUMMARY_CHARS = 240  # of each step's summary, in the answer of a task in steps
+MAX_STEPS = 20
 REPAIR_ROUNDS = 3  # failed checks go back to the agent this many times before the frontier
 TOOLS = "Bash,Read,Edit,Write,Grep,Glob"
 _GIT = shutil.which("git") or "git"
@@ -210,11 +212,25 @@ def task_prompt(task: str, checks: list[Check]) -> str:
     )
 
 
-def repair_prompt(results: list[CheckResult]) -> str:
+def step_prompt(task: str, steps: list[str], index: int, checks: list[Check]) -> str:
+    """One step of a task in steps: the shared instructions, then only this step."""
+    text = (
+        f"{task}\n\nThe work is split in {len(steps)} steps, each done by a separate run in "
+        f"this same copy. You do step {index + 1} only; do not start any other change.\n\n"
+        f"Step {index + 1}: {steps[index]}"
+    )
+    return task_prompt(text, checks)
+
+
+def repair_prompt(results: list[CheckResult], steps: list[str] | None = None) -> str:
     """What the agent is told when its work fails the checks."""
     failed = "\n".join(f"- {r.name}: {r.detail}" for r in results if not r.passed)
+    made = ""
+    if steps:
+        listed = "\n".join(f"{n}. {step}" for n, step in enumerate(steps, 1))
+        made = f"Other runs just made these changes in this copy:\n{listed}\n\n"
     return (
-        "deputy ran the checks of this task on your copy and these fail:\n"
+        f"{made}deputy ran the checks of this task on your copy and these fail:\n"
         f"{failed}\n"
         "Fix your work so that they pass. Never weaken, skip or delete a check or a test, and "
         "never change code that the task is not about to make one pass: when a failure comes "
@@ -265,13 +281,31 @@ def _discard(workdir: Path, copy: Path) -> None:
     )
 
 
+def _stage(copy: Path) -> None:
+    """Put every change of the copy in its index, except what is not the work."""
+    leave_out = copy.with_name(f"{copy.name}.exclude")
+    leave_out.write_text("\n".join(_NOT_THE_WORK) + "\n", encoding="utf-8")
+    try:
+        _git("-c", f"core.excludesFile={leave_out}", "add", "--all", cwd=copy)
+    finally:
+        leave_out.unlink(missing_ok=True)
+
+
+def _snapshot(copy: Path) -> str:
+    """The state of the copy, to come back to when a step is abandoned."""
+    _stage(copy)
+    return _git("write-tree", cwd=copy)
+
+
+def _restore(copy: Path, tree: str) -> None:
+    """Undo everything since the snapshot, new files included."""
+    _stage(copy)
+    _git("read-tree", "--reset", "-u", tree, cwd=copy)
+
+
 def _patch(copy: Path, start: str, target: Path) -> str:
     """Save what the agent changed; returns the one-line summary, empty when nothing changed."""
-    leave_out = target.with_suffix(".exclude")
-    leave_out.parent.mkdir(parents=True, exist_ok=True)
-    leave_out.write_text("\n".join(_NOT_THE_WORK) + "\n", encoding="utf-8")
-    _git("-c", f"core.excludesFile={leave_out}", "add", "--all", cwd=copy)
-    leave_out.unlink()
+    _stage(copy)
     patch = subprocess.run(  # noqa: S603  (fixed program, arguments built here)
         [_GIT, "diff", "--cached", "--binary", start],
         cwd=copy,
@@ -392,58 +426,166 @@ def _command(backend: Backend, settings: Path) -> list[str]:
 
 
 @dataclass
+class Step:
+    """One part of the task: what was asked, how it ended and what the agent said."""
+
+    text: str
+    outcome: str = "done"  # done | stuck | unfinished | time_limit
+    summary: str = ""
+
+
+@dataclass
 class _Work:
     seen: dict[str, Any] = field(default_factory=dict[str, Any])
     results: list[CheckResult] = field(default_factory=list[CheckResult])
-    summaries: list[str] = field(default_factory=list[str])
-    finished: bool = False
+    steps: list[Step] = field(default_factory=list[Step])
+    repair_summary: str = ""
     tool_calls: int = 0
     repairs: int = 0
     nudges: int = 0
 
+    @property
+    def left(self) -> list[int]:
+        """The numbers of the steps that are not done."""
+        return [n for n, step in enumerate(self.steps, 1) if step.outcome != "done"]
+
+
+class _Rounds:
+    """The agent's conversations for one task: each step, a nudge when it is stuck, then a
+    repair round for each failure of the checks."""
+
+    def __init__(self, copy: Path, command: list[str], env: dict[str, str]) -> None:
+        self.copy, self.command, self.env = copy, command, env
+        self.started = time.monotonic()
+        self.work = _Work()
+
+    async def drive(self, prompt: list[str]) -> dict[str, Any]:
+        left = BUDGET_S - (time.monotonic() - self.started)
+        seen = await _drive([*self.command, *prompt], self.copy, self.env, left)
+        self.work.seen = seen
+        self.work.tool_calls += len(seen["tools"])
+        return seen
+
+    async def step(self, prompt: str) -> Step:
+        """One conversation, resumed with a nudge while the agent is stuck."""
+        step, nudges, argv = Step(prompt), 0, [prompt]
+        while True:
+            seen = await self.drive(argv)
+            session = str(seen["session"])
+            if seen["stalled"] and nudges < NUDGES and session and not seen["timed_out"]:
+                nudges += 1
+                self.work.nudges += 1
+                argv = ["--resume", session, STALL_PROMPT]
+                continue
+            final = cast("dict[str, Any]", seen["result"])
+            step.summary = str(final.get("result") or "")
+            if seen["timed_out"]:
+                step.outcome = "time_limit"
+            elif seen["stalled"]:
+                step.outcome = "stuck"
+            elif final.get("subtype") != "success" or final.get("is_error"):
+                step.outcome = "unfinished"
+            return step
+
 
 async def _work(  # noqa: PLR0913, PLR0917
     task: str,
+    steps: list[str],
     copy: Path,
     backend: Backend,
     command: list[str],
     checks: list[Check],
     policy: Policy,
 ) -> _Work:
-    """The agent's rounds: the task, a nudge when it is stuck, then a repair round for each
-    failure of the checks."""
-    started = time.monotonic()
-    work = _Work()
+    """Do the task, or each of its steps in a conversation of its own, then repair until the
+    checks pass. A step the agent cannot do is undone, so that it leaves no half-made change."""
     window = compact_window(await require_context(backend))
     async with Gateway(backend) as gateway:
-        env = agent_environment(gateway, backend, copy, window)
-        prompt = [task_prompt(task, checks)]
+        rounds = _Rounds(copy, command, agent_environment(gateway, backend, copy, window))
+        work = rounds.work
+        prompts = [step_prompt(task, steps, n, checks) for n in range(len(steps))]
+        for prompt in prompts or [task_prompt(task, checks)]:
+            before = _snapshot(copy) if steps else ""
+            step = await rounds.step(prompt)
+            work.steps.append(step)
+            if step.outcome != "done" and steps:
+                _restore(copy, before)
+            if step.outcome in ("time_limit", "unfinished"):
+                break  # no time left, or the model server is not answering
+        session = "" if steps else str(work.seen["session"])
         while True:
-            left = BUDGET_S - (time.monotonic() - started)
-            work.seen = await _drive([*command, *prompt], copy, env, left)
-            work.tool_calls += len(work.seen["tools"])
-            session = str(work.seen["session"])
-            if work.seen["stalled"] and work.nudges < NUDGES and session:
-                work.nudges += 1
-                prompt = ["--resume", session, STALL_PROMPT]
-                continue
-            final = cast("dict[str, Any]", work.seen["result"])
-            work.summaries.append(str(final.get("result") or ""))
-            work.finished = final.get("subtype") == "success" and not final.get("is_error")
-            answer = "\n\n".join(work.summaries)
+            answer = "\n\n".join([*(step.summary for step in work.steps), work.repair_summary])
             work.results = await run_checks(
                 checks, answer, Sandbox(copy), policy, copy_environment(copy)
             )
+            last = work.steps[-1].outcome
             if (
-                work.seen["timed_out"]
-                or not work.finished
-                or all(result.passed for result in work.results)
+                all(result.passed for result in work.results)
                 or work.repairs == REPAIR_ROUNDS
-                or not session
+                or last in ("time_limit", "unfinished")
+                or (last != "done" and not steps)
             ):
                 return work
             work.repairs += 1
-            prompt = ["--resume", session, repair_prompt(work.results)]
+            text = repair_prompt(work.results, steps if not session else None)
+            repair = await rounds.step(text) if not session else None
+            if repair is None:
+                seen = await rounds.drive(["--resume", session, text])
+                final = cast("dict[str, Any]", seen["result"])
+                work.repair_summary = str(final.get("result") or "")
+                if seen["timed_out"] or seen["stalled"]:
+                    return work
+            else:
+                work.repair_summary = repair.summary
+                if repair.outcome != "done":
+                    return work
+            session = str(work.seen["session"])
+            if not session:
+                return work
+
+
+def _answer(work: _Work, changed: str, patch_file: Path) -> str:
+    """What the orchestrator reads: short, and clear about what is left for it to do."""
+    if len(work.steps) == 1:
+        parts = [work.steps[0].summary[:SUMMARY_CHARS]]
+    else:
+        parts = [
+            "\n".join(
+                f"{n}. {step.summary[:STEP_SUMMARY_CHARS].strip()}"
+                if step.outcome == "done"
+                else f"{n}. NOT DONE ({step.outcome}): its changes were undone."
+                for n, step in enumerate(work.steps, 1)
+            )
+        ]
+        if work.left:
+            numbers = ", ".join(str(n) for n in work.left)
+            parts.append(f"Left for you: step {numbers}. The patch holds the other steps.")
+    if work.repairs:
+        parts.append(
+            f"After {work.repairs} repair round(s) for failed checks: "
+            f"{work.repair_summary[:SUMMARY_CHARS]}"
+        )
+    if changed:
+        parts.append(f"Changes: {changed}. Review, then apply: git apply {patch_file}")
+    return "\n\n".join(part for part in parts if part)
+
+
+def _status(work: _Work, steps: list[str]) -> tuple[str, list[str]]:
+    outcomes = {step.outcome for step in work.steps}
+    passed = all(result.passed for result in work.results)
+    missing = len(work.steps) < len(steps) or bool(work.left)
+    if not missing:
+        return ("ok", []) if passed else ("checks_failed", ["needs_frontier"])
+    reason = (
+        "time_limit"
+        if "time_limit" in outcomes
+        else "stuck"
+        if "stuck" in outcomes
+        else "backend_error"
+    )
+    # `partial`: some steps are done and the checks pass, so the patch is worth applying
+    partial = ["partial"] if passed and "done" in outcomes and steps else []
+    return "error", [reason, *partial, "needs_frontier"]
 
 
 async def run(  # noqa: PLR0913, PLR0917
@@ -453,11 +595,16 @@ async def run(  # noqa: PLR0913, PLR0917
     checks: list[Check],
     policy: Policy,
     run_id: str,
+    steps: list[str] | None = None,
 ) -> Result:
     """Do the task in a private copy and report a patch; the real repository stays as it is.
 
-    When the work fails the checks, the same agent gets the failures and tries again, up to
-    REPAIR_ROUNDS times, so that the frontier receives work that passes or a real problem."""
+    With `steps`, each one is done in a conversation of its own in the same copy: a small
+    context is what a local model reads fast and handles well, and a step it cannot do is
+    undone and named, without losing the others. When the work fails the checks, the agent gets
+    the failures and tries again, up to REPAIR_ROUNDS times, so that the frontier receives work
+    that passes or a real problem."""
+    steps = steps or []
     started = time.monotonic()
     folder = state_dir() / "agents"
     copy = folder / run_id
@@ -468,7 +615,8 @@ async def run(  # noqa: PLR0913, PLR0917
     try:
         settings = folder / f"{run_id}.settings.json"
         settings.write_text(json.dumps(agent_settings(copy)), encoding="utf-8")
-        work = await _work(task, copy, backend, _command(backend, settings), checks, policy)
+        command = _command(backend, settings)
+        work = await _work(task, steps, copy, backend, command, checks, policy)
         settings.unlink(missing_ok=True)
         patch_file = folder / f"{run_id}.patch"
         try:
@@ -479,34 +627,8 @@ async def run(  # noqa: PLR0913, PLR0917
             return Result.model_validate(
                 {"run_id": run_id, "status": "error", "answer": note, "flags": ["needs_frontier"]}
             )
-        seen, results, finished = work.seen, work.results, work.finished
-        repaired = (
-            f"After {work.repairs} repair round(s) for failed checks: "
-            f"{work.summaries[-1][:SUMMARY_CHARS]}"
-            if work.repairs
-            else ""
-        )
-        answer = "\n\n".join(
-            part
-            for part in (
-                work.summaries[0][:SUMMARY_CHARS],
-                repaired,
-                f"Changes: {changed}. Review, then apply: git apply {patch_file}"
-                if changed
-                else "",
-            )
-            if part
-        )
-        status = "ok"
-        flags: list[str] = []
-        if seen["timed_out"]:
-            status, flags = "error", ["time_limit", "needs_frontier"]
-        elif seen["stalled"]:
-            status, flags = "error", ["stuck", "needs_frontier"]
-        elif not finished:
-            status, flags = "error", ["backend_error", "needs_frontier"]
-        elif not all(result.passed for result in results):
-            status, flags = "checks_failed", ["needs_frontier"]
+        answer = _answer(work, changed, patch_file)
+        status, flags = _status(work, steps)
         elapsed = round(time.monotonic() - started, 1)
         runs.record(
             {
@@ -516,6 +638,8 @@ async def run(  # noqa: PLR0913, PLR0917
                 "tool_calls": work.tool_calls,
                 "repairs": work.repairs,
                 "nudges": work.nudges,
+                "steps": len(work.steps),
+                "left": len(work.left) + max(len(steps) - len(work.steps), 0),
                 "elapsed_s": elapsed,
             }
         )
@@ -524,7 +648,7 @@ async def run(  # noqa: PLR0913, PLR0917
                 "run_id": run_id,
                 "status": status,
                 "answer": answer,
-                "checks": results,
+                "checks": work.results,
                 "flags": flags,
                 "metrics": Metrics(elapsed_s=elapsed, tool_calls=work.tool_calls),
             }

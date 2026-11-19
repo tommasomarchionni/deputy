@@ -161,10 +161,11 @@ class Result(BaseModel):
 
 
 class Outcome(BaseModel):
-    """What the orchestrator reads: the answer and the verdict, nothing it has no use for.
+    """What the orchestrator reads: the answer and the verdict."""
 
-    Metrics and the saving estimate stay in the trace (`deputy stats`, the `status` tool); empty
-    fields are left out, so a passing result is the answer and a few words."""
+    # Metrics and the saving estimate stay in the trace (`deputy stats`, the `status` tool);
+    # empty fields are left out, so a passing result is the answer and a few words. The
+    # docstring is part of the tool schema the orchestrator carries: keep it to one line.
 
     model_config = COMPACT
 
