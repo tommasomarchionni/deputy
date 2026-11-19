@@ -180,3 +180,36 @@ def test_a_large_or_unknown_context_is_accepted(
 ) -> None:
     _context(monkeypatch, reply)
     asyncio.run(localagent.require_context(BACKEND))
+
+
+def test_ignored_dependencies_linked_into_the_copy_do_not_break_the_patch(
+    repo: Path, fake_claude
+) -> None:
+    (repo / ".gitignore").write_text(".venv\nnode_modules\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "ignore")
+    (repo / ".venv").mkdir()
+    (repo / "node_modules").mkdir()
+    fake_claude("echo two >> a.txt")
+    result = _run(repo)
+    assert result.status == "ok"
+    patch = (state_dir() / "agents" / "run-1.patch").read_text()
+    assert "a.txt" in patch
+    assert ".venv" not in patch
+    assert "node_modules" not in patch
+
+
+def test_the_copy_is_kept_when_the_patch_cannot_be_made(
+    repo: Path, fake_claude, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_claude("echo two >> a.txt")
+
+    def broken(*_: object) -> str:
+        raise ConfigError("git add failed")
+
+    monkeypatch.setattr(localagent, "_patch", broken)
+    result = _run(repo)
+    copy = state_dir() / "agents" / "run-1"
+    assert result.status == "error"
+    assert str(copy) in result.answer
+    assert (copy / "a.txt").read_text() == "one\ntwo\n"

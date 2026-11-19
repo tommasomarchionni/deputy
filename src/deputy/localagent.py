@@ -156,7 +156,11 @@ def _discard(workdir: Path, copy: Path) -> None:
 
 def _patch(copy: Path, start: str, target: Path) -> str:
     """Save what the agent changed; returns the one-line summary, empty when nothing changed."""
-    _git("add", "--all", "--", ".", *(f":(exclude,glob){path}" for path in _NOT_THE_WORK), cwd=copy)
+    leave_out = target.with_suffix(".exclude")
+    leave_out.parent.mkdir(parents=True, exist_ok=True)
+    leave_out.write_text("\n".join(_NOT_THE_WORK) + "\n", encoding="utf-8")
+    _git("-c", f"core.excludesFile={leave_out}", "add", "--all", cwd=copy)
+    leave_out.unlink()
     patch = subprocess.run(  # noqa: S603  (fixed program, arguments built here)
         [_GIT, "diff", "--cached", "--binary", start],
         cwd=copy,
@@ -248,6 +252,7 @@ async def run(  # noqa: PLR0913, PLR0917
     folder = state_dir() / "agents"
     copy = folder / run_id
     start = _prepare(workdir, copy)
+    keep = False
     try:
         settings = folder / f"{run_id}.settings.json"
         settings.write_text(json.dumps(agent_settings(copy)), encoding="utf-8")
@@ -276,7 +281,14 @@ async def run(  # noqa: PLR0913, PLR0917
             seen = await _drive(command, copy, agent_environment(gateway, backend, copy))
         settings.unlink(missing_ok=True)
         patch_file = folder / f"{run_id}.patch"
-        changed = _patch(copy, start, patch_file)
+        try:
+            changed = _patch(copy, start, patch_file)
+        except (ConfigError, subprocess.SubprocessError, OSError) as exc:
+            keep = True  # hours of work must not be lost to a failed diff
+            note = f"the patch could not be made ({exc}); the agent's copy is kept at {copy}"
+            return Result.model_validate(
+                {"run_id": run_id, "status": "error", "answer": note, "flags": ["needs_frontier"]}
+            )
         final = cast("dict[str, Any]", seen["result"])
         summary = str(final.get("result") or "")[:SUMMARY_CHARS]
         results = await run_checks(checks, summary, Sandbox(copy), policy)
@@ -320,4 +332,5 @@ async def run(  # noqa: PLR0913, PLR0917
             }
         )
     finally:
-        _discard(workdir, copy)
+        if not keep:
+            _discard(workdir, copy)
