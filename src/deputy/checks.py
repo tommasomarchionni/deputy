@@ -436,7 +436,7 @@ class Command(BaseModel):
 
     async def evaluate(self, ctx: CheckContext) -> CheckResult:
         name = f"command: {' '.join(self.argv)}"
-        if not self._allowed_by(ctx.policy):
+        if not self.allowed_by(ctx.policy):
             return _result(name, "command not allowed by the policy")
         env = {k: v for k, v in os.environ.items() if k in _COMMAND_ENV} | dict(ctx.env)
         process: asyncio.subprocess.Process | None = None
@@ -465,7 +465,7 @@ class Command(BaseModel):
             return _result(name)
         return _result(name, output.decode("utf-8", "replace")[-600:] or "non-zero exit")
 
-    def _allowed_by(self, policy: Policy) -> bool:
+    def allowed_by(self, policy: Policy) -> bool:
         return bool(self.argv) and any(
             prefix and self.argv[: len(prefix)] == prefix for prefix in policy.allowed_commands
         )

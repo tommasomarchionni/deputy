@@ -51,6 +51,10 @@ different trust level from the worker's file tools, so it is confined on every s
   Code history.
 - **Text in files is data.** The agent is told so; the confinement above is what holds if a file
   tries to instruct it.
+- **`command` checks run the agent's code.** Tests and linters in `checks` run on the copy after
+  the agent ends, outside its sandbox unless you set `policy.command_wrapper` (below): the same
+  rule as for the worker. A check command the policy does not allow is refused before the run
+  starts, not after an hour of work.
 
 Measured on 2026-11-19: asked to write and read outside its copy, read `~/.ssh/config` and run
 `cat ~/.ssh/config`, the agent was refused every time; a probe script found no network and no

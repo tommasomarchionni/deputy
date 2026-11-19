@@ -431,3 +431,19 @@ def test_a_local_agent_is_refused_when_the_context_is_too_small(
     data = structured(asyncio.run(build_server().call_tool("delegate", arguments)))
     assert data["status"] == "error"
     assert "--ctx-size" in data["answer"]
+
+
+def test_a_local_agent_is_refused_before_it_starts_when_a_check_command_is_not_allowed(
+    tmp_path: Path,
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    arguments = {
+        "task": "change it",
+        "workdir": str(tmp_path),
+        "agent": True,
+        "checks": [{"type": "command", "argv": ["uv", "run", "pytest"]}],
+    }
+    data = structured(asyncio.run(build_server().call_tool("delegate", arguments)))
+    assert data["status"] == "error"
+    assert "does not allow the check command(s) uv run pytest" in data["answer"]
+    assert "allowed_commands" in data["answer"]

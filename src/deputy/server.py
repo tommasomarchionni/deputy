@@ -31,8 +31,8 @@ from deputy import (
 )
 from deputy.agent import Outcome, Result, outcome_of, run_task, task_class
 from deputy.backends import ChatClient
-from deputy.checks import Check, CheckSpec, to_check
-from deputy.config import Backend, Config, ConfigError, Policy, load_config
+from deputy.checks import Check, CheckSpec, Command, to_check
+from deputy.config import Backend, Config, ConfigError, Policy, config_path, load_config
 from deputy.model_profiles import ModelProfile
 from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
@@ -220,6 +220,23 @@ def _agent_started(run_id: str) -> str:
     )
 
 
+def _refused_checks(checks: list[Check], policy: Policy) -> str:
+    """A `command` check the policy does not allow, said before an hour of work and not after."""
+    refused = [
+        " ".join(check.argv)
+        for check in checks
+        if isinstance(check, Command) and not check.allowed_by(policy)
+    ]
+    if not refused:
+        return ""
+    allowed = "; ".join(" ".join(prefix) for prefix in policy.allowed_commands) or "none"
+    return (
+        f"the policy does not allow the check command(s) {'; '.join(refused)} (allowed "
+        f"prefixes: {allowed}). The user adds them under [policy] allowed_commands in "
+        f"{config_path()}; until then, leave these checks out and run them yourself on the patch."
+    )
+
+
 def _agent_problem(backend: Backend, steps: list[str], *, has_room: bool) -> str:
     """Why a local agent cannot start, or nothing."""
     if len(steps) > localagent.MAX_STEPS:
@@ -249,7 +266,9 @@ def build_server() -> MCPServer:
         prepared: _Delegation, task: str, workdir: str, run_id: str, steps: list[str]
     ) -> Outcome:
         backend = prepared.routes[0].backend
-        problem = _agent_problem(backend, steps, has_room=pending.has_room())
+        problem = _agent_problem(backend, steps, has_room=pending.has_room()) or _refused_checks(
+            prepared.checks, prepared.config.policy
+        )
         if problem:
             return outcome_of(_setup_error(run_id, problem))
         try:
