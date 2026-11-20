@@ -134,8 +134,21 @@ read 0.1, output 5).
   45 minutes with one repair round, but updated the documentation in one place of four and left
   two tests that did not test their change.
 
-What this does not show: one set of changes, one Python repository, one run of the delegated
-path. A single small change costs less done by the frontier model itself than handed over.
+- **On a real issue of a JavaScript monorepo it did the mechanical part and not the hard one.**
+  The issue had been closed by a frontier subagent (Sonnet 5.5, together with a second small
+  issue: 96 requests, 1.94 million weighted tokens, 24 minutes for the two). Qwen3.8 27B started
+  from the commit before that change, with the issue as three steps and the unit tests, the type
+  check and the formatter as checks. Steps one and two (dead attributes removed from three HTML
+  files, ten unused strings removed from a typed catalogue, the two tests updated) were done in
+  14 minutes: the four product files came out byte for byte as merged, and the merged tests
+  pass on them. Step three, a new test that reads the routes and templates of four apps, was
+  not: 40 tool calls without an edit, a nudge, then the 30 minutes of the step ran out, and the
+  run ended as `partial` after 50 minutes. What the step had written was thrown away, which is
+  why a draft is now kept.
+
+What this does not show: one set of changes on a Python repository and one issue on a JavaScript
+one, one run of each. A single small change costs less done by the frontier model itself than
+handed over.
 
 ## What this does not show
 
