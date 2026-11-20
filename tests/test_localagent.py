@@ -235,6 +235,38 @@ def test_a_step_the_agent_cannot_do_is_undone_and_named(
     assert "broken" not in patch
     assert "+ok\n+ok" in patch  # steps one and three are in the patch
     assert _rounds(tmp_path) == 3 + localagent.NUDGES
+    draft = state_dir() / "agents" / "run-1.step-2.draft.patch"
+    assert f"Its unchecked draft, to start from if it helps: {draft}" in result.answer
+    assert "half.txt" in draft.read_text()
+    assert "+broken" in draft.read_text()
+    assert "+ok" not in draft.read_text()  # only what step two had changed
+
+
+def test_an_abandoned_step_that_changed_nothing_has_no_draft(repo: Path, fake_claude) -> None:
+    fake_claude(_stall(), repair=_stall())
+    result = _run_steps(repo, ["one"])
+    assert "1. NOT DONE (stuck): its changes were undone." in result.answer
+    assert "draft" not in result.answer
+    assert not list((state_dir() / "agents").glob("*.draft.patch"))
+
+
+def test_a_stuck_step_is_told_to_write_its_change_not_to_leave_it(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    log = tmp_path / "nudge"
+    fake_claude("true", repair=f'{_LAST}echo "$prompt" > {log}; echo done > done.txt', stuck=1)
+    result = _run_steps(repo, ["one"])
+    assert result.status == "ok"
+    assert "Stop exploring: write the change now" in log.read_text()
+    assert "done.txt" in (state_dir() / "agents" / "run-1.patch").read_text()
+
+
+def test_a_step_that_ends_without_a_change_after_a_nudge_is_stuck(repo: Path, fake_claude) -> None:
+    fake_claude("true", repair="true", stuck=1)  # nudged, it answers and changes nothing
+    result = _run_steps(repo, ["one"])
+    assert result.status == "error"
+    assert result.flags == ["stuck", "needs_frontier"]
+    assert "Left for you: step 1." in result.answer
 
 
 _SLOW = 'echo \'{"type": "system", "session_id": "s1"}\'; sleep 30'

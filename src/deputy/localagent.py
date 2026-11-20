@@ -42,6 +42,12 @@ STALL_PROMPT = (
     "the change you are stuck on as it is, finish the other changes, and in your summary name "
     "the change that is left and why."
 )
+# In steps the conversation has one change: giving it up would leave nothing to finish.
+STEP_STALL_PROMPT = (
+    f"deputy stopped you: you used {STALL_CALLS} tools in a row without changing a file. Stop "
+    "exploring: write the change now with what you know, run its tests and fix what fails. If "
+    "you cannot, say in your summary what stops you."
+)
 STEP_BUDGET_S = 1_800.0  # one step of a task in steps: a 27B model took 3 to 20 minutes
 WRAP_UP_S = 300.0  # then this long to leave the step in a state that holds together
 WRAP_UP_PROMPT = (
@@ -368,6 +374,16 @@ def _restore(copy: Path, tree: str) -> None:
     _git("read-tree", "--reset", "-u", tree, cwd=copy)
 
 
+def _keep_draft(copy: Path, tree: str, number: int) -> str:
+    """Put aside what an abandoned step had changed, for whoever finishes it: the path of the
+    patch, or nothing when the step changed nothing. It was not checked and is not applied."""
+    target = copy.with_name(f"{copy.name}.step-{number}.draft.patch")
+    try:
+        return str(target) if _patch(copy, tree, target) else ""
+    except (ConfigError, subprocess.SubprocessError, OSError):
+        return ""
+
+
 def _patch(copy: Path, start: str, target: Path) -> str:
     """Save what the agent changed; returns the one-line summary, empty when nothing changed."""
     _stage(copy)
@@ -497,6 +513,8 @@ class Step:
     text: str
     outcome: str = "done"  # done | stuck | unfinished | time_limit
     summary: str = ""
+    nudges: int = 0
+    draft: str = ""  # the patch of what an abandoned step had changed, when it changed anything
 
 
 @dataclass
@@ -534,7 +552,9 @@ class _Rounds:
         self.work.tool_calls += len(seen["tools"])
         return seen
 
-    async def step(self, prompt: str, limit_s: float = BUDGET_S) -> Step:
+    async def step(
+        self, prompt: str, limit_s: float = BUDGET_S, stall_prompt: str = STALL_PROMPT
+    ) -> Step:
         """One conversation, resumed with a nudge while the agent is stuck and, when its own
         time is up, once more to wrap up what it has."""
         step, nudges, argv = Step(prompt), 0, [prompt]
@@ -548,8 +568,9 @@ class _Rounds:
                 continue
             if seen["stalled"] and nudges < NUDGES and session and not seen["timed_out"]:
                 nudges += 1
+                step.nudges = nudges
                 self.work.nudges += 1
-                argv = ["--resume", session, STALL_PROMPT]
+                argv = ["--resume", session, stall_prompt]
                 continue
             final = cast("dict[str, Any]", seen["result"])
             step.summary = str(final.get("result") or "")
@@ -579,11 +600,18 @@ async def _work(  # noqa: PLR0913, PLR0917
         rounds = _Rounds(copy, command, agent_environment(gateway, backend, copy, window))
         work = rounds.work
         prompts = [step_prompt(task, steps, n, checks) for n in range(len(steps))]
-        for prompt in prompts or [task_prompt(task, checks)]:
+        for number, prompt in enumerate(prompts or [task_prompt(task, checks)], 1):
             before = _snapshot(copy) if steps else ""
-            step = await rounds.step(prompt, STEP_BUDGET_S if steps else BUDGET_S)
+            step = (
+                await rounds.step(prompt, STEP_BUDGET_S, STEP_STALL_PROMPT)
+                if steps
+                else await rounds.step(prompt)
+            )
             work.steps.append(step)
+            if steps and step.outcome == "done" and step.nudges and _snapshot(copy) == before:
+                step.outcome = "stuck"  # told to write the change, it ended without one
             if step.outcome != "done" and steps:
+                step.draft = _keep_draft(copy, before, number)
                 _restore(copy, before)
             if step.outcome == "unfinished" or rounds.time_left() <= 0:
                 break  # the model server is not answering, or no time is left
@@ -620,6 +648,10 @@ async def _work(  # noqa: PLR0913, PLR0917
                 return work
 
 
+def _draft_note(step: Step) -> str:
+    return f" Its unchecked draft, to start from if it helps: {step.draft}" if step.draft else ""
+
+
 def _answer(work: _Work, changed: str, patch_file: Path, total: int = 0) -> str:
     """What the orchestrator reads: short, and clear about what is left for it to do."""
     if not total:
@@ -629,7 +661,7 @@ def _answer(work: _Work, changed: str, patch_file: Path, total: int = 0) -> str:
             "\n".join(
                 f"{n}. {step.summary[:STEP_SUMMARY_CHARS].strip()}"
                 if step.outcome == "done"
-                else f"{n}. NOT DONE ({step.outcome}): its changes were undone."
+                else f"{n}. NOT DONE ({step.outcome}): its changes were undone.{_draft_note(step)}"
                 for n, step in enumerate(work.steps, 1)
             )
         ]
