@@ -79,7 +79,7 @@ context, read in parts).
 
 | Command | What it tells you |
 | --- | --- |
-| `deputy discover` | where your agent's reading went in past Claude Code sessions, and how much a delegation could take |
+| `deputy discover` | where your agent's reading and tokens went in past Claude Code sessions, and how much a delegation could take |
 | `deputy bench --tasks-file tasks.toml --workdir .` | your own tasks on your own repository: pass or fail, time, tokens saved |
 | `deputy stats` | what deputy did for you: runs, pass rate, tokens saved, per kind of task |
 | `deputy bench` | your model on the built-in suite; `--compare A.json B.json` compares two runs |

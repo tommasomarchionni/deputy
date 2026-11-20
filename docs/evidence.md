@@ -179,5 +179,22 @@ of which 3,148 were not followed by an edit of the file (about 7.5 million token
 delegations: an adoption of 0.5 %. Subagents did 2,601 of those reads (about 6.5 million tokens), so
 that is where a delegation can save the most.
 
+**What those reads are worth.** The same command on the sessions of that repository active in one
+week (3 main sessions, 279 subagents), in weighted tokens:
+
+| | Requests | Weighted tokens | Share | Of it, context read again |
+| --- | ---: | ---: | ---: | ---: |
+| Main sessions | 17,249 | 898.5 M | 55 % | 87 % |
+| Subagents that edit (207) | 23,109 | 698.9 M | 43 % | 75 % |
+| Subagents that only read (72) | 1,898 | 39.0 M | 2 % | 52 % |
+
+The main sessions carried a median of 430,000 tokens of context per request and were compacted at
+about 963,000. Reading again the context above 200,000 tokens was 38 % of everything; the large
+reads a delegation could have taken were at most 7 %. So on this workload the reading path is the
+small lever, the size of the context the largest, and the subagents that edit (what the local
+agent is for) the second. In four days of that week the hint to delegate a read was shown 253
+times, 225 of them to subagents, and the sessions made 16 delegations, 1 of them from a subagent:
+a hint is not enough to change what an agent does.
+
 A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
 `deputy bench --compare` shows what changed between two nights.
