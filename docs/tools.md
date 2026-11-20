@@ -133,7 +133,9 @@ wrong answer; the failing `checks` keep their full detail.
 
 ## `status`
 
-Configured backends and whether they answer.
+Configured backends and whether they answer. A session keeps the server it started with: when a
+newer deputy has been installed since, `update` says so and asks to reconnect the server (in
+Claude Code: `/mcp`).
 
 ## `feedback`
 

@@ -21,6 +21,7 @@ from deputy import (
     stats,
     tokens,
     updates,
+    version,
 )
 from deputy import (
     digest as digests,
@@ -56,6 +57,17 @@ AGENT_RULE = (
     "your turn. When it ends, read the patch, apply it and do only what is left. Make a change "
     "yourself only when it is a few lines the user is waiting for, or when the user says so."
 )
+
+
+def _update_notice(started_with: str) -> dict[str, str]:
+    """A session keeps the server it started with: an update is unused until it reconnects."""
+    installed = version.current_version()
+    if installed == started_with:
+        return {}
+    return {
+        "update": f"deputy {installed} is installed, this session still runs {started_with}: "
+        "reconnect the server to use it (Claude Code: /mcp)"
+    }
 
 
 def instructions() -> str:
@@ -266,6 +278,7 @@ def _agent_problem(backend: Backend, steps: list[str], *, has_room: bool) -> str
 def build_server() -> MCPServer:
     server = MCPServer("deputy", instructions=instructions())
     pending = background.Jobs()
+    started_with = version.current_version()
 
     async def launch(prepared: _Delegation, request: _Request, wait: bool) -> Outcome:
         work = _delegate(prepared, request)
@@ -360,9 +373,10 @@ def build_server() -> MCPServer:
     async def status() -> dict[str, str]:
         """Backends and whether they answer."""
         try:
-            return await _backend_status(load_config())
+            found = await _backend_status(load_config())
         except ConfigError as exc:
-            return {"error": str(exc)}
+            found = {"error": str(exc)}
+        return found | _update_notice(started_with)
 
     @server.tool(structured_output=False)
     def feedback(run_id: str, verdict: Literal["accepted", "rejected"], reason: str = "") -> str:
