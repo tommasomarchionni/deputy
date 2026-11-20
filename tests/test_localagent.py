@@ -1,10 +1,13 @@
 # pyright: basic
 import asyncio
+import contextlib
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -634,3 +637,53 @@ def test_patches_older_than_a_week_are_removed(repo: Path, fake_claude) -> None:
     _run(repo)
     assert not old.exists()
     assert fresh.exists()
+
+
+def _gone(pid: int, within_s: float = 10.0) -> bool:
+    end = time.monotonic() + within_s
+    while time.monotonic() < end:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_a_terminated_deputy_takes_its_agent_with_it(tmp_path: Path) -> None:
+    # stopping a run from outside left its agent working on the model server for the rest of
+    # its hour: SIGTERM ends Python without running `finally`
+    agent = "import os, pathlib, time; pathlib.Path('pid').write_text(str(os.getpid()) + chr(10))"
+    parent = tmp_path / "parent.py"
+    parent.write_text(
+        "import asyncio, os, sys\n"
+        "from pathlib import Path\n"
+        "from deputy import localagent\n"
+        f"agent = [sys.executable, '-c', {agent + '; time.sleep(60)'!r}]\n"
+        "asyncio.run(localagent._drive(agent, Path(sys.argv[1]), dict(os.environ), 60))\n"
+    )
+    process = subprocess.Popen([sys.executable, str(parent), str(tmp_path)])
+    written = tmp_path / "pid"
+    try:
+        end = time.monotonic() + 20
+        while not (written.exists() and written.read_text().endswith("\n")):
+            assert time.monotonic() < end, "the agent did not start"
+            time.sleep(0.05)
+        process.terminate()
+        assert process.wait(timeout=10) == -signal.SIGTERM
+        assert _gone(int(written.read_text()))
+    finally:
+        process.kill()
+        if written.exists():  # a failing test must not leave the agent behind either
+            with contextlib.suppress(ProcessLookupError, ValueError):
+                os.kill(int(written.read_text()), signal.SIGKILL)
+
+
+def test_agents_still_running_when_deputy_exits_are_stopped() -> None:
+    sleeper = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True
+    )
+    localagent._agents.add(sleeper.pid)
+    localagent._stop_agents()
+    assert sleeper.wait(timeout=10) == -signal.SIGKILL
+    assert not localagent._agents

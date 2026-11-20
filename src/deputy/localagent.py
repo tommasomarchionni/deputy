@@ -8,6 +8,8 @@ copy. What comes back is a summary, the checks and a patch for the orchestrator 
 from __future__ import annotations
 
 import asyncio
+import atexit
+import contextlib
 import json
 import os
 import shutil
@@ -440,6 +442,39 @@ def _read_stream(line: bytes, seen: dict[str, Any]) -> None:
             seen["since_change"] = 0 if changes else seen["since_change"] + 1
 
 
+_agents: set[int] = set()  # the process groups of the agents this process is running
+
+
+def _stop_agents() -> None:
+    """Kill every agent this process started: a deputy that stops must not leave one working on
+    the model server, where it would slow the next run down for up to an hour."""
+    for group in tuple(_agents):
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(group, signal.SIGKILL)
+    _agents.clear()
+
+
+atexit.register(_stop_agents)
+
+
+def _terminated(loop: asyncio.AbstractEventLoop) -> None:
+    _stop_agents()
+    loop.remove_signal_handler(signal.SIGTERM)  # back to the default, which ends the process
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+def _watch_termination(loop: asyncio.AbstractEventLoop) -> bool:
+    """SIGTERM ends Python without running `finally` or `atexit`. While an agent runs, stop it
+    first; a handler the host program installed is left alone."""
+    if signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL:
+        return False
+    try:
+        loop.add_signal_handler(signal.SIGTERM, _terminated, loop)
+    except (ValueError, RuntimeError, NotImplementedError):  # not the main thread, or no support
+        return False
+    return True
+
+
 async def _drive(
     command: list[str], copy: Path, env: dict[str, str], budget_s: float
 ) -> dict[str, Any]:
@@ -462,6 +497,9 @@ async def _drive(
         start_new_session=True,
         limit=16 * 1024 * 1024,
     )
+    _agents.add(process.pid)
+    loop = asyncio.get_running_loop()
+    watching = _watch_termination(loop)
 
     async def consume() -> None:
         assert process.stdout is not None
@@ -480,6 +518,9 @@ async def _drive(
         if process.returncode is None:
             os.killpg(process.pid, signal.SIGKILL)
             await process.wait()
+        _agents.discard(process.pid)
+        if watching:
+            loop.remove_signal_handler(signal.SIGTERM)
     return seen
 
 
