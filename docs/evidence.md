@@ -217,4 +217,22 @@ agent is for) the second. In four days of that week the hint to delegate a read 
 times, 225 of them to subagents, and the sessions made 16 delegations, 1 of them from a subagent:
 a hint is not enough to change what an agent does.
 
+**What a lower compaction limit did.** The largest share above is not something deputy can take:
+it is the size of the context. On that repository `autoCompactWindow` was set to 400,000 in the
+Claude Code settings. Version 2.1.322 ignored it (the sessions were compacted at about 965,000
+tokens); from 2.1.329 it holds, and the same two sessions were compacted at about 365,000:
+
+| Main session | Requests | Mean context | Weighted tokens per request |
+| --- | ---: | ---: | ---: |
+| A, limit ignored | 8,150 | 511,000 | 57,000 |
+| A, limit 400,000 | 215 | 244,000 | 29,100 |
+| B, limit ignored | 1,636 | 490,000 | 57,100 |
+| B, limit 400,000 | 281 | 227,000 | 30,300 |
+
+About 48 % fewer weighted tokens per request in both, almost all of it context not read again.
+The limits: the work before and after is not the same work, the requests after are few, and a
+compaction forgets detail (three in about eight hours across the two sessions); what that cost in
+quality was not measured. `deputy discover` prints the context per request and the size at
+compaction for your own sessions, so you can see whether the setting holds for you.
+
 `deputy bench --compare` shows what changed between two runs.
