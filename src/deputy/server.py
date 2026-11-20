@@ -12,12 +12,7 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
 from deputy import (
-    digest as digests,
-)
-from deputy import (
-    jobs as background,
-)
-from deputy import (
+    confinement,
     lessons,
     localagent,
     model_profiles,
@@ -28,6 +23,12 @@ from deputy import (
     stats,
     tokens,
     updates,
+)
+from deputy import (
+    digest as digests,
+)
+from deputy import (
+    jobs as background,
 )
 from deputy.agent import Outcome, Result, outcome_of, run_task, task_class
 from deputy.backends import ChatClient
@@ -222,13 +223,14 @@ def _agent_started(run_id: str) -> str:
 
 def _refused_checks(checks: list[Check], policy: Policy) -> str:
     """A `command` check the policy does not allow, said before an hour of work and not after."""
+    confined = not policy.command_wrapper and confinement.agent_wrapper_tool() is not None
     refused = [
         " ".join(check.argv)
         for check in checks
         if isinstance(check, Command) and not check.allowed_by(policy)
     ]
-    if not refused:
-        return ""
+    if confined or not refused:
+        return ""  # deputy's sandbox for the agent's checks needs no allow-list
     allowed = "; ".join(" ".join(prefix) for prefix in policy.allowed_commands) or "none"
     return (
         f"the policy does not allow the check command(s) {'; '.join(refused)} (allowed "

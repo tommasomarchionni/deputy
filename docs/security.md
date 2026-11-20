@@ -51,10 +51,16 @@ different trust level from the worker's file tools, so it is confined on every s
   Code history.
 - **Text in files is data.** The agent is told so; the confinement above is what holds if a file
   tries to instruct it.
-- **`command` checks run the agent's code.** Tests and linters in `checks` run on the copy after
-  the agent ends, outside its sandbox unless you set `policy.command_wrapper` (below): the same
-  rule as for the worker. A check command the policy does not allow is refused before the run
-  starts, not after an hour of work.
+- **`command` checks run the agent's code, in a sandbox.** Tests and linters in `checks` run on
+  the copy after the agent ends. deputy runs them in its own sandbox (`sandbox-exec` on macOS,
+  bubblewrap on Linux): writes only in the copy and its temporary folder, no reading of `~/.ssh`,
+  `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config`, `~/.claude` or the credential files
+  in the home folder, and no network beyond localhost (test suites start local servers; on Linux
+  there is no network at all). Inside that sandbox a check needs no entry in
+  `policy.allowed_commands`: it can do no more than the agent's own confined shell. If you set
+  `policy.command_wrapper` yourself, your wrapper and your allow-list apply instead; with no
+  sandbox tool on the machine the allow-list applies, and a command it does not allow is refused
+  before the run starts, not after an hour of work.
 
 Measured on 2026-11-19: asked to write and read outside its copy, read `~/.ssh/config` and run
 `cat ~/.ssh/config`, the agent was refused every time; a probe script found no network and no

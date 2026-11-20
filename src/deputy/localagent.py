@@ -20,7 +20,7 @@ from typing import Any, cast
 
 import httpx
 
-from deputy import runs
+from deputy import confinement, runs
 from deputy.agent import Metrics, Result, outcome_of
 from deputy.checks import Check, CheckResult, Command, run_checks
 from deputy.config import Backend, ConfigError, Policy, state_dir
@@ -191,6 +191,14 @@ def _scratch(copy: Path) -> Path:
     """Temporary files of the run: next to the copy, never inside it, so that a test's temporary
     folder is not inside a repository and a linter does not read what the tests leave behind."""
     return copy.with_name(f"{copy.name}.tmp")
+
+
+def checks_wrapper(copy: Path, policy: Policy) -> list[str] | None:
+    """The sandbox for this run's `command` checks: deputy's own, unless the user configured one
+    (then their wrapper and their allow-list apply) or this machine has no sandbox tool."""
+    if policy.command_wrapper:
+        return None
+    return confinement.agent_wrapper(copy, _scratch(copy))
 
 
 def _conversations(copy: Path) -> Path:
@@ -524,6 +532,7 @@ async def _work(  # noqa: PLR0913, PLR0917
     """Do the task, or each of its steps in a conversation of its own, then repair until the
     checks pass. A step the agent cannot do is undone, so that it leaves no half-made change."""
     window = compact_window(await require_context(backend))
+    wrapper = checks_wrapper(copy, policy)
     async with Gateway(backend) as gateway:
         rounds = _Rounds(copy, command, agent_environment(gateway, backend, copy, window))
         work = rounds.work
@@ -540,7 +549,7 @@ async def _work(  # noqa: PLR0913, PLR0917
         while True:
             answer = "\n\n".join([*(step.summary for step in work.steps), work.repair_summary])
             work.results = await run_checks(
-                checks, answer, Sandbox(copy), policy, copy_environment(copy)
+                checks, answer, Sandbox(copy), policy, env=copy_environment(copy), wrapper=wrapper
             )
             last = work.steps[-1].outcome
             if (
@@ -698,5 +707,6 @@ async def _run(  # noqa: PLR0913, PLR0917
     finally:
         shutil.rmtree(_conversations(copy), ignore_errors=True)
         shutil.rmtree(_scratch(copy), ignore_errors=True)
+        copy.with_name(f"{copy.name}.checks.sb").unlink(missing_ok=True)
         if not keep:
             _discard(workdir, copy)

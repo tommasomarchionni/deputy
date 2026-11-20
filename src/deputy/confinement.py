@@ -31,6 +31,35 @@ MACOS_PROFILE = """\
 (deny network*)
 """
 
+# For the checks of the local agent: the same idea, on its copy. Localhost stays reachable, because
+# test suites start servers and talk to local services; nothing beyond this machine is.
+_AGENT_SECRETS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".claude", ".netrc",
+                  ".npmrc", ".pypirc", ".git-credentials")  # fmt: skip
+AGENT_MACOS_PROFILE = (
+    """\
+(version 1)
+(deny default)
+(allow process-exec* process-fork signal sysctl-read mach-lookup ipc-posix-shm)
+(allow file-read*)
+(deny file-read*
+"""
+    + "".join(
+        f'  (subpath (string-append (param "HOME") "/{name}"))\n' for name in _AGENT_SECRETS
+    ).rstrip("\n")
+    + """)
+(allow file-write*
+  (subpath (param "WORKDIR"))
+  (subpath (param "SCRATCH"))
+  (subpath "/private/tmp")
+  (subpath "/private/var/folders")
+  (literal "/dev/null"))
+(deny network*)
+(allow network-outbound (remote ip "localhost:*"))
+(allow network-bind (local ip "localhost:*"))
+(allow network-inbound (local ip "localhost:*"))
+"""
+)
+
 LINUX_WRAPPER = [
     "bwrap", "--ro-bind", "/", "/", "--bind", "{workdir}", "{workdir}", "--dev", "/dev",
     "--proc", "/proc", "--tmpfs", "/tmp", "--unshare-net", "--die-with-parent",  # noqa: S108
@@ -57,6 +86,32 @@ def suggested_wrapper(platform: str | None = None) -> list[str] | None:
     if system.startswith("linux") and shutil.which("bwrap"):
         return list(LINUX_WRAPPER)
     return None
+
+
+def agent_wrapper(copy: Path, scratch: Path, platform: str | None = None) -> list[str] | None:
+    """A sandbox for the `command` checks of a local agent's run, or None when this machine has
+    no sandbox tool: writes only in the copy and its temporary folder, no reading of the home
+    folder's secrets, no network beyond localhost (Linux: none at all)."""
+    system = platform or sys.platform
+    if system == "darwin" and shutil.which("sandbox-exec"):
+        profile = copy.with_name(f"{copy.name}.checks.sb")
+        profile.write_text(AGENT_MACOS_PROFILE, encoding="utf-8")
+        profile.chmod(0o600)
+        return [
+            "sandbox-exec", "-f", str(profile), "-D", f"WORKDIR={copy.resolve()}",
+            "-D", f"SCRATCH={scratch.resolve()}", "-D", f"HOME={Path.home()}",
+        ]  # fmt: skip
+    if system.startswith("linux") and shutil.which("bwrap"):
+        both = [part.replace("{workdir}", str(copy)) for part in LINUX_WRAPPER]
+        return [*both[:-2], "--bind", str(scratch), str(scratch), *both[-2:]]
+    return None
+
+
+def agent_wrapper_tool(platform: str | None = None) -> str | None:
+    """The sandbox tool `agent_wrapper` would use on this machine, if there is one."""
+    system = platform or sys.platform
+    name = "sandbox-exec" if system == "darwin" else "bwrap" if system.startswith("linux") else ""
+    return shutil.which(name) if name else None
 
 
 def write_profile() -> Path:

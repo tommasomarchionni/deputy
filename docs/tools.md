@@ -81,7 +81,8 @@ Claude Code subagent, but no request reaches a hosted model.
   run may take up to 3 hours: a local model is much slower than a hosted one.
 - **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
   work. A `command` check runs with the copy's code first on the Python path, and with `uv` told
-  never to sync or download, so it tests the copy and never changes your environment. Declare the
+  never to sync or download, so it tests the copy and never changes your environment. It runs in
+  deputy's sandbox and needs no allow-list ([security](security.md#the-local-agent)). Declare the
   project's gates as checks (tests, linter, formatter, type checker): the agent finishes the job
   before you see it.
 - **Failed checks go back to the agent.** It resumes its own conversation with the failures (a

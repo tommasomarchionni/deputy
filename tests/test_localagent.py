@@ -2,15 +2,17 @@
 import asyncio
 import json
 import os
+import shutil
 import stat
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, cast
 
 import httpx
 import pytest
 
-from deputy import cli, localagent
+from deputy import cli, confinement, localagent
 from deputy.checks import CheckResult, Command, Contains
 from deputy.config import Backend, ConfigError, Policy, state_dir
 from deputy.gateway import MAX_TOKENS
@@ -248,6 +250,49 @@ def test_failed_checks_of_steps_go_to_a_new_conversation_that_knows_the_steps(
     assert "After 1 repair round(s)" in result.answer
     assert "Other runs just made these changes in this copy:\n1. one\n2. two" in log.read_text()
     assert _rounds(tmp_path) == 3
+
+
+@pytest.mark.skipif(
+    sys.platform != "darwin" or confinement.agent_wrapper_tool() is None,
+    reason="needs the macOS sandbox",
+)
+def test_the_checks_of_the_agent_run_in_a_sandbox_and_need_no_allow_list(
+    repo: Path, fake_claude
+) -> None:
+    fake_claude("echo two >> a.txt")
+    probe = (  # sees the copy, writes its temporary folder, cannot read the home's secrets
+        'grep -q two a.txt && echo t > "$TMPDIR/t" && ! ls "$HOME/.config" >/dev/null 2>&1'
+    )
+    result = _run(repo, [Command(argv=["sh", "-c", probe])])  # the default policy allows nothing
+    assert result.status == "ok", result.checks
+    assert not (state_dir() / "agents" / "run-1.checks.sb").exists()
+
+
+def test_a_wrapper_of_the_user_keeps_the_allow_list(repo: Path, fake_claude) -> None:
+    fake_claude("echo two >> a.txt")
+    policy = Policy(command_wrapper=["env"])  # the user's own choice of confinement
+    result = asyncio.run(
+        localagent.run(
+            "do it", repo, BACKEND, [Command(argv=["sh", "-c", "true"])], policy, "run-1"
+        )
+    )
+    assert result.status == "checks_failed"
+    assert "not allowed by the policy" in result.checks[0].detail
+
+
+def test_the_linux_sandbox_of_the_checks_binds_the_copy_and_its_temporary_folder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    wrapper = confinement.agent_wrapper(Path("/s/run"), Path("/s/run.tmp"), "linux")
+    assert wrapper is not None
+    assert wrapper[0] == "bwrap"
+    assert "--unshare-net" in wrapper
+    text = " ".join(wrapper)
+    assert "--bind /s/run /s/run" in text
+    assert "--bind /s/run.tmp /s/run.tmp" in text
+    assert text.endswith("--chdir /s/run")
+    assert confinement.agent_wrapper(Path("/s/run"), Path("/s/run.tmp"), "win32") is None
 
 
 def test_the_result_is_left_for_deputy_wait(repo: Path, fake_claude, capsys) -> None:

@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 
-from deputy import cli, localagent, model_profiles, server
+from deputy import cli, confinement, localagent, model_profiles, server
 from deputy.agent import Result
 from deputy.backends import Probe
 from deputy.bench import Summary
@@ -434,8 +434,10 @@ def test_a_local_agent_is_refused_when_the_context_is_too_small(
 
 
 def test_a_local_agent_is_refused_before_it_starts_when_a_check_command_is_not_allowed(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ) -> None:
+    # without a sandbox tool the checks run with the user's rights, so the allow-list decides
+    monkeypatch.setattr(confinement, "agent_wrapper_tool", lambda: None)
     cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
     arguments = {
         "task": "change it",
@@ -447,3 +449,28 @@ def test_a_local_agent_is_refused_before_it_starts_when_a_check_command_is_not_a
     assert data["status"] == "error"
     assert "does not allow the check command(s) uv run pytest" in data["answer"]
     assert "allowed_commands" in data["answer"]
+
+
+def test_with_a_sandbox_tool_the_checks_of_a_local_agent_need_no_allow_list(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(confinement, "agent_wrapper_tool", lambda: "/usr/bin/sandbox-exec")
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+
+    async def run(task, workdir, backend, checks, policy, run_id, steps):
+        return Result(run_id=run_id, status="ok", answer=f"{len(checks)} check(s)")
+
+    async def enough(backend) -> int:
+        return 131_072
+
+    monkeypatch.setattr(localagent, "run", run)
+    monkeypatch.setattr(localagent, "require_context", enough)
+    arguments = {
+        "task": "change it",
+        "workdir": str(tmp_path),
+        "agent": True,
+        "checks": [{"type": "command", "argv": ["uv", "run", "pytest"]}],
+    }
+    data = structured(asyncio.run(build_server().call_tool("delegate", arguments)))
+    assert data["status"] == "running"
+    assert "deputy wait" in data["answer"]
