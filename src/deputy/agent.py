@@ -406,7 +406,8 @@ class AgentRun:
         if all(r.passed for r in self._check_results):
             self._status = "ok"
             return True
-        if self._metrics.retries >= self._max_retries:
+        hopeless = any(r.final and not r.passed for r in self._check_results)
+        if hopeless or self._metrics.retries >= self._max_retries:
             self._status = "checks_failed"
             self._flags.append("needs_frontier")
             return True

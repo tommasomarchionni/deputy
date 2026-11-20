@@ -20,8 +20,9 @@ The status is `ok` only when each line states a fact, each citation names a file
 it, the quoted words are on that line, no line stands without a source, and the answer is at most
 2,000 characters. A fact may cite another file of the work folder than the listed ones, when the
 worker followed them there: it is proven the same way.
-Anything else, including an answer the files do not contain, comes back as `checks_failed`: read
-the files yourself. Missing, empty, binary, secret-looking or outside paths are refused before any
+Anything else comes back as `checks_failed`: read the files yourself. When the worker finds no
+answer in the files, that happens at once, without a correction round. Missing, empty, binary,
+secret-looking or outside paths are refused before any
 model is called. The result has the same fields as `delegate`.
 
 **What `ok` proves.** The sources are real: the quoted words are on the cited lines. It does not

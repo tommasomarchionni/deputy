@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from deputy.checks import Check, CitesFiles, MaxChars
+from deputy.checks import NOT_FOUND, Check, CitesFiles, MaxChars
 from deputy.sandbox import Sandbox, SandboxError
 
 MAX_FILES = 8
@@ -48,6 +48,6 @@ def plan(files: list[str], question: str, sandbox: Sandbox) -> Plan:
         "else: no title, no introduction. Use the file "
         "path as listed, a single line number, and 3 to 10 words copied exactly from that line. "
         f"Answer in at most {ANSWER_CHARS} characters. If the files do not contain the "
-        "answer, write only: not found"
+        f"answer, write only: {NOT_FOUND}"
     )
     return Plan(task=task, checks=[CitesFiles(paths=named), MaxChars(limit=ANSWER_CHARS)])

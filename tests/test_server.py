@@ -504,3 +504,21 @@ def test_the_user_can_keep_code_changes_for_the_frontier_model() -> None:
     path = config_path()
     path.write_text('code_changes = "frontier"\n' + path.read_text())
     assert server.instructions() == server.INSTRUCTIONS
+
+
+def test_digest_hands_back_at_once_when_the_files_hold_no_answer(
+    tmp_path: Path,
+    fake_client,
+    monkeypatch,  # type: ignore[no-untyped-def]
+) -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    (tmp_path / "a.md").write_text("alpha\nbeta\n")
+    script = [
+        message(tool_calls=[tool_call("read_file", {"path": "a.md"})]),
+        message("not found"),  # a correction round would ask the script for a third reply
+    ]
+    monkeypatch.setattr(server, "ChatClient", lambda backend: fake_client(script))
+    data = _digest(tmp_path)
+    assert data["status"] == "checks_failed"
+    assert "needs_frontier" in data["flags"]
+    assert "no answer in the files" in data["checks"]

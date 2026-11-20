@@ -33,6 +33,7 @@ class CheckResult(BaseModel):
     name: str
     passed: bool
     detail: str = ""
+    final: bool = False  # a failure no correction round can fix: hand the task back at once
 
 
 @dataclass(frozen=True)
@@ -231,6 +232,7 @@ def _matching(name: str, paths: list[str]) -> list[str]:
 
 _TRAILING_QUOTE = re.compile(r'^[\s,:)\-\u2013]*"(?P<words>.+)"\s*\)?[.,;]?\s*$')
 _MIN_QUOTE_CHARS = 8
+NOT_FOUND = "not found"  # what a worker answers when the files do not hold the answer
 _MIN_FACT_WORDS = 2
 
 
@@ -293,6 +295,9 @@ class CitesFiles(BaseModel):
         return ""
 
     async def evaluate(self, ctx: CheckContext) -> CheckResult:
+        if ctx.answer.strip().rstrip(".").casefold() == NOT_FOUND:
+            detail = "the worker found no answer in the files"
+            return CheckResult(name="cites_files", passed=False, detail=detail, final=True)
         try:
             lines = {p: read_lines(ctx.sandbox.resolve(p)) for p in self.paths}
         except SandboxError as exc:
