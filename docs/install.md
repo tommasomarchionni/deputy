@@ -70,6 +70,8 @@ hook to `~/.claude/settings.json`: before Claude Code reads a whole file larger 
 (about 2,000 tokens), or runs a shell command that prints more than that (`cat`, `nl`, `sed -n`,
 `head`, `tail`), it adds one line to the model's context with the size and the `digest` tool that
 can read it instead. Images, PDFs and other binary files get no hint: the worker reads text only.
+With a local default backend the same hook adds a few lines to each of your requests: code changes
+that tests can check go to the local agent ([configuration](configuration.md#code-changes)).
 It never blocks anything, says nothing for a small read, a partial read through the read tool or a
 command piped into another, and stays silent on any error. In real sessions such reads were about 1.5 % of all reads but held
 about 18 % of what was read. Turn it off with `deputy hook off` (on again with `deputy hook on`,

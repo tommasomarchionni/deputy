@@ -293,8 +293,9 @@ does the same for that call. With one backend nothing is probed and nothing chan
 ## Code changes
 
 `code_changes = "local"` (the default) applies when the default backend is local: every session
-is told, in the server's instructions, that code changes which tests or linters can check go to
-the local agent (`delegate` with `agent=true`) before the code is read, one change per step, with
+is told, in the server's instructions and, in Claude Code, by the hook with each of your requests
+(a rule in the instructions alone was followed one time in two), that code changes which tests or
+linters can check go to the local agent (`delegate` with `agent=true`) before the code is read, one change per step, with
 the project's tests and linters as checks. Your agent then waits with `deputy wait`, reviews the
 patch and applies it. You do not have to ask for it each time. It keeps a change for itself when
 it is a few lines you are waiting for, or when you say so: a local model takes minutes where a

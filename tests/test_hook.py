@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from deputy import cli, hook
+from deputy import cli, hook, tokens
+from deputy.config import config_path
 
 
 def _read(path: Path, **extra: object) -> dict:
@@ -260,3 +261,49 @@ def test_a_broken_settings_file_is_left_alone(tmp_path: Path) -> None:
     target.write_text("{broken")
     assert hook.refresh(target) is False
     assert target.read_text() == "{broken"
+
+
+def test_each_request_of_the_user_is_told_that_code_changes_go_to_the_local_agent() -> None:
+    payload = json.dumps({"hook_event_name": "UserPromptSubmit", "prompt": "fix the parser"})
+    assert hook.run(payload) == ""  # no configuration: nothing to hand the changes to
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    out = json.loads(hook.run(payload))["hookSpecificOutput"]
+    assert out["hookEventName"] == "UserPromptSubmit"
+    for rule in ("agent=true", "do not read or edit the code first", "`steps`", "deputy wait"):
+        assert rule in out["additionalContext"]
+    assert tokens.estimate(out["additionalContext"]) <= 130  # paid with every request
+
+
+def test_no_such_hint_when_the_user_keeps_code_changes_for_the_frontier_model() -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    path = config_path()
+    path.write_text('code_changes = "frontier"\n' + path.read_text())
+    assert hook.run(json.dumps({"hook_event_name": "UserPromptSubmit", "prompt": "x"})) == ""
+
+
+def test_the_hook_is_installed_for_reads_and_for_requests_and_removed_whole(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "settings.json"
+    target.write_text(
+        json.dumps({"hooks": {"UserPromptSubmit": [{"hooks": [{"command": "mine"}]}]}})
+    )
+    hook.enable(target)
+    hooks = json.loads(target.read_text())["hooks"]
+    assert [e["hooks"][0]["command"] for e in hooks["UserPromptSubmit"]] == ["mine", "deputy-hook"]
+    assert "matcher" not in hooks["UserPromptSubmit"][1]
+    assert hooks["PreToolUse"][0]["matcher"] == "Read|Bash"
+    assert "already on" in hook.enable(target)
+    hook.disable(target)
+    assert json.loads(target.read_text())["hooks"] == {
+        "UserPromptSubmit": [{"hooks": [{"command": "mine"}]}]
+    }
+
+
+def test_a_hint_installed_before_gets_the_part_for_requests(tmp_path: Path) -> None:
+    target = tmp_path / "settings.json"
+    old = {"matcher": "Read|Bash", "hooks": [{"type": "command", "command": "deputy-hook"}]}
+    target.write_text(json.dumps({"hooks": {"PreToolUse": [old]}}))
+    assert hook.refresh(target) is True
+    assert "UserPromptSubmit" in json.loads(target.read_text())["hooks"]
+    assert hook.refresh(target) is False

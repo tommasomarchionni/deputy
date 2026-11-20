@@ -1,4 +1,5 @@
-"""A Claude Code hook that suggests `digest` before a large read. It never blocks anything.
+"""A Claude Code hook that suggests `digest` before a large read, and says with each request of
+the user that code changes go to the local agent. It never blocks anything.
 
 Before Claude Code reads a whole file larger than `HINT_BYTES`, or runs a shell command that prints
 more than that (`cat`, `nl`, `sed -n`, `head`, `tail`), the hook adds one line to the model's
@@ -25,6 +26,16 @@ HOOK_TIMEOUT_S = 5  # the hint must never hold a read for long
 HOOK_COMMAND = "deputy-hook"  # a light entry point: it runs before every read
 _EVENT = "PreToolUse"
 _MATCHER = "Read|Bash"
+_PROMPT_EVENT = "UserPromptSubmit"
+# Said next to each request of the user: rules in a system prompt were followed one time in two.
+PROMPT_HINT = (
+    "deputy: the user wants code changes made by the local agent, to save your tokens. If this "
+    "request needs code changes that tests or linters can check, do not read or edit the code "
+    "first: call deputy's `delegate` with agent=true (the rules the changes share in `task`, one "
+    "change per item of `steps`, the project's test and lint commands as `command` checks), then "
+    "run `deputy wait <run_id>` in a background shell. Keep for yourself only a change of a few "
+    "lines the user is waiting for."
+)
 _BINARY_SUFFIXES = frozenset(
     [
         ".png",
@@ -137,16 +148,33 @@ def hint(payload: dict[str, Any]) -> str | None:
     return None
 
 
+def prompt_hint() -> str | None:
+    """What is said with each request of the user: code changes go to the local agent. Only when
+    the default backend is local and the user did not keep code changes for the frontier model."""
+    from deputy.config import ConfigError, load_config  # noqa: PLC0415  (not needed for a read)
+
+    try:
+        config = load_config()
+        local = config.code_changes == "local" and config.backend().kind == "local"
+    except ConfigError:
+        return None
+    return PROMPT_HINT if local else None
+
+
 def run(stdin_text: str) -> str:
     """What the hook prints: a JSON object that adds context, or nothing. Never raises."""
     try:
         payload = json.loads(stdin_text)
-        line = hint(cast("dict[str, Any]", payload)) if isinstance(payload, dict) else None
+        if not isinstance(payload, dict):
+            return ""
+        known = cast("dict[str, Any]", payload)
+        event = _PROMPT_EVENT if known.get("hook_event_name") == _PROMPT_EVENT else _EVENT
+        line = prompt_hint() if event == _PROMPT_EVENT else hint(known)
     except (ValueError, OSError):
         return ""
     if line is None:
         return ""
-    return json.dumps({"hookSpecificOutput": {"hookEventName": _EVENT, "additionalContext": line}})
+    return json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": line}})
 
 
 def settings_path() -> Path:
@@ -163,9 +191,14 @@ def _load(path: Path) -> dict[str, Any]:
     return cast("dict[str, Any]", data)
 
 
-def _entries(settings: dict[str, Any]) -> list[dict[str, Any]]:
+def _entries(settings: dict[str, Any], event: str = _EVENT) -> list[dict[str, Any]]:
     hooks = cast("dict[str, Any]", settings.setdefault("hooks", {}))
-    return cast("list[dict[str, Any]]", hooks.setdefault(_EVENT, []))
+    return cast("list[dict[str, Any]]", hooks.setdefault(event, []))
+
+
+def _wanted(event: str) -> dict[str, Any]:
+    ours = {"type": "command", "command": HOOK_COMMAND, "timeout": HOOK_TIMEOUT_S}
+    return {"matcher": _MATCHER, "hooks": [ours]} if event == _EVENT else {"hooks": [ours]}
 
 
 def _is_ours(entry: dict[str, Any]) -> bool:
@@ -181,17 +214,20 @@ def _write(path: Path, settings: dict[str, Any]) -> None:
 
 
 def enable(path: Path | None = None) -> str:
-    """Add the hook to Claude Code's user settings; keeps everything else as it is."""
+    """Add the hook to Claude Code's user settings, before large reads and with each request of
+    the user; keeps everything else as it is."""
     target = path or settings_path()
     settings = _load(target)
-    entries = _entries(settings)
-    ours = {"type": "command", "command": HOOK_COMMAND, "timeout": HOOK_TIMEOUT_S}
-    wanted = {"matcher": _MATCHER, "hooks": [ours]}
-    current = [e for e in entries if _is_ours(e)]
-    if current and all(e == wanted for e in current):
+    changed = False
+    for event in (_EVENT, _PROMPT_EVENT):
+        entries, wanted = _entries(settings, event), _wanted(event)
+        current = [e for e in entries if _is_ours(e)]
+        if current and all(e == wanted for e in current):
+            continue
+        entries[:] = [*(e for e in entries if not _is_ours(e)), wanted]
+        changed = True
+    if not changed:
         return f"the read hint is already on ({target})"
-    entries[:] = [e for e in entries if not _is_ours(e)]
-    entries.append(wanted)
     _write(target, settings)
     return (
         f"read hint on: Claude Code will suggest delegating large reads ({target}); "
@@ -202,17 +238,20 @@ def enable(path: Path | None = None) -> str:
 def disable(path: Path | None = None) -> str:
     target = path or settings_path()
     settings = _load(target)
-    entries = _entries(settings)
-    kept = [e for e in entries if not _is_ours(e)]
-    if len(kept) == len(entries):
-        return f"the read hint is already off ({target})"
-    hooks = cast("dict[str, Any]", settings["hooks"])
-    if kept:
-        hooks[_EVENT] = kept
-    else:
-        del hooks[_EVENT]
-    if not hooks:
+    removed = False
+    for event in (_EVENT, _PROMPT_EVENT):
+        entries = _entries(settings, event)
+        kept = [e for e in entries if not _is_ours(e)]
+        removed = removed or len(kept) != len(entries)
+        hooks = cast("dict[str, Any]", settings["hooks"])
+        if kept:
+            hooks[event] = kept
+        else:
+            del hooks[event]
+    if not settings["hooks"]:
         del settings["hooks"]
+    if not removed:
+        return f"the read hint is already off ({target})"
     _write(target, settings)
     return f"read hint off ({target}); on again with `deputy hook on`"
 
@@ -221,9 +260,10 @@ def refresh(path: Path | None = None) -> bool:
     """Bring a hint that is on up to this version; a hint that is off stays off. True if changed."""
     target = path or settings_path()
     try:
-        entries = _entries(_load(target))
-        ours = [e for e in entries if _is_ours(e)]
-        if not ours or all(e.get("matcher") == _MATCHER for e in ours):
+        settings = _load(target)
+        ours = [e for e in _entries(settings) if _is_ours(e)]
+        prompts = [e for e in _entries(settings, _PROMPT_EVENT) if _is_ours(e)]
+        if not ours or (all(e.get("matcher") == _MATCHER for e in ours) and prompts):
             return False
         enable(target)
     except (ValueError, OSError):
