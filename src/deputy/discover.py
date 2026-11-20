@@ -67,6 +67,9 @@ class Report:
     delegations: int = 0  # calls of deputy's delegation tools, to compare with the large reads
     adoption: Adoption = field(default_factory=Adoption)
     subagents: int = 0  # subagent transcripts read
+    agent_runs: int = 0  # `delegate` calls with agent=true
+    agent_changes: int = 0  # the code changes in them: one per step
+    own_edits: int = 0  # edits the sessions made themselves
     subagent_adoption: Adoption = field(default_factory=Adoption)  # the part of `adoption` in them
 
     @property
@@ -159,6 +162,7 @@ class _Step:
     edits: list[str] = field(default_factory=list[str])
     chars: int = 0
     compaction: bool = False
+    agent_changes: int = 0  # code changes handed to the local agent by this call
 
 
 def _resolved(path: str, folder: str) -> str:
@@ -172,6 +176,9 @@ def _step_of(name: str, arguments: dict[str, Any], cwd: str) -> _Step:
     if name == "Read" and target:
         part = (arguments.get("offset"), arguments.get("limit"))
         return _Step(reads=[(_resolved(target, cwd), part)])
+    if is_delegation(name) and arguments.get("agent") is True:
+        steps = arguments.get("steps")
+        return _Step(agent_changes=len(cast("list[object]", steps)) if steps else 1)
     if name != "Bash":
         return _Step()
     command = str(arguments.get("command", ""))
@@ -272,7 +279,11 @@ def build_report(folder: Path, *, days: float, now: float | None = None) -> Repo
                 _add(report.by_source.setdefault(source, Bucket()), chars)
             handle.seek(0)
             part = Adoption()
-            _measure_adoption(part, _steps(handle))
+            steps = _steps(handle)
+            report.agent_runs += sum(1 for step in steps if step.agent_changes)
+            report.agent_changes += sum(step.agent_changes for step in steps)
+            report.own_edits += sum(len(step.edits) for step in steps)
+            _measure_adoption(part, steps)
             _merge(report.adoption, part)
             if path in subagents:
                 _merge(report.subagent_adoption, part)
@@ -299,6 +310,8 @@ def _adoption_lines(report: Report) -> list[str]:
         f"(~{agents.delegable_tokens:,} tokens) and the main sessions the rest.",
         f"Read again with no change or compaction in between: ~{seen.again_tokens:,} tokens, "
         f"~{seen.same_part_tokens:,} of them the very same part of the file.",
+        f"Code changes: {report.agent_changes} handed to the local agent in {report.agent_runs} "
+        f"run(s); the sessions made {report.own_edits} edits themselves.",
     ]
 
 

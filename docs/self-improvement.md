@@ -196,6 +196,8 @@ The last lines measure **adoption**, the number to watch over time:
   delegation could have taken, with the part done by subagents shown apart.
   A file read through `Read`, `cat`, `sed -n`, `head`, `tail` or `nl` counts, unless the same file
   was edited within the next 40 tool calls: that read needed the exact text.
+- **Code changes** counts the changes handed to the local agent (`delegate` with `agent=true`,
+  one per step) next to the edits the sessions made themselves.
 - **Read again** is what went into reading a file a second time with no edit and no compaction in
   between, and how much of that was the very same part of the file.
 
