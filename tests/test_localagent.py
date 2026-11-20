@@ -158,10 +158,34 @@ def test_failed_checks_go_back_to_the_agent(repo: Path, fake_claude, tmp_path: P
 
 
 def test_repairs_stop_after_a_few_rounds(repo: Path, fake_claude, tmp_path: Path) -> None:
-    fake_claude("echo two >> a.txt")
+    # each repair round changes a file, so only the cap on rounds, not the early stop, ends it
+    fake_claude("echo two >> a.txt", repair="echo more >> a.txt")
     result = _run(repo, [Contains(values=["never said"])])
     assert result.status == "checks_failed"
     assert _rounds(tmp_path) == 1 + localagent.REPAIR_ROUNDS
+
+
+def test_a_repair_round_that_changes_nothing_ends_the_repairs(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    fake_claude("echo two >> a.txt", repair="true")  # it gets the failure and does nothing
+    result = _run(repo, [Contains(values=["never said"])])
+    assert result.status == "checks_failed"
+    assert _rounds(tmp_path) == 2  # one repair round, not three: asking again cannot help
+    assert [check.passed for check in result.checks] == [False]
+
+
+def test_a_repair_that_only_corrects_the_answer_still_passes(
+    repo: Path, fake_claude, tmp_path: Path
+) -> None:
+    # a check on the answer needs no file change, so the checks run once more after such a round
+    said = json.dumps(
+        {"type": "result", "subtype": "success", "result": "the port is 8080", "session_id": "s1"}
+    )
+    fake_claude("echo two >> a.txt", repair=f"echo '{said}'; exit 0")
+    result = _run(repo, [Contains(values=["8080"])])
+    assert result.status == "ok"
+    assert _rounds(tmp_path) == 2
 
 
 def test_a_stuck_agent_is_stopped_and_told_to_move_on(
