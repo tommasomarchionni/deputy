@@ -32,7 +32,8 @@ MACOS_PROFILE = """\
 """
 
 # For the checks of the local agent: the same idea, on its copy. Localhost stays reachable, because
-# test suites start servers and talk to local services; nothing beyond this machine is.
+# test suites start servers and talk to local services; nothing beyond this machine is, and not
+# the system's name lookups either. Unix sockets work where files can be written (Nx needs one).
 _AGENT_SECRETS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".claude", ".netrc",
                   ".npmrc", ".pypirc", ".git-credentials")  # fmt: skip
 AGENT_MACOS_PROFILE = (
@@ -57,6 +58,11 @@ AGENT_MACOS_PROFILE = (
 (allow network-outbound (remote ip "localhost:*"))
 (allow network-bind (local ip "localhost:*"))
 (allow network-inbound (local ip "localhost:*"))
+(allow network-outbound network-bind network-inbound
+  (subpath (param "WORKDIR"))
+  (subpath (param "SCRATCH"))
+  (subpath "/private/tmp")
+  (subpath "/private/var/folders"))
 """
 )
 

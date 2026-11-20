@@ -125,7 +125,8 @@ def agent_settings(copy: Path) -> dict[str, Any]:
             "autoAllowBashIfSandboxed": True,
             "allowUnsandboxedCommands": False,
             "filesystem": {"denyRead": _SECRET_PATHS, "allowWrite": [scratch]},
-            "network": {"allowedDomains": []},
+            # no domain at all; a socket file only where temporary files go (Nx needs one)
+            "network": {"allowedDomains": [], "allowUnixSockets": [scratch]},
         },
     }
 
@@ -184,6 +185,9 @@ def copy_environment(copy: Path) -> dict[str, str]:
         "UV_CACHE_DIR": str(copy / ".uv-cache"),
         "PYTHONPATH": str(copy / "src"),
         "TMPDIR": str(_scratch(copy)),
+        # Nx: its socket where the sandbox lets it be, and no daemon left behind by a copy
+        "NX_SOCKET_DIR": str(_scratch(copy) / "nx"),
+        "NX_DAEMON": "false",
     }
 
 

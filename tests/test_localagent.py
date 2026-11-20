@@ -409,6 +409,7 @@ def test_the_shell_of_the_agent_is_confined(tmp_path: Path) -> None:
     assert sandbox["network"]["allowedDomains"] == []
     assert {"~/.ssh", "~/.config/deputy", "~/.claude"} <= set(sandbox["filesystem"]["denyRead"])
     assert sandbox["filesystem"]["allowWrite"] == [f"/{tmp_path.resolve()}.tmp"]
+    assert sandbox["network"]["allowUnixSockets"] == [f"/{tmp_path.resolve()}.tmp"]
     assert localagent.agent_settings(tmp_path)["disableAllHooks"] is True
 
 
@@ -423,6 +424,7 @@ def test_the_agent_gets_no_credential_of_the_user(monkeypatch: pytest.MonkeyPatc
     assert env["ANTHROPIC_BASE_URL"] == FakeGateway.url
     assert env["PYTHONPATH"] == "/copy/src"
     assert env["TMPDIR"] == "/copy.tmp"
+    assert env["NX_SOCKET_DIR"] == "/copy.tmp/nx"
     assert env["CLAUDE_CONFIG_DIR"] == "/copy.claude"
 
 
