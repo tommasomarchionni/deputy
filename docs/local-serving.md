@@ -49,7 +49,7 @@ tokens of context, new code, a file written again with one change), 400 tokens e
   answer. With sampling, 8 and 12 were slower than 6: more drafts are thrown away.
 - **Real work gains less than the test.** In the local agent's own conversations, by context
   size, `draft-mtp,ngram-mod` with 6 against `draft-mtp` with 2: 21.4 against 17.9 tok/s under
-  5,000 tokens, 22.8 against 17.5 up to 20,000, 20.8 against 15.6 up to 40,000, and 14.3 against
+  5,000 tokens, 24.0 against 17.5 up to 20,000, 18.9 against 15.6 up to 40,000, and 14.3 against
   13.3 above (few requests). An agent writes short tool calls at temperature 1.0, where about
   half of the drafted tokens are accepted.
 - **Quality on the benchmark did not move:** 34 of 36 against 35 of 36 before, the same two
