@@ -7,6 +7,7 @@ means adding one class, not editing a chain of conditions.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -267,15 +268,16 @@ def _quote_is_on(quote: str, text: list[str], first: int, last: int) -> bool:
 
 
 class CitesFiles(BaseModel):
-    """Every line of the answer states a fact and cites a listed file and a real line of it, with
-    words quoted from that line. Nothing stands without its source, and no source without a fact."""
+    """Every line of the answer states a fact and cites a listed file, or another file of the work
+    folder, and a real line of it, with words quoted from that line. Nothing stands without its
+    source, and no source without a fact."""
 
     type: Literal["cites_files"] = "cites_files"
     paths: list[str]
 
     def _problem(self, answer: str, match: re.Match[str], lines: dict[str, list[str]]) -> str:
         cited = match["name"]
-        found = _matching(cited, self.paths)
+        found = _matching(cited, self.paths) or ([cited] if cited in lines else [])
         if len(found) != 1:
             return f"{cited} is not one of the files" if not found else f"{cited} is ambiguous"
         first = int(match["first"])
@@ -298,6 +300,11 @@ class CitesFiles(BaseModel):
         cited = list(_NAMED_CITATION.finditer(ctx.answer))
         if not cited:
             return _result("cites_files", 'no citation (expected: file.md:12 "the exact words")')
+        # a fact from another file of the folder is as true as one from a listed file: prove it
+        for name in {match["name"] for match in cited}:
+            if not _matching(name, self.paths):
+                with contextlib.suppress(SandboxError):
+                    lines[name] = read_lines(ctx.sandbox.resolve(name))
         problems = [p for m in cited if (p := self._problem(ctx.answer, m, lines))]
         bare = [
             line.strip()[:40]

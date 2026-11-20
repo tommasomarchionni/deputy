@@ -449,3 +449,46 @@ def test_cites_files_refuses_a_name_that_could_be_two_files(tmp_path: Path) -> N
     assert "ambiguous" in _files_check(tmp_path, answer, paths)
     exact = '- the fact (other/a.md:2 "the second letter")'
     assert _files_check(tmp_path, exact, paths) == ""
+
+
+def test_cites_files_accepts_a_proven_quote_from_a_file_that_was_not_listed(
+    tmp_path: Path,
+) -> None:
+    """A cited file not in `paths` is accepted when the sandbox lets the check read it."""
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "a.md").write_text("alpha line one\n")
+    (tmp_path / "notes").mkdir(exist_ok=True)
+    (tmp_path / "notes" / "extra.md").write_text("the extra fact lives here\n")
+    answer = '- the fact (notes/extra.md:1 "the extra fact lives here")'
+    context = CheckContext(answer=answer, sandbox=Sandbox(tmp_path), policy=Policy())
+    result = asyncio.run(CitesFiles(paths=["docs/a.md"]).evaluate(context))
+    assert result.passed, result.detail
+
+
+def test_cites_files_refuses_a_wrong_quote_from_a_file_that_was_not_listed(
+    tmp_path: Path,
+) -> None:
+    """A cited file not in `paths` still fails when the quote is not on the cited line."""
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "a.md").write_text("alpha line one\n")
+    (tmp_path / "notes").mkdir(exist_ok=True)
+    (tmp_path / "notes" / "extra.md").write_text("the extra fact lives here\n")
+    answer = '- the fact (notes/extra.md:1 "a completely different quote")'
+    context = CheckContext(answer=answer, sandbox=Sandbox(tmp_path), policy=Policy())
+    result = asyncio.run(CitesFiles(paths=["docs/a.md"]).evaluate(context))
+    assert not result.passed
+    assert "does not contain" in result.detail
+
+
+def test_cites_files_refuses_a_file_the_sandbox_does_not_let_read(
+    tmp_path: Path,
+) -> None:
+    """A secret-looking file the sandbox refuses stays `not one of the files`."""
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "a.md").write_text("alpha line one\n")
+    (tmp_path / "creds.pem").write_text("BEGIN CERTIFICATE\n")
+    answer = '- the cert (creds.pem:1 "BEGIN CERTIFICATE")'
+    context = CheckContext(answer=answer, sandbox=Sandbox(tmp_path), policy=Policy())
+    result = asyncio.run(CitesFiles(paths=["docs/a.md"]).evaluate(context))
+    assert not result.passed
+    assert "is not one of the files" in result.detail
