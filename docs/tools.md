@@ -71,10 +71,13 @@ Claude Code subagent, but no request reaches a hosted model.
   `task`: every step gets a conversation of its own in the same copy. A local model reads a short
   conversation fast and handles it well; one long conversation for eight changes made a 27B model
   spend a third of its time reading its own history again. A step the agent cannot do is undone,
-  so it leaves no half-made change, and the answer names it: `Left for you: step 6`. A step has
-  30 minutes; when they are up the agent is told once to wrap up, and the next steps still run. With the
-  flag `partial` the checks pass on the steps that are done: apply the patch and do only the
-  steps that are left.
+  so it leaves no half-made change, and the answer names it: `Left for you: step 6`. What that
+  step had changed is kept apart as a draft, not checked and not in the patch, and the answer
+  gives its path: start from it if it helps. A step has 30 minutes; when they are up the agent is
+  told once to wrap up, and the next steps still run. An agent that makes 40 tool calls without
+  changing a file is stopped and told to write the change with what it knows; a step that still
+  ends without a change counts as stuck. With the flag `partial` the checks pass on the steps
+  that are done: apply the patch and do only the steps that are left.
 - **It runs in the background, and you do not poll it.** The call returns `status: running` at
   once. Run `deputy wait <run_id>` in a background shell: it prints the result when the run
   ends, so the orchestrator spends one turn on it instead of one for every "is it done?". The
