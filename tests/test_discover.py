@@ -270,3 +270,25 @@ def test_a_digest_call_counts_as_a_delegation(tmp_path: Path) -> None:
         tmp_path, _at("/repo", _use("a", "mcp__deputy__digest", question="q"), _result("a", "ok"))
     )
     assert discover.build_report(tmp_path, days=30).delegations == 1
+
+
+def test_code_changes_handed_to_the_local_agent_are_counted_next_to_own_edits(
+    tmp_path: Path,
+) -> None:
+    _session(
+        tmp_path,
+        "s",
+        _use("a", "mcp__deputy__delegate", task="rules", agent=True, steps=["one", "two", "three"]),
+        _result("a", "running"),
+        _use("b", "mcp__deputy__delegate", task="one change", agent=True),
+        _result("b", "running"),
+        _use("c", "mcp__deputy__delegate", task="a summary"),
+        _result("c", "ok"),
+        _use("d", "Edit", file_path="/repo/a.py"),
+        _result("d", "ok"),
+    )
+    report = discover.build_report(tmp_path, days=30)
+    assert (report.agent_runs, report.agent_changes, report.own_edits) == (2, 4, 1)
+    text = discover.format_report(report)
+    assert "Code changes: 4 handed to the local agent in 2 run(s)" in text
+    assert "made 1 edits themselves" in text

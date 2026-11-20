@@ -10,7 +10,8 @@ import asyncio
 import json
 import os
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal
 
 import jsonschema
@@ -40,6 +41,11 @@ class CheckContext:
     answer: str
     sandbox: Sandbox
     policy: Policy
+    env: Mapping[str, str] = field(default_factory=dict[str, str])
+    """Added to a `command` check's environment: the local agent's copy needs its own."""
+    wrapper: list[str] | None = None
+    """A sandbox for `command` checks that takes the place of the policy's. A command that runs
+    inside it needs no allow-list: it can do no more than the agent's own confined shell."""
 
 
 def _result(name: str, problem: str = "") -> CheckResult:
@@ -419,9 +425,8 @@ class FileContains(BaseModel):
 
 def _confined(argv: list[str], ctx: CheckContext) -> list[str]:
     """The command, behind the policy's wrapper (if any), with {workdir} filled in."""
-    prefix = [
-        part.replace("{workdir}", str(ctx.sandbox.root)) for part in ctx.policy.command_wrapper
-    ]
+    wrapper = ctx.policy.command_wrapper if ctx.wrapper is None else ctx.wrapper
+    prefix = [part.replace("{workdir}", str(ctx.sandbox.root)) for part in wrapper]
     return [*prefix, *argv]
 
 
@@ -433,9 +438,9 @@ class Command(BaseModel):
 
     async def evaluate(self, ctx: CheckContext) -> CheckResult:
         name = f"command: {' '.join(self.argv)}"
-        if not self._allowed_by(ctx.policy):
+        if ctx.wrapper is None and not self.allowed_by(ctx.policy):
             return _result(name, "command not allowed by the policy")
-        env = {k: v for k, v in os.environ.items() if k in _COMMAND_ENV}
+        env = {k: v for k, v in os.environ.items() if k in _COMMAND_ENV} | dict(ctx.env)
         process: asyncio.subprocess.Process | None = None
         try:
             process = await asyncio.create_subprocess_exec(
@@ -462,7 +467,7 @@ class Command(BaseModel):
             return _result(name)
         return _result(name, output.decode("utf-8", "replace")[-600:] or "non-zero exit")
 
-    def _allowed_by(self, policy: Policy) -> bool:
+    def allowed_by(self, policy: Policy) -> bool:
         return bool(self.argv) and any(
             prefix and self.argv[: len(prefix)] == prefix for prefix in policy.allowed_commands
         )
@@ -515,10 +520,18 @@ def to_check(spec: CheckSpec) -> Check:
     return _CHECK_ADAPTER.validate_python(spec.model_dump(exclude_none=True))
 
 
-async def run_checks(
-    checks: list[Check], answer: str, sandbox: Sandbox, policy: Policy
+async def run_checks(  # noqa: PLR0913
+    checks: list[Check],
+    answer: str,
+    sandbox: Sandbox,
+    policy: Policy,
+    *,
+    env: Mapping[str, str] | None = None,
+    wrapper: list[str] | None = None,
 ) -> list[CheckResult]:
-    context = CheckContext(answer=answer, sandbox=sandbox, policy=policy)
+    context = CheckContext(
+        answer=answer, sandbox=sandbox, policy=policy, env=env or {}, wrapper=wrapper
+    )
     return [await check.evaluate(context) for check in checks]
 
 

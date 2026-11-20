@@ -30,6 +30,43 @@
   `deputy hook off` removes it; other hooks and settings are kept.
 - **Traces** (`runs.jsonl`) hold run metadata and check results, not file contents or answers.
 
+## The local agent
+
+`delegate` with `agent=true` gives a local model Claude Code's tools, including a shell. That is a
+different trust level from the worker's file tools, so it is confined on every side:
+
+- **A private copy.** The agent works in a git worktree of the repository, never in the repository
+  itself. You get a patch to review before anything changes.
+- **Its file tools stay in the copy.** Read, Edit and Write are allowed only inside the copy; any
+  other path is refused without asking (`dontAsk` mode).
+- **Its shell is sandboxed** by Claude Code's sandbox (Seatbelt on macOS, bubblewrap on Linux),
+  which fails closed: no network at all, no reading of `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`,
+  `~/.docker`, `~/.config/deputy`, `~/.config/gh`, `~/.claude` or `.env` and key files, and writes
+  only inside the copy. Commands can never run outside the sandbox.
+- **No credentials.** The agent's environment drops `ANTHROPIC_*`, `CLAUDE_CODE_*`, `AWS_*`,
+  `GITHUB_*` and `GH_*`. It talks only to deputy's gateway on `127.0.0.1`, which answers only to a
+  random per-run token and forwards only to your configured local backend.
+- **No hooks, no MCP servers, no settings files** of yours or of the repository are loaded. The
+  agent's conversations are kept in a folder of the run, removed with it, never in your own Claude
+  Code history.
+- **Text in files is data.** The agent is told so; the confinement above is what holds if a file
+  tries to instruct it.
+- **`command` checks run the agent's code, in a sandbox.** Tests and linters in `checks` run on
+  the copy after the agent ends. deputy runs them in its own sandbox (`sandbox-exec` on macOS,
+  bubblewrap on Linux): writes only in the copy and its temporary folder, no reading of `~/.ssh`,
+  `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.docker`, `~/.config`, `~/.claude` or the credential files
+  in the home folder, and no network beyond localhost (test suites start local servers; on Linux
+  there is no network at all). deputy uses the sandbox only if it starts: bubblewrap is often
+  installed where the system refuses it. Inside that sandbox a check needs no entry in
+  `policy.allowed_commands`: it can do no more than the agent's own confined shell. If you set
+  `policy.command_wrapper` yourself, your wrapper and your allow-list apply instead; with no
+  sandbox tool on the machine the allow-list applies, and a command it does not allow is refused
+  before the run starts, not after an hour of work.
+
+Measured on 2026-11-19: asked to write and read outside its copy, read `~/.ssh/config` and run
+`cat ~/.ssh/config`, the agent was refused every time; a probe script found no network and no
+writable home folder.
+
 ## Review of the sandbox (2026-11-18)
 
 A written review of the three ways a worker touches files (`read_file`, `write_file`, `grep`),

@@ -15,6 +15,7 @@ from deputy.cli import (
     stats,
     tuning,
     update,
+    wait,
     workspace,
 )
 from deputy.cli import lessons as lessons_cli
@@ -31,6 +32,7 @@ _COMMAND_MODULES = (
     memory,
     optimise,
     workspace,
+    wait,
     update,
     serve,
 )

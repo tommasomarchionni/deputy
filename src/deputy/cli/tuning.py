@@ -9,7 +9,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from deputy import compare, taskfile
+from deputy import compare, localagent, taskfile
 from deputy.agent import Result
 from deputy.bench import (
     QUICK_TASKS,
@@ -143,9 +143,20 @@ def _bench_compare(args: argparse.Namespace) -> int:
     return 1 if result.regressed and args.fail_on_regression else 0
 
 
+BUSY = 75  # EX_TEMPFAIL: try again later
+
+
 def bench(args: argparse.Namespace) -> int:
     if args.compare:
         return _bench_compare(args)
+    running = [] if args.even_if_busy else localagent.active_runs()
+    if running:
+        print(
+            f"a local agent run is using the model server ({', '.join(running)}): the benchmark "
+            "would slow it down and measure wrong numbers. Not run; --even-if-busy runs it anyway.",
+            file=sys.stderr,
+        )
+        return BUSY
     if args.tasks_file:
         return _bench_file(args)
     try:
@@ -294,6 +305,11 @@ def register(sub: Subparsers) -> None:
                 help="also run tasks that take minutes (a file larger than the context)",
             )
             parser.add_argument("--variant", action="append", help="extra setting: NAME=JSON")
+            parser.add_argument(
+                "--even-if-busy",
+                action="store_true",
+                help="run although a local agent run is using the model server",
+            )
             parser.add_argument(
                 "--tasks-file", help="run the tasks of this TOML file on your own folder"
             )

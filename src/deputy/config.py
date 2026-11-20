@@ -85,6 +85,9 @@ class Config(BaseModel):
     auto_tune: Literal["off", "propose", "apply"] = "propose"
     auto_update: Literal["off", "notify", "apply"] = "apply"
     routing: Literal["off", "auto"] = "auto"
+    # who makes code changes when the default backend is local: with "local" the orchestrator is
+    # told to hand them to the local agent; with "frontier" the agent is only offered
+    code_changes: Literal["local", "frontier"] = "local"
     policy: Policy = Field(default_factory=Policy)
 
     def backend(self, name: str | None = None) -> Backend:

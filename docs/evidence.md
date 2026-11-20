@@ -107,6 +107,36 @@ read-only commands of two real repositories:
 The two tools cut different parts of the bill and do not interfere: rtk shortens what shell
 commands print; deputy takes long reads off the orchestrator, and its worker never uses the shell.
 
+## A local agent for code changes
+
+Measured on 2026-11-20 on an M4 Pro with 64 GB: eight small changes to this repository (code,
+tests and documentation each), given as one request to Claude Code 2.1.321 with Claude Sonnet 5.5
+as the frontier model. The local model is Qwen3.8 27B (Q4_K_M) on llama.cpp. Hidden checks, one
+per change, grade the result; the weights are those of the bill (input 1, cache write 1.25, cache
+read 0.1, output 5).
+
+| Who makes the changes | Frontier tokens, weighted | Cost | Time | Result |
+| --- | ---: | ---: | ---: | --- |
+| The frontier model alone (two runs) | 133,556 and 140,080 | $0.34 and $0.38 | 2.5 min | 8 of 8; tests, linter, formatter and type checker pass |
+| The frontier model hands them to the local agent in 8 steps, waits with `deputy wait`, reviews and applies the patch | 77,660 | $0.22 | 88 min | 8 of 8; the same gates pass after the frontier reformatted one file |
+
+- **About 43 % fewer frontier tokens, for 35 times the time.** Of the 77,660, about 30,800 are
+  the prompt cache written again after 88 idle minutes: a session that keeps working meanwhile
+  does not pay them.
+- **The local model needs short conversations.** The same eight changes in one conversation:
+  7 of 8 after 105 minutes, stuck on the last one, a third of the time spent reading its own
+  history again. In eight steps, directly (no frontier): 8 of 8 in 79 minutes, no repair round,
+  documentation updated in five files.
+- **Handing over has to be said with the request.** With the rule only in the server's
+  instructions the frontier model delegated as its first move in 3 of 6 runs; with the hook's
+  line next to the request, in 6 of 6.
+- **A smaller, faster model is not better here.** Qwen3.6-35B-A3B made the eight changes pass in
+  45 minutes with one repair round, but updated the documentation in one place of four and left
+  two tests that did not test their change.
+
+What this does not show: one set of changes, one Python repository, one run of the delegated
+path. A single small change costs less done by the frontier model itself than handed over.
+
 ## What this does not show
 
 - Savings are estimates with one yardstick on both sides; real tokenizers differ by up to about a

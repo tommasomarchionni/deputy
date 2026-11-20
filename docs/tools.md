@@ -41,17 +41,60 @@ other than answering a question about files.
 | `backend` | A configured backend; default is `default_backend`. |
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
 | `wait` | `true` by default. With `false` it returns at once with `status: running`; get the result with `collect`. |
+| `agent` | `false` by default. With `true`, a local agent does a code change in a private copy (below). |
+| `steps` | With `agent`: the separate changes, one per item; each is done in a conversation of its own. |
 
 Returns: `run_id`, `status` (`ok`, `checks_failed`, `turn_limit`, `error`, and for background runs
 `running`, `cancelled`), `answer`, a one-line `checks` summary (`3/3 passed`, or what failed with its
 detail), and, only when there are any, `files_written` and `flags` (`needs_frontier`, `turn_limit`,
-`backend_error`, `setup_error`, `time_limit`, `not_worth_delegating`, `small_input`).
+`backend_error`, `setup_error`, `time_limit`, `stuck`, `partial`, `not_worth_delegating`,
+`small_input`).
 
 The result is short on purpose. Metrics (turns, tokens, seconds, model) and the saving estimate
 (`orchestrator_tokens_saved_est`, a rough bytes / 4 estimate of what you did not have to read) are
 recorded in the trace and shown by `deputy stats`, not sent: a typical passing result is about 16 %
 smaller (558 to 471 tokens in a measured case), and the tool's output schema is smaller too.
 The worker always answers in English (the bundled profile says so), unless asked to translate.
+
+### A local agent for a code change (`agent=true`)
+
+With `agent=true`, `delegate` hands the whole task to Claude Code's own agent loop, running on your
+local model through a small gateway inside deputy. The agent searches, edits and runs tests like a
+Claude Code subagent, but no request reaches a hosted model.
+
+- **It never touches your repository.** It works in a private copy (a git worktree of your current
+  state, including uncommitted changes to tracked files; new untracked files are not copied), and
+  what comes back is a patch:
+  `Review, then apply: git apply <path>`. Generated files (`__pycache__`, `.venv`, `node_modules`)
+  are left out of the patch.
+- **Give it steps.** Put each separate change in `steps` (up to 20) and what they share in
+  `task`: every step gets a conversation of its own in the same copy. A local model reads a short
+  conversation fast and handles it well; one long conversation for eight changes made a 27B model
+  spend a third of its time reading its own history again. A step the agent cannot do is undone,
+  so it leaves no half-made change, and the answer names it: `Left for you: step 6`. A step has
+  30 minutes; when they are up the agent is told once to wrap up, and the next steps still run. With the
+  flag `partial` the checks pass on the steps that are done: apply the patch and do only the
+  steps that are left.
+- **It runs in the background, and you do not poll it.** The call returns `status: running` at
+  once. Run `deputy wait <run_id>` in a background shell: it prints the result when the run
+  ends, so the orchestrator spends one turn on it instead of one for every "is it done?". The
+  exit code is 0 for `ok`, 1 for anything else, 124 if the time is up. `collect` still works. A
+  run may take up to 3 hours: a local model is much slower than a hosted one.
+- **Checks run on the copy**, so `file_contains` and allow-listed `command` checks see the agent's
+  work. A `command` check runs with the copy's code first on the Python path, and with `uv` told
+  never to sync or download, so it tests the copy and never changes your environment. It runs in
+  deputy's sandbox and needs no allow-list ([security](security.md#the-local-agent)). Declare the
+  project's gates as checks (tests, linter, formatter, type checker): the agent finishes the job
+  before you see it.
+- **Failed checks go back to the agent.** It resumes its own conversation with the failures (a
+  task in steps: a new conversation that is told the steps), up to 3 times, and is told never to
+  weaken or skip a check. Only then does a failure come back as
+  `checks_failed` with `needs_frontier`; an agent that does not finish comes back the same way.
+- **What it needs:** the `claude` command, a git repository, and a local backend whose context
+  holds at least 110,000 tokens (llama.cpp: `--ctx-size 131072`). deputy reads the size from a
+  llama.cpp server and refuses a smaller one; with other servers (Ollama sets a small context by
+  default) make sure of it yourself. Patches older than a week are removed.
+- **What it cannot do** is in [security](security.md#the-local-agent).
 
 ## `collect`
 

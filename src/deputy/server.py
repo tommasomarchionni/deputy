@@ -12,13 +12,9 @@ from mcp.server.mcpserver import MCPServer
 from pydantic import ValidationError
 
 from deputy import (
-    digest as digests,
-)
-from deputy import (
-    jobs as background,
-)
-from deputy import (
+    confinement,
     lessons,
+    localagent,
     model_profiles,
     project_memory,
     router,
@@ -28,10 +24,16 @@ from deputy import (
     tokens,
     updates,
 )
+from deputy import (
+    digest as digests,
+)
+from deputy import (
+    jobs as background,
+)
 from deputy.agent import Outcome, Result, outcome_of, run_task, task_class
 from deputy.backends import ChatClient
-from deputy.checks import Check, CheckSpec, to_check
-from deputy.config import Backend, Config, ConfigError, Policy, load_config
+from deputy.checks import Check, CheckSpec, Command, to_check
+from deputy.config import Backend, Config, ConfigError, Policy, config_path, load_config
 from deputy.model_profiles import ModelProfile
 from deputy.profiles import Profile, load_profiles
 from deputy.sandbox import Sandbox, SandboxError
@@ -44,8 +46,29 @@ INSTRUCTIONS = (
     "answer: deputy proved that each quoted source is on its line, not that the model understood "
     "it, so read the cited line before you act on a fact. If the status is not ok, read the files "
     "yourself. Read directly a file you are about to edit, a short file, or what one search "
-    "answers. For other work with your own checks, use `delegate`."
+    "answers. For other work with your own checks, use `delegate`; for a well-defined code "
+    "change with tests, `delegate` with agent=true does it on the local model and returns a patch."
 )
+AGENT_RULE = (
+    " Code changes: the user wants the local agent to make them, to save your tokens. When "
+    "asked for changes that tests or linters can check, do not read or edit the code first: "
+    "call `delegate` with agent=true, the rules the changes share in `task`, one self-contained "
+    "change per item of `steps`, and the project's test and lint commands as `command` checks. "
+    "Then run `deputy wait <run_id>` in a background shell and go on with other work, or end "
+    "your turn. When it ends, read the patch, apply it and do only what is left. Make a change "
+    "yourself only when it is a few lines the user is waiting for, or when the user says so."
+)
+
+
+def instructions() -> str:
+    """What every session is told. With a local default backend and `code_changes = "local"`
+    (the default), code changes go to the local agent without the user asking each time."""
+    try:
+        config = load_config()
+        local = config.code_changes == "local" and config.backend().kind == "local"
+    except ConfigError:
+        local = False
+    return INSTRUCTIONS + AGENT_RULE if local else INSTRUCTIONS
 
 
 @dataclass(frozen=True)
@@ -210,8 +233,46 @@ async def _backend_status(config: Config) -> dict[str, str]:
     return out
 
 
+def _agent_started(run_id: str) -> str:
+    return (
+        "started; it can take an hour or more. Do not poll: run `deputy wait "
+        f"{run_id}` in a background shell, with the longest timeout your shell tool takes, go "
+        "on with other work, and read the result it prints when the run ends (or call collect "
+        "then)."
+    )
+
+
+def _refused_checks(checks: list[Check], policy: Policy) -> str:
+    """A `command` check the policy does not allow, said before an hour of work and not after."""
+    confined = not policy.command_wrapper and confinement.agent_sandbox_works()
+    refused = [
+        " ".join(check.argv)
+        for check in checks
+        if isinstance(check, Command) and not check.allowed_by(policy)
+    ]
+    if confined or not refused:
+        return ""  # deputy's sandbox for the agent's checks needs no allow-list
+    allowed = "; ".join(" ".join(prefix) for prefix in policy.allowed_commands) or "none"
+    return (
+        f"the policy does not allow the check command(s) {'; '.join(refused)} (allowed "
+        f"prefixes: {allowed}). The user adds them under [policy] allowed_commands in "
+        f"{config_path()}; until then, leave these checks out and run them yourself on the patch."
+    )
+
+
+def _agent_problem(backend: Backend, steps: list[str], *, has_room: bool) -> str:
+    """Why a local agent cannot start, or nothing."""
+    if len(steps) > localagent.MAX_STEPS:
+        return f"at most {localagent.MAX_STEPS} steps: split the work in two delegations"
+    if backend.kind != "local":
+        return "the local agent needs a local backend"
+    if not has_room:
+        return f"{background.MAX_ACTIVE} jobs are already running"
+    return ""
+
+
 def build_server() -> MCPServer:
-    server = MCPServer("deputy", instructions=INSTRUCTIONS)
+    server = MCPServer("deputy", instructions=instructions())
     pending = background.Jobs()
 
     async def launch(prepared: _Delegation, request: _Request, wait: bool) -> Outcome:
@@ -224,10 +285,29 @@ def build_server() -> MCPServer:
             return outcome_of(_setup_error(request.run_id, message))
         return outcome_of(pending.submit(request.run_id, prepared.sandbox, work))
 
+    async def start_agent(
+        prepared: _Delegation, task: str, workdir: str, run_id: str, steps: list[str]
+    ) -> Outcome:
+        backend = prepared.routes[0].backend
+        problem = _agent_problem(backend, steps, has_room=pending.has_room()) or _refused_checks(
+            prepared.checks, prepared.config.policy
+        )
+        if problem:
+            return outcome_of(_setup_error(run_id, problem))
+        try:
+            await localagent.require_context(backend)
+        except ConfigError as exc:
+            return outcome_of(_setup_error(run_id, str(exc)))
+        policy = prepared.config.policy
+        work = localagent.run(task, Path(workdir), backend, prepared.checks, policy, run_id, steps)
+        started = pending.submit(run_id, prepared.sandbox, work)
+        return outcome_of(started.model_copy(update={"answer": _agent_started(run_id)}))
+
     @server.tool(
         description=(
-            "Run a task on a worker in the absolute `workdir`, verified by `checks`. "
-            "wait=False returns at once; then use `collect`."
+            "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: "
+            "then `collect`. agent=True: a local agent changes code in a private copy and returns "
+            "a patch; one change per item of `steps`, what they share in `task`."
         )
     )
     async def delegate(  # noqa: PLR0913, PLR0917
@@ -238,6 +318,8 @@ def build_server() -> MCPServer:
         backend: str | None = None,
         max_turns: int | None = None,
         wait: bool = True,
+        agent: bool = False,
+        steps: list[str] | None = None,
     ) -> Outcome:
         run_id = runs.new_run_id()
         try:
@@ -255,14 +337,16 @@ def build_server() -> MCPServer:
             "max_turns": max_turns,
             "checks": [c.model_dump(exclude_none=True) for c in checks or []],
         }
+        if agent or steps:  # `steps` are only for the local agent
+            return await start_agent(prepared, task, workdir, run_id, steps or [])
         args = _Request(task, max_turns, tokens.estimate_value(request), run_id)
         return await launch(prepared, args, wait)
 
     @server.tool(  # the result shape is already described by `delegate`
         structured_output=False,
         description=(
-            "Ask about files in the absolute `workdir` instead of reading them: a short answer, "
-            "every line citing a proven file line."
+            "Ask about files in the absolute `workdir` instead of reading them: every line of the "
+            "answer cites a proven file line."
         ),
     )
     async def digest(files: list[str], question: str, workdir: str) -> Outcome:
@@ -277,7 +361,7 @@ def build_server() -> MCPServer:
 
     @server.tool(structured_output=False)  # the result shape is already described by `delegate`
     async def collect(run_id: str, cancel: bool = False) -> Outcome:
-        """Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it."""
+        """Result of a background delegation (waits 20 s); cancel=True stops it."""
         return outcome_of(await pending.collect(run_id, cancel=cancel))
 
     @server.tool()
@@ -288,9 +372,9 @@ def build_server() -> MCPServer:
         except ConfigError as exc:
             return {"error": str(exc)}
 
-    @server.tool()
+    @server.tool(structured_output=False)
     def profiles(workdir: str | None = None) -> dict[str, str]:
-        """Available profiles (name: description)."""
+        """Available profiles."""
         found = load_profiles(Path(workdir) if workdir else None)
         return {name: p.description for name, p in found.items()}
 

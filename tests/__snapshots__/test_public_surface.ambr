@@ -3,8 +3,9 @@
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
                       [--lessons] [--run-code] [--slow] [--variant VARIANT]
-                      [--tasks-file TASKS_FILE] [--workdir WORKDIR]
-                      [--compare BEFORE AFTER] [--fail-on-regression] [--json]
+                      [--even-if-busy] [--tasks-file TASKS_FILE]
+                      [--workdir WORKDIR] [--compare BEFORE AFTER]
+                      [--fail-on-regression] [--json]
   
   options:
     -h, --help            show this help message and exit
@@ -18,6 +19,8 @@
     --slow                also run tasks that take minutes (a file larger than
                           the context)
     --variant VARIANT     extra setting: NAME=JSON
+    --even-if-busy        run although a local agent run is using the model
+                          server
     --tasks-file TASKS_FILE
                           run the tasks of this TOML file on your own folder
     --workdir WORKDIR     folder for --tasks-file
@@ -234,6 +237,19 @@
   
   '''
 # ---
+# name: test_each_command_help_is_stable[wait]
+  '''
+  usage: deputy wait [-h] [--timeout TIMEOUT] run_id
+  
+  positional arguments:
+    run_id             the run_id that `delegate` returned
+  
+  options:
+    -h, --help         show this help message and exit
+    --timeout TIMEOUT  seconds to wait (default: longer than a run can take)
+  
+  '''
+# ---
 # name: test_each_command_help_is_stable[workspace]
   '''
   usage: deputy workspace [-h] [--repo REPO]
@@ -275,17 +291,18 @@
     'stats',
     'tune',
     'update',
+    'wait',
     'workspace',
   ])
 # ---
 # name: test_the_server_instructions_are_stable
-  'Saves your context: a cheaper model reads files for you. Before you read a file over about 8 KB, or several files, to answer a question, summarise, compare or find facts, call `digest` with the files and the question instead of reading them. If its status is ok, work from the answer: deputy proved that each quoted source is on its line, not that the model understood it, so read the cited line before you act on a fact. If the status is not ok, read the files yourself. Read directly a file you are about to edit, a short file, or what one search answers. For other work with your own checks, use `delegate`.'
+  'Saves your context: a cheaper model reads files for you. Before you read a file over about 8 KB, or several files, to answer a question, summarise, compare or find facts, call `digest` with the files and the question instead of reading them. If its status is ok, work from the answer: deputy proved that each quoted source is on its line, not that the model understood it, so read the cited line before you act on a fact. If the status is not ok, read the files yourself. Read directly a file you are about to edit, a short file, or what one search answers. For other work with your own checks, use `delegate`; for a well-defined code change with tests, `delegate` with agent=true does it on the local model and returns a patch.'
 # ---
 # name: test_the_tool_schemas_are_stable
   '''
   {
     "collect": {
-      "description": "Result of a `wait=False` delegation (waits up to 20 s); cancel=True stops it.",
+      "description": "Result of a background delegation (waits 20 s); cancel=True stops it.",
       "input": {
         "properties": {
           "cancel": {
@@ -306,7 +323,7 @@
       }
     },
     "delegate": {
-      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False returns at once; then use `collect`.",
+      "description": "Run a task on a worker in the absolute `workdir`, verified by `checks`. wait=False: then `collect`. agent=True: a local agent changes code in a private copy and returns a patch; one change per item of `steps`, what they share in `task`.",
       "input": {
         "$defs": {
           "CheckSpec": {
@@ -418,6 +435,11 @@
           }
         },
         "properties": {
+          "agent": {
+            "default": false,
+            "title": "Agent",
+            "type": "boolean"
+          },
           "backend": {
             "anyOf": [
               {
@@ -462,6 +484,21 @@
             "title": "Profile",
             "type": "string"
           },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Steps"
+          },
           "task": {
             "title": "Task",
             "type": "string"
@@ -485,7 +522,7 @@
       }
     },
     "digest": {
-      "description": "Ask about files in the absolute `workdir` instead of reading them: a short answer, every line citing a proven file line.",
+      "description": "Ask about files in the absolute `workdir` instead of reading them: every line of the answer cites a proven file line.",
       "input": {
         "properties": {
           "files": {
@@ -544,7 +581,7 @@
       }
     },
     "profiles": {
-      "description": "Available profiles (name: description).",
+      "description": "Available profiles.",
       "input": {
         "properties": {
           "workdir": {

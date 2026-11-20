@@ -42,6 +42,15 @@ deputy doctor        # checks the config and that the server answers
 Non-interactive: `deputy init --yes --url http://127.0.0.1:8080 --model default`.
 Details and examples for each kind of server: [configuration](configuration.md).
 
+For the local agent (`delegate` with `agent=true`), the server needs a context of at least 110,000
+tokens: with llama.cpp, start it with `--ctx-size 131072`. The `claude` command must be installed.
+Give the server room to keep a long conversation aside (llama.cpp: `--cache-ram`, in MiB): with
+one slot, any other request to the same server throws the agent's conversation out of memory, and
+without that room the agent reads it all again at its next turn. Measured on a 27B model with
+`--cache-ram 2048`, at 47,000 tokens of conversation: 10 minutes a turn instead of seconds, while
+a benchmark was running on the same server. `deputy bench` therefore does not start while an
+agent run is going (exit code 75).
+
 ## 3. Connect your agent
 
 `deputy install <agent>` prints the exact configuration; add `--apply` to do it for you.
@@ -61,6 +70,8 @@ hook to `~/.claude/settings.json`: before Claude Code reads a whole file larger 
 (about 2,000 tokens), or runs a shell command that prints more than that (`cat`, `nl`, `sed -n`,
 `head`, `tail`), it adds one line to the model's context with the size and the `digest` tool that
 can read it instead. Images, PDFs and other binary files get no hint: the worker reads text only.
+With a local default backend the same hook adds a few lines to each of your requests: code changes
+that tests can check go to the local agent ([configuration](configuration.md#code-changes)).
 It never blocks anything, says nothing for a small read, a partial read through the read tool or a
 command piped into another, and stays silent on any error. In real sessions such reads were about 1.5 % of all reads but held
 about 18 % of what was read. Turn it off with `deputy hook off` (on again with `deputy hook on`,
