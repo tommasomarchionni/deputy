@@ -238,6 +238,46 @@ def test_a_step_the_agent_cannot_do_is_undone_and_named(
     assert _rounds(tmp_path) == 3 + localagent.NUDGES
 
 
+_SLOW = 'echo \'{"type": "system", "session_id": "s1"}\'; sleep 30'
+
+
+def test_a_step_that_takes_too_long_is_told_to_wrap_up_and_the_next_ones_still_run(
+    repo: Path, fake_claude, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(localagent, "STEP_BUDGET_S", 1.0)
+    work = f'{_LAST}case "$prompt" in *"You do step 1"*) {_SLOW};; *) echo ok >> a.txt;; esac'
+    fake_claude(work, repair="echo wrapped >> a.txt")
+    result = _run_steps(repo, ["one", "two"])
+    assert result.status == "ok"
+    assert "+wrapped\n+ok" in (state_dir() / "agents" / "run-1.patch").read_text()
+    assert _rounds(tmp_path) == 3  # step one, its wrap-up, step two
+
+
+def test_a_step_that_does_not_wrap_up_is_undone_and_named(
+    repo: Path, fake_claude, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(localagent, "STEP_BUDGET_S", 1.0)
+    monkeypatch.setattr(localagent, "WRAP_UP_S", 1.0)
+    slow = f"echo half >> a.txt; {_SLOW}"
+    work = f'{_LAST}case "$prompt" in *"You do step 1"*) {slow};; *) echo ok >> a.txt;; esac'
+    fake_claude(work, repair=_SLOW)
+    result = _run_steps(repo, ["one", "two"])
+    assert result.status == "error"
+    assert result.flags == ["time_limit", "partial", "needs_frontier"]
+    assert "Left for you: step 1." in result.answer
+    patch = (state_dir() / "agents" / "run-1.patch").read_text()
+    assert "half" not in patch
+    assert "+ok" in patch
+
+
+def test_steps_that_were_never_started_are_named_too(repo: Path, fake_claude) -> None:
+    fake_claude("true", subtype="error_during_execution")  # the model server stopped answering
+    result = _run_steps(repo, ["one", "two", "three"])
+    assert result.status == "error"
+    assert "backend_error" in result.flags
+    assert "Left for you: step 1, 2, 3." in result.answer
+
+
 def test_failed_checks_of_steps_go_to_a_new_conversation_that_knows_the_steps(
     repo: Path, fake_claude, tmp_path: Path
 ) -> None:

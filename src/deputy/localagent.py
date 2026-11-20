@@ -42,6 +42,13 @@ STALL_PROMPT = (
     "the change you are stuck on as it is, finish the other changes, and in your summary name "
     "the change that is left and why."
 )
+STEP_BUDGET_S = 1_800.0  # one step of a task in steps: a 27B model took 3 to 20 minutes
+WRAP_UP_S = 300.0  # then this long to leave the step in a state that holds together
+WRAP_UP_PROMPT = (
+    "deputy stopped you: the time for this step is up. Do not improve anything further. In a few "
+    "minutes at most, make what you changed hold together (no half-made edit, the tests of the "
+    "code you changed pass), then end with your summary."
+)
 STEP_SUMMARY_CHARS = 240  # of each step's summary, in the answer of a task in steps
 MAX_STEPS = 20
 REPAIR_ROUNDS = 3  # failed checks go back to the agent this many times before the frontier
@@ -516,19 +523,28 @@ class _Rounds:
         self.started = time.monotonic()
         self.work = _Work()
 
-    async def drive(self, prompt: list[str]) -> dict[str, Any]:
-        left = BUDGET_S - (time.monotonic() - self.started)
-        seen = await _drive([*self.command, *prompt], self.copy, self.env, left)
+    def time_left(self) -> float:
+        return BUDGET_S - (time.monotonic() - self.started)
+
+    async def drive(self, prompt: list[str], limit_s: float = BUDGET_S) -> dict[str, Any]:
+        budget = min(self.time_left(), limit_s)
+        seen = await _drive([*self.command, *prompt], self.copy, self.env, budget)
         self.work.seen = seen
         self.work.tool_calls += len(seen["tools"])
         return seen
 
-    async def step(self, prompt: str) -> Step:
-        """One conversation, resumed with a nudge while the agent is stuck."""
+    async def step(self, prompt: str, limit_s: float = BUDGET_S) -> Step:
+        """One conversation, resumed with a nudge while the agent is stuck and, when its own
+        time is up, once more to wrap up what it has."""
         step, nudges, argv = Step(prompt), 0, [prompt]
+        deadline, wrapped = time.monotonic() + limit_s, False
         while True:
-            seen = await self.drive(argv)
+            seen = await self.drive(argv, WRAP_UP_S if wrapped else deadline - time.monotonic())
             session = str(seen["session"])
+            if seen["timed_out"] and not wrapped and session and self.time_left() > WRAP_UP_S:
+                wrapped = True
+                argv = ["--resume", session, WRAP_UP_PROMPT]
+                continue
             if seen["stalled"] and nudges < NUDGES and session and not seen["timed_out"]:
                 nudges += 1
                 self.work.nudges += 1
@@ -564,12 +580,12 @@ async def _work(  # noqa: PLR0913, PLR0917
         prompts = [step_prompt(task, steps, n, checks) for n in range(len(steps))]
         for prompt in prompts or [task_prompt(task, checks)]:
             before = _snapshot(copy) if steps else ""
-            step = await rounds.step(prompt)
+            step = await rounds.step(prompt, STEP_BUDGET_S if steps else BUDGET_S)
             work.steps.append(step)
             if step.outcome != "done" and steps:
                 _restore(copy, before)
-            if step.outcome in ("time_limit", "unfinished"):
-                break  # no time left, or the model server is not answering
+            if step.outcome == "unfinished" or rounds.time_left() <= 0:
+                break  # the model server is not answering, or no time is left
         session = "" if steps else str(work.seen["session"])
         while True:
             answer = "\n\n".join([*(step.summary for step in work.steps), work.repair_summary])
@@ -580,7 +596,8 @@ async def _work(  # noqa: PLR0913, PLR0917
             if (
                 all(result.passed for result in work.results)
                 or work.repairs == REPAIR_ROUNDS
-                or last in ("time_limit", "unfinished")
+                or last == "unfinished"
+                or rounds.time_left() <= 0
                 or (last != "done" and not steps)
             ):
                 return work
@@ -602,9 +619,9 @@ async def _work(  # noqa: PLR0913, PLR0917
                 return work
 
 
-def _answer(work: _Work, changed: str, patch_file: Path) -> str:
+def _answer(work: _Work, changed: str, patch_file: Path, total: int = 0) -> str:
     """What the orchestrator reads: short, and clear about what is left for it to do."""
-    if len(work.steps) == 1:
+    if not total:
         parts = [work.steps[0].summary[:SUMMARY_CHARS]]
     else:
         parts = [
@@ -615,8 +632,9 @@ def _answer(work: _Work, changed: str, patch_file: Path) -> str:
                 for n, step in enumerate(work.steps, 1)
             )
         ]
-        if work.left:
-            numbers = ", ".join(str(n) for n in work.left)
+        missing = [*work.left, *range(len(work.steps) + 1, total + 1)]
+        if missing:
+            numbers = ", ".join(str(n) for n in missing)
             parts.append(f"Left for you: step {numbers}. The patch holds the other steps.")
     if work.repairs:
         parts.append(
@@ -708,7 +726,7 @@ async def _run(  # noqa: PLR0913, PLR0917
             return Result.model_validate(
                 {"run_id": run_id, "status": "error", "answer": note, "flags": ["needs_frontier"]}
             )
-        answer = _answer(work, changed, patch_file)
+        answer = _answer(work, changed, patch_file, len(steps))
         status, flags = _status(work, steps)
         elapsed = round(time.monotonic() - started, 1)
         runs.record(
