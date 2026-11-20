@@ -53,7 +53,8 @@ tokens per session. Details of each field, check and flag: [tools](tools.md).
    copy. A step has 30 minutes; an agent that makes 40 tool calls without changing a file is told
    to write the change with what it knows.
 4. **Verify:** the checks (the project's tests, linter, formatter, type checker) run on the copy,
-   in deputy's sandbox. Failures go back to the agent, up to three times.
+   in deputy's sandbox. Failures go back to the agent, up to three times; a round in which it
+   changes no file is the last, because asking again cannot help.
 5. **Undo what did not work:** a step the agent could not do is undone, so the patch holds only
    steps whose checks pass; what that step had changed is kept apart as a draft.
 6. **Hand back:** a patch, a summary per step and the steps left for the orchestrator. The

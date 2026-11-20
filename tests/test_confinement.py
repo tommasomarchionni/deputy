@@ -3,6 +3,7 @@ import asyncio
 import os
 import shutil
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -178,10 +179,19 @@ def test_doctor_says_what_holds_for_the_local_agent(
     assert expected in out
 
 
-@pytest.mark.skipif(
-    sys.platform != "darwin" or shutil.which("sandbox-exec") is None,
-    reason="needs macOS sandbox-exec",
-)
+def _can_sandbox() -> bool:
+    # macOS refuses a sandbox inside a sandbox, so probe whether one can actually start.
+    if sys.platform != "darwin" or shutil.which("sandbox-exec") is None:
+        return False
+    probe = subprocess.run(
+        ["sandbox-exec", "-p", "(version 1)(allow default)", "/usr/bin/true"],
+        capture_output=True,
+        check=False,
+    )
+    return probe.returncode == 0
+
+
+@pytest.mark.skipif(not _can_sandbox(), reason="needs macOS sandbox-exec, outside another sandbox")
 def test_the_real_macos_sandbox_confines_a_command(tmp_path: Path) -> None:
     """Runs a real command under the real profile: writes stay in the work folder, no network."""
     confinement.write_profile()

@@ -657,6 +657,7 @@ async def _work(  # noqa: PLR0913, PLR0917
             if step.outcome == "unfinished" or rounds.time_left() <= 0:
                 break  # the model server is not answering, or no time is left
         session = "" if steps else str(work.seen["session"])
+        idle = False  # the last repair round changed no file: the checks get one last run
         while True:
             answer = "\n\n".join([*(step.summary for step in work.steps), work.repair_summary])
             work.results = await run_checks(
@@ -666,12 +667,14 @@ async def _work(  # noqa: PLR0913, PLR0917
             if (
                 all(result.passed for result in work.results)
                 or work.repairs == REPAIR_ROUNDS
+                or idle
                 or last == "unfinished"
                 or rounds.time_left() <= 0
                 or (last != "done" and not steps)
             ):
                 return work
             work.repairs += 1
+            before = _snapshot(copy)
             text = repair_prompt(work.results, steps if not session else None)
             repair = await rounds.step(text) if not session else None
             if repair is None:
@@ -684,6 +687,7 @@ async def _work(  # noqa: PLR0913, PLR0917
                 work.repair_summary = repair.summary
                 if repair.outcome != "done":
                     return work
+            idle = _snapshot(copy) == before
             session = str(work.seen["session"])
             if not session:
                 return work
