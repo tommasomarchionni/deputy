@@ -1,4 +1,4 @@
-"""The MCP server: six small tools. Schemas are paid by the orchestrator on every turn, so they
+"""The MCP server: five small tools. Schemas are paid by the orchestrator on every turn, so they
 are kept short on purpose."""
 
 from __future__ import annotations
@@ -371,12 +371,6 @@ def build_server() -> MCPServer:
             return await _backend_status(load_config())
         except ConfigError as exc:
             return {"error": str(exc)}
-
-    @server.tool(structured_output=False)
-    def profiles(workdir: str | None = None) -> dict[str, str]:
-        """Available profiles."""
-        found = load_profiles(Path(workdir) if workdir else None)
-        return {name: p.description for name, p in found.items()}
 
     @server.tool(structured_output=False)
     def feedback(run_id: str, verdict: Literal["accepted", "rejected"], reason: str = "") -> str:

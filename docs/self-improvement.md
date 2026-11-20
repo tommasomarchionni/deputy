@@ -9,15 +9,13 @@ not do yet, and how to watch it work.
 runs, every delegation gets one correction round, and each run is recorded in a trace with your
 `feedback`. From that trace, deputy flags kinds of task that do not pay (`not_worth_delegating`) and
 `deputy learn` turns repeated failures into short lessons for the worker. `deputy tune` changes
-request settings only if they win. You run `learn`, `tune` and `optimise`; the nightly benchmark
-can run on its own.
+request settings only if they win. You run `learn` and `tune`.
 
 **Does it improve its own code?** No, and it will never do so unattended. Code changes are made by
 people (or by an agent working through the normal issue and pull-request process), and the benchmark
 and the tests are what find the defects. Real examples from this project: the benchmark reported a
 correct answer as failed, which exposed a gap in the citation grader (fixed, with tests); a property
-test found a bug in the settings writer (fixed). The optimiser (`deputy optimise`) *proposes* a better profile with a
-benchmark report; a human decides.
+test found a bug in the settings writer (fixed).
 
 **When can I see it?** Now. Run `deputy tune` against your model (a few minutes with a fast model,
 about a quarter of an hour with a slow local one). See [Watch it work](#watch-it-work).
@@ -35,9 +33,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Lessons learned from real use (`deputy learn`): short reminders in the worker prompt where a kind of check keeps failing, with evidence and expiry | **today** (derived from the trace) |
 | Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
 | Measured profiles read by routing: the backend is chosen per task by pass rate and speed | **today** ([configuration](configuration.md#routing)); per task class is planned |
-| Offline optimiser that proposes a better worker profile, judged on the benchmark and confirmed on held-out tasks, applied only on your approval, with rollback (`deputy optimise`) | **today** for the profile text; other parameters are covered by `tune` |
 | Benchmark on your own folder with your own tasks, from a TOML file (`deputy bench --tasks-file`), writes rolled back | **today** |
-| Nightly benchmark on the machine that serves your model, one JSON report per night (`examples/nightly-bench.sh`, scheduled with launchd) | **today**, opt-in |
 
 ## How it works today
 
@@ -75,13 +71,6 @@ the orchestrator does the task. Bounded retries, bounded turns.
 - `deputy tune` runs the suite for your settings and for candidates (thinking off, shorter output,
   cooler sampling) and recommends one only if it loses no accuracy and is clearly cheaper than the
   spread. Server flags it cannot change (context size, thinking budget) are printed as a hint.
-- `deputy optimise` is a reflective prompt search for the worker profile. The worker reads where the
-  current profile failed on the benchmark and proposes rewrites (one that fixes the failures, one
-  that is shorter). Each is measured on the selection tasks; one is kept only if it loses no
-  accuracy and gains accuracy or is clearly cheaper, and then it must also hold up on the held-out
-  tasks. It writes a report and a candidate file and changes nothing: `deputy optimise --apply ID`
-  is your approval, `--revert ID` puts the previous profile back. The proposal text comes from a
-  model, so read the diff in the report before applying; the sandbox does not depend on it.
 - **Who decides** is `auto_tune`: `off`, `propose` (default) or `apply`. Applied settings go to a
   separate `tuned.toml`; `deputy tune --revert` undoes them.
 

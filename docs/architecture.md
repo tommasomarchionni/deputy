@@ -17,10 +17,9 @@
 | `delegate` | Run one task: `task`, `workdir`, `profile`, `checks`, optional `backend`, `max_turns`, and `wait` (false returns at once). Returns `run_id`, `status`, `answer`, a one-line `checks` summary, and `files_written` and `flags` when there are any. |
 | `collect` | The result of a background `delegate`, waiting up to 20 s; `cancel` stops it and puts written files back. |
 | `status` | The backends and whether they answer, the measured model profile, a week of usage, and advice on kinds of task that do not pay. |
-| `profiles` | The worker profiles available for a folder. |
 | `feedback` | The orchestrator says `accepted` or `rejected`, and why; recorded in the trace. |
 
-Six tools with short descriptions: their schemas (bytes / 4, compact JSON) cost the orchestrator about 1143 770 tokens per
+Five tools with short descriptions: their schemas (bytes / 4, compact JSON) cost the orchestrator about 1143 770 tokens per
 session. Details of each field, check and flag: [tools](tools.md).
 
 ## What happens in one delegation
@@ -51,7 +50,7 @@ written to the trace (`route`).
 
 All on your machine, in the state directory (`~/.local/state/deputy`): the trace (`runs.jsonl`),
 measured model profiles, lessons, project memory (keyed by repository, outside the repository),
-optimiser proposals and nightly benchmark reports, as JSON files. Configuration is in
+as JSON files. Configuration is in
 `~/.config/deputy/config.toml`; API keys come from a mode-600 file or an environment variable,
 never from the configuration file or the command line.
 

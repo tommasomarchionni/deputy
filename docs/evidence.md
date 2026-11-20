@@ -196,5 +196,4 @@ agent is for) the second. In four days of that week the hint to delegate a read 
 times, 225 of them to subagents, and the sessions made 16 delegations, 1 of them from a subagent:
 a hint is not enough to change what an agent does.
 
-A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
-`deputy bench --compare` shows what changed between two nights.
+`deputy bench --compare` shows what changed between two runs.

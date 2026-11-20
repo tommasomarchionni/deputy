@@ -1,6 +1,6 @@
 # Tools
 
-Six tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
+Five tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
 tool list is about 1143 770 tokens (bytes / 4, compact JSON); the part a model sees (names, descriptions,
 arguments) about . A test keeps the list under 5,000 characters, about 1,250 tokens.
 
@@ -36,7 +36,7 @@ other than answering a question about files.
 | --- | --- |
 | `task` | What to do. Name files, do not paste them. |
 | `workdir` | Absolute path the worker is confined to. |
-| `profile` | `helper` by default; see `profiles`. |
+| `profile` | `helper` by default; see [profiles](configuration.md#profiles). |
 | `checks` | Proofs the server runs on the answer (below). |
 | `backend` | A configured backend; default is `default_backend`. |
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
@@ -102,7 +102,7 @@ The result of a `wait=False` delegation, by its `run_id` (the same id the result
 It waits up to 20 seconds, so polling costs few tokens: if the job is still going you get
 `status: running` and call it again. `cancel=true` stops the worker (the request to the model
 server is dropped and a running command check is killed) and puts back every file the worker
-wrote, so the workspace is as it was. A result can be collected once. At most 3 jobs run at once.
+wrote, so the working directory is as it was. A result can be collected once. At most 3 jobs run at once.
 
 Jobs live in the memory of the running server: if the server exits, they are gone.
 
@@ -128,10 +128,6 @@ wrong answer; the failing `checks` keep their full detail.
 ## `status`
 
 Configured backends and whether they answer.
-
-## `profiles`
-
-Available profiles, name and description.
 
 ## `feedback`
 

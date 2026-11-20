@@ -14,10 +14,7 @@
 - **The worker has no shell.** Checks that run commands are declared by the orchestrator and run by
   the server, only when the argv matches `policy.allowed_commands`, without a shell, with a stripped
   environment and a timeout.
-- **The orchestrator is trusted** to choose `workdir` and checks: it is the user's own agent. Point
-  it at a copy (`deputy workspace create NAME PATH...`, then `deputy workspace diff NAME`; `path`
-  prints where it is, `remove` deletes it) when the
-  worker should not touch the real repository.
+- **The orchestrator is trusted** to choose `workdir` and checks: it is the user's own agent.
 - **Worker output is a draft.** Review it before it reaches the real repository.
 - **Secrets:** keys come from a mode-600 file or an environment variable, are never written to the
   config, the traces or the model prompt.
@@ -107,5 +104,4 @@ ready-made one for your platform:
 
 The allow-list still judges the command you declared, not the wrapper. If the wrapper program is
 missing, the check fails instead of running unconfined. The wrapper reduces the damage a worker's
-code can do; it is not a promise of perfect isolation: keep `allowed_commands` short and run
-deputy on a workspace copy (`deputy workspace`).
+code can do; it is not a promise of perfect isolation: keep `allowed_commands` short.

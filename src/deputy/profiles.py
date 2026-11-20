@@ -148,8 +148,8 @@ def overrides(profiles: dict[str, Profile]) -> list[str]:
     not get deputy's later improvements to that profile (tools, rules), so say so."""
     return [
         f"profile {name}: your {profiles[name].source} copy replaces the bundled one, so deputy's "
-        f"later improvements to it do not reach you; delete the copy (or `deputy optimise "
-        f"--revert ID`), or keep only your own lines and add `extends: {name}`"
+        f"later improvements to it do not reach you; delete the copy, or keep only your own lines "
+        f"and add `extends: {name}`"
         for name in sorted(bundled_names())
         if name in profiles
         and profiles[name].source != "bundled"

@@ -29,26 +29,4 @@ translation, larger for code. Setting it per kind of task is planned; today it i
 Quality at each setting
 must be measured by the benchmark before it becomes a default; speed alone is not a reason.
 
-## Nightly benchmark (macOS)
-
-Regressions in a model's behaviour are invisible to ordinary CI, which has no model. To watch yours,
-run the benchmark every night on the machine that serves it. This uses `launchd` on your own Mac,
-not a CI runner: a self-hosted runner on a public repository would run code from pull requests.
-
-```sh
-mkdir -p ~/.local/share/deputy ~/Library/LaunchAgents
-cp examples/nightly-bench.sh ~/.local/share/deputy/
-cp examples/deputy-nightly-bench.plist ~/Library/LaunchAgents/dev.deputy.nightly-bench.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.deputy.nightly-bench.plist
-```
-
-It runs at 03:00, skips (and says so in `skipped.log`) when the backend does not answer, and keeps
-one report per night in `~/.local/state/deputy/nightly/` for 90 days. Reports never block anything:
-compare two nights with `deputy bench --compare BEFORE.json AFTER.json`. Remove it with `launchctl bootout gui/$(id -u)/dev.deputy.nightly-bench`.
-
-Comparing prints the pass rate, time per task and estimated saving of both reports, names the tasks
-that failed more (or less) and says if the served model changed. It exits 0 unless you add
-`--fail-on-regression`, so a cron job can alert on it. Only a pass rate that fell by more than 5
-points counts as a regression (one extra failure among three repetitions is noise); tasks that failed
-more or less are listed as changes; per-task detail is limited to failure counts
-because a report keeps no per-task pass rate.
+Regressions in a model's behaviour are invisible to ordinary CI, which has no model. Run `deputy bench` by hand when the served model, its server options or deputy's version change, because the measured profile records which model it was measured on.

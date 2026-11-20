@@ -3,7 +3,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import pytest
 
@@ -24,14 +24,13 @@ def structured(result: Any) -> dict[str, Any]:
     return result.structured_content
 
 
-def test_exposes_exactly_six_small_tools() -> None:
+def test_exposes_exactly_five_small_tools() -> None:
     tools = asyncio.run(build_server().list_tools())
     assert sorted(t.name for t in tools) == [
         "collect",
         "delegate",
         "digest",
         "feedback",
-        "profiles",
         "status",
     ]
     size = sum(len(json.dumps(t.model_dump(mode="json"))) for t in tools)
@@ -86,9 +85,7 @@ def test_delegate_runs_end_to_end_with_a_scripted_model(
     assert "metrics" not in data  # they stay in the trace, not in what the orchestrator reads
 
 
-def test_profiles_and_status_tools() -> None:
-    profiles = asyncio.run(build_server().call_tool("profiles", {}))
-    assert "helper" in json.loads(cast("Any", profiles).content[0].text)
+def test_status_tool() -> None:
     status = asyncio.run(build_server().call_tool("status", {}))
     assert "deputy init" in structured(status)["error"]
 

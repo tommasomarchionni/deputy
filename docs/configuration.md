@@ -47,7 +47,7 @@ Several backends can be listed; pick one per call with the `backend` argument.
 
 A **profile** is the worker's standing instructions: a Markdown file whose front matter names it and
 whose body becomes the worker's system prompt. The orchestrator picks one with the `profile`
-argument of `delegate` (default `helper`); the `profiles` tool lists the ones available.
+argument of `delegate` (default `helper`).
 
 - **Where they live, and which wins.** deputy ships one profile, `helper`, inside the package. You
   can add your own in `~/.config/deputy/profiles/` (yours, every project) or in `.deputy/profiles/`
@@ -56,8 +56,7 @@ argument of `delegate` (default `helper`); the `profiles` tool lists the ones av
 - **Who creates them.** Nobody, automatically: there is no command that writes a new profile. You
   copy the template
   [`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md)
-  and fill it in. The one exception is `deputy optimise --apply`, which installs an improved copy of
-  a profile as yours (and keeps the previous one for `--revert`).
+  and fill it in.
 - **What else reaches the worker.** On top of the profile, deputy adds the lessons learned from use
   (`deputy learn`) and the project memory (`deputy memory`), which points to your repository's own
   rule files instead of copying them.
@@ -67,10 +66,10 @@ argument of `delegate` (default `helper`); the `profiles` tool lists the ones av
   win; what you leave out comes from the parent. A profile may extend its own name (a project's
   `helper` that adds lines to the bundled one), and chains work. A parent that does not exist, or a
   loop, is ignored and `deputy doctor` says which profile and why.
-- **Copies fall behind.** A copy of `helper` without `extends` (yours, a project's, or one installed
-  by `deputy optimise --apply`) replaces the bundled one, so deputy's later improvements do not
-  reach you. `deputy doctor` says when that happens. Prefer `helper` plus project memory, and write
-  your own profile only for a kind of work `helper` does not cover.
+- **Copies fall behind.** A copy of `helper` without `extends` (yours, or a project's) replaces the
+  bundled one, so deputy's later improvements do not reach you. `deputy doctor` says when that
+  happens. Prefer `helper` plus project memory, and write your own profile only for a kind of work
+  `helper` does not cover.
 
 The front matter can set the profile's limits:
 
@@ -260,22 +259,6 @@ an answer or a file; at most 3 lessons are added to a prompt, only for the profi
 checks the task asks for; a lesson expires after 14 days and is re-derived only while the evidence
 still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
 `deputy stats` and the benchmark can tell whether they help.
-
-## Optimising the worker profile
-
-```sh
-deputy optimise                  # measure, reflect, judge, confirm; writes a report, changes nothing
-deputy optimise --list           # saved proposals
-deputy optimise --apply ID       # your approval: installs it as your profile (previous one kept)
-deputy optimise --revert ID      # undo
-```
-
-Options: `--profile NAME` (default `helper`), `--backend`, `--runs N` (repeat each measurement).
-A proposal is saved under the state directory with `report.md` (the tables and a diff). It can
-only be applied if it also held up on the held-out tasks. A confirmed proposal's decision also states what it gains and
-what it costs (pass rates, time per task, output tokens), and says so when it brings no gain on the
-held-out tasks or is more than 25 % slower: confirmed only means it lost no accuracy. It takes minutes on a local model: it
-runs the selection tasks for the current profile and for each proposal, then the held-out tasks.
 
 ## Routing
 

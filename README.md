@@ -84,10 +84,9 @@ context, read in parts).
 | `deputy stats` | what deputy did for you: runs, pass rate, tokens saved, per kind of task |
 | `deputy bench` | your model on the built-in suite; `--compare A.json B.json` compares two runs |
 
-deputy also improves with use: `deputy tune` picks request settings that measure better,
-`deputy learn` turns repeated failures into short lessons for the worker (kept only if they help),
-and `deputy optimise` proposes a better worker profile that you approve. See
-[how deputy improves](docs/self-improvement.md).
+deputy also improves with use: `deputy tune` picks request settings that measure better, and
+`deputy learn` turns repeated failures into short lessons for the worker (kept only if they help).
+See [how deputy improves](docs/self-improvement.md).
 
 ## Documentation
 
@@ -100,7 +99,7 @@ Full site: **<https://tommasomarchionni.github.io/deputy/>** (source in `docs/`)
 | The tools, the checks and the flags | [tools](docs/tools.md) |
 | Security model | [security](docs/security.md) |
 | Measured results | [evidence](docs/evidence.md) |
-| Benchmark, tuning, lessons, optimiser | [self-improvement](docs/self-improvement.md) |
+| Benchmark, tuning, lessons | [self-improvement](docs/self-improvement.md) |
 | Design, memory, local model speed | [architecture](docs/architecture.md), [memory](docs/memory.md), [local serving](docs/local-serving.md) |
 | Roadmap | [roadmap](docs/roadmap.md) and the [project board](https://github.com/users/tommasomarchionni/projects/3) |
 
