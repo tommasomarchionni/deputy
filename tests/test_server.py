@@ -437,7 +437,7 @@ def test_a_local_agent_is_refused_before_it_starts_when_a_check_command_is_not_a
     tmp_path: Path, monkeypatch
 ) -> None:
     # without a sandbox tool the checks run with the user's rights, so the allow-list decides
-    monkeypatch.setattr(confinement, "agent_wrapper_tool", lambda: None)
+    monkeypatch.setattr(confinement, "agent_sandbox_works", lambda: False)
     cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
     arguments = {
         "task": "change it",
@@ -454,7 +454,7 @@ def test_a_local_agent_is_refused_before_it_starts_when_a_check_command_is_not_a
 def test_with_a_sandbox_tool_the_checks_of_a_local_agent_need_no_allow_list(
     tmp_path: Path, monkeypatch
 ) -> None:
-    monkeypatch.setattr(confinement, "agent_wrapper_tool", lambda: "/usr/bin/sandbox-exec")
+    monkeypatch.setattr(confinement, "agent_sandbox_works", lambda: True)
     cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
 
     async def run(task, workdir, backend, checks, policy, run_id, steps):

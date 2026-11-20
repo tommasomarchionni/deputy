@@ -7,8 +7,11 @@ it is replaced by the working directory of the check.
 
 from __future__ import annotations
 
+import functools
 import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from deputy.config import config_dir
@@ -34,7 +37,7 @@ MACOS_PROFILE = """\
 # For the checks of the local agent: the same idea, on its copy. Localhost stays reachable, because
 # test suites start servers and talk to local services; nothing beyond this machine is, and not
 # the system's name lookups either. Unix sockets work where files can be written (Nx needs one).
-_AGENT_SECRETS = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".claude", ".netrc",
+_PRIVATE_PLACES = (".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config", ".claude", ".netrc",
                   ".npmrc", ".pypirc", ".git-credentials")  # fmt: skip
 AGENT_MACOS_PROFILE = (
     """\
@@ -45,7 +48,7 @@ AGENT_MACOS_PROFILE = (
 (deny file-read*
 """
     + "".join(
-        f'  (subpath (string-append (param "HOME") "/{name}"))\n' for name in _AGENT_SECRETS
+        f'  (subpath (string-append (param "HOME") "/{name}"))\n' for name in _PRIVATE_PLACES
     ).rstrip("\n")
     + """)
 (allow file-write*
@@ -94,30 +97,69 @@ def suggested_wrapper(platform: str | None = None) -> list[str] | None:
     return None
 
 
+def macos_agent_wrapper(copy: Path, scratch: Path) -> list[str]:
+    profile = copy.with_name(f"{copy.name}.checks.sb")
+    profile.write_text(AGENT_MACOS_PROFILE, encoding="utf-8")
+    profile.chmod(0o600)
+    return [
+        "sandbox-exec", "-f", str(profile), "-D", f"WORKDIR={copy.resolve()}",
+        "-D", f"SCRATCH={scratch.resolve()}", "-D", f"HOME={Path.home()}",
+    ]  # fmt: skip
+
+
+def linux_agent_wrapper(copy: Path, scratch: Path) -> list[str]:
+    """bubblewrap: a read-only system with the home folder's private places hidden, an empty
+    /tmp, the copy and its temporary folder writable (bound last, so they show even when they
+    live under /tmp), and no network."""
+    hidden: list[str] = []
+    for name in _PRIVATE_PLACES:
+        place = Path.home() / name
+        if place.is_dir():
+            hidden += ["--tmpfs", str(place)]
+        elif place.is_file():
+            hidden += ["--ro-bind", "/dev/null", str(place)]
+    return [
+        "bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc",
+        "--tmpfs", "/tmp", *hidden,  # noqa: S108
+        "--bind", str(copy), str(copy), "--bind", str(scratch), str(scratch),
+        "--unshare-net", "--die-with-parent", "--chdir", str(copy),
+    ]  # fmt: skip
+
+
+def _starts(wrapper: list[str]) -> bool:
+    """A sandbox tool can be installed and still be refused by the system (bubblewrap where
+    user namespaces are off): only a wrapper that runs a command is one to rely on."""
+    try:
+        done = subprocess.run(  # noqa: S603  (argv built here)
+            [*wrapper, "true"], capture_output=True, timeout=20, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
 def agent_wrapper(copy: Path, scratch: Path, platform: str | None = None) -> list[str] | None:
     """A sandbox for the `command` checks of a local agent's run, or None when this machine has
-    no sandbox tool: writes only in the copy and its temporary folder, no reading of the home
-    folder's secrets, no network beyond localhost (Linux: none at all)."""
+    no sandbox that works: writes only in the copy and its temporary folder, no reading of the
+    home folder's private places, no network beyond localhost (Linux: none at all)."""
     system = platform or sys.platform
     if system == "darwin" and shutil.which("sandbox-exec"):
-        profile = copy.with_name(f"{copy.name}.checks.sb")
-        profile.write_text(AGENT_MACOS_PROFILE, encoding="utf-8")
-        profile.chmod(0o600)
-        return [
-            "sandbox-exec", "-f", str(profile), "-D", f"WORKDIR={copy.resolve()}",
-            "-D", f"SCRATCH={scratch.resolve()}", "-D", f"HOME={Path.home()}",
-        ]  # fmt: skip
-    if system.startswith("linux") and shutil.which("bwrap"):
-        both = [part.replace("{workdir}", str(copy)) for part in LINUX_WRAPPER]
-        return [*both[:-2], "--bind", str(scratch), str(scratch), *both[-2:]]
-    return None
+        wrapper = macos_agent_wrapper(copy, scratch)
+    elif system.startswith("linux") and shutil.which("bwrap"):
+        wrapper = linux_agent_wrapper(copy, scratch)
+    else:
+        return None
+    return wrapper if _starts(wrapper) else None
 
 
-def agent_wrapper_tool(platform: str | None = None) -> str | None:
-    """The sandbox tool `agent_wrapper` would use on this machine, if there is one."""
-    system = platform or sys.platform
-    name = "sandbox-exec" if system == "darwin" else "bwrap" if system.startswith("linux") else ""
-    return shutil.which(name) if name else None
+@functools.cache
+def agent_sandbox_works() -> bool:
+    """Whether `agent_wrapper` gives a sandbox on this machine: tried once, on empty folders."""
+    with tempfile.TemporaryDirectory() as folder:
+        copy, scratch = Path(folder) / "copy", Path(folder) / "copy.tmp"
+        copy.mkdir()
+        scratch.mkdir()
+        return agent_wrapper(copy, scratch) is not None
 
 
 def write_profile() -> Path:

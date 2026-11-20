@@ -2,7 +2,6 @@
 import asyncio
 import json
 import os
-import shutil
 import stat
 import subprocess
 import sys
@@ -293,7 +292,7 @@ def test_failed_checks_of_steps_go_to_a_new_conversation_that_knows_the_steps(
 
 
 @pytest.mark.skipif(
-    sys.platform != "darwin" or confinement.agent_wrapper_tool() is None,
+    sys.platform != "darwin" or not confinement.agent_sandbox_works(),
     reason="needs the macOS sandbox",
 )
 def test_the_checks_of_the_agent_run_in_a_sandbox_and_need_no_allow_list(
@@ -321,18 +320,33 @@ def test_a_wrapper_of_the_user_keeps_the_allow_list(repo: Path, fake_claude) -> 
 
 
 def test_the_linux_sandbox_of_the_checks_binds_the_copy_and_its_temporary_folder(
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
-    wrapper = confinement.agent_wrapper(Path("/s/run"), Path("/s/run.tmp"), "linux")
-    assert wrapper is not None
+    home = tmp_path / "home"
+    (home / ".ssh").mkdir(parents=True)
+    (home / ".netrc").write_text("x")
+    monkeypatch.setattr(Path, "home", lambda: home)
+    wrapper = confinement.linux_agent_wrapper(Path("/s/run"), Path("/s/run.tmp"))
     assert wrapper[0] == "bwrap"
     assert "--unshare-net" in wrapper
     text = " ".join(wrapper)
-    assert "--bind /s/run /s/run" in text
+    # the copy is bound after the empty /tmp, so a copy under /tmp is still there
+    assert text.index("--tmpfs /tmp") < text.index("--bind /s/run /s/run")
     assert "--bind /s/run.tmp /s/run.tmp" in text
+    assert f"--tmpfs {home}/.ssh" in text
+    assert f"--ro-bind /dev/null {home}/.netrc" in text
     assert text.endswith("--chdir /s/run")
     assert confinement.agent_wrapper(Path("/s/run"), Path("/s/run.tmp"), "win32") is None
+
+
+def test_a_sandbox_tool_that_cannot_start_is_not_relied_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refuses = tmp_path / "bwrap"
+    refuses.write_text("#!/bin/sh\nexit 1\n")  # installed, but the system refuses it
+    refuses.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    assert confinement.agent_wrapper(tmp_path, tmp_path, "linux") is None
 
 
 def test_a_run_is_visible_to_other_processes_while_it_lasts(

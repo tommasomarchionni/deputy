@@ -244,7 +244,7 @@ def _agent_started(run_id: str) -> str:
 
 def _refused_checks(checks: list[Check], policy: Policy) -> str:
     """A `command` check the policy does not allow, said before an hour of work and not after."""
-    confined = not policy.command_wrapper and confinement.agent_wrapper_tool() is not None
+    confined = not policy.command_wrapper and confinement.agent_sandbox_works()
     refused = [
         " ".join(check.argv)
         for check in checks
