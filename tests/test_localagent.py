@@ -295,6 +295,29 @@ def test_the_linux_sandbox_of_the_checks_binds_the_copy_and_its_temporary_folder
     assert confinement.agent_wrapper(Path("/s/run"), Path("/s/run.tmp"), "win32") is None
 
 
+def test_a_run_is_visible_to_other_processes_while_it_lasts(
+    repo: Path, fake_claude, tmp_path: Path, capsys
+) -> None:
+    seen = tmp_path / "seen"
+    fake_claude(f"ls {state_dir()}/agents/*.running > {seen}")
+    assert localagent.active_runs() == []
+    assert _run(repo).status == "ok"
+    assert seen.read_text().strip().endswith("run-1.running")
+    assert localagent.active_runs() == []  # the marker goes with the run
+
+
+def test_a_benchmark_steps_aside_while_an_agent_run_uses_the_model_server(capsys) -> None:
+    marker = state_dir() / "agents" / "run-9.running"
+    marker.parent.mkdir(parents=True)
+    marker.write_text(str(os.getpid()))
+    assert localagent.active_runs() == ["run-9"]
+    assert cli.main(["bench"]) == 75
+    assert "run-9" in capsys.readouterr().err
+    marker.write_text("999999999")  # a process that is gone
+    assert localagent.active_runs() == []
+    assert not marker.exists()
+
+
 def test_the_result_is_left_for_deputy_wait(repo: Path, fake_claude, capsys) -> None:
     fake_claude("echo two >> a.txt")
     assert localagent.wait_for("run-1", timeout_s=0) is None

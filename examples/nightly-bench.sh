@@ -8,6 +8,11 @@ if ! deputy doctor 2>&1 | grep -q "^backend .*: ok"; then
   echo "$(date -u +%FT%TZ) backend not answering, benchmark skipped" >> "$OUT/skipped.log"
   exit 0
 fi
-deputy bench --runs 3 --run-code --json > "$OUT/$(date +%F).json.tmp"
+# exit code 75: a local agent run is using the model server; tonight's numbers would be wrong
+if ! deputy bench --runs 3 --run-code --json > "$OUT/$(date +%F).json.tmp"; then
+  rm -f "$OUT/$(date +%F).json.tmp"
+  echo "$(date -u +%FT%TZ) benchmark not run (model server busy, or it failed)" >> "$OUT/skipped.log"
+  exit 0
+fi
 mv "$OUT/$(date +%F).json.tmp" "$OUT/$(date +%F).json"
 find "$OUT" -name '20*.json' -mtime +90 -delete

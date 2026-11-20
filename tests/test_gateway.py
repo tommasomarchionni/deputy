@@ -82,6 +82,17 @@ def test_system_messages_stay_where_they_are_in_the_conversation() -> None:
     assert three["messages"][2]["content"][0]["content"] == "out\n\nlate"
 
 
+def test_the_line_that_differs_in_every_conversation_is_left_out_of_the_system_prompt() -> None:
+    def system(mark: str) -> str:
+        blocks = [
+            {"type": "text", "text": f"x-anthropic-billing-header: cc_version=2.1.321.{mark};"},
+            {"type": "text", "text": "You are a careful engineer."},
+        ]
+        return normalise({"system": blocks, "messages": []}, BACKEND)["system"]
+
+    assert system("a9e") == system("655") == "You are a careful engineer."
+
+
 def _post(app: object, headers: dict[str, str], path: str = "/v1/messages") -> httpx.Response:
     async def go() -> httpx.Response:
         transport = httpx.ASGITransport(app=app)  # type: ignore[arg-type]

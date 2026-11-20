@@ -41,10 +41,17 @@ def _without_cache_marks(value: Any) -> Any:
     return value
 
 
+# Claude Code opens the system prompt with a line that carries a different mark in every
+# conversation. It is for Anthropic's servers; here it would only make each conversation's
+# prompt differ from its first tokens, so nothing could be reused from the one before.
+_BILLING_LINE = "x-anthropic-billing-header:"
+
+
 def _system_text(system: Any) -> str:
     if isinstance(system, list):
         blocks = cast("list[Json]", system)
-        return "\n\n".join(str(block.get("text", "")) for block in blocks)
+        texts = [str(block.get("text", "")) for block in blocks]
+        return "\n\n".join(text for text in texts if not text.startswith(_BILLING_LINE))
     return str(system or "")
 
 

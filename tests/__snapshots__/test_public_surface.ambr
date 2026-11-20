@@ -3,8 +3,9 @@
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
                       [--lessons] [--run-code] [--slow] [--variant VARIANT]
-                      [--tasks-file TASKS_FILE] [--workdir WORKDIR]
-                      [--compare BEFORE AFTER] [--fail-on-regression] [--json]
+                      [--even-if-busy] [--tasks-file TASKS_FILE]
+                      [--workdir WORKDIR] [--compare BEFORE AFTER]
+                      [--fail-on-regression] [--json]
   
   options:
     -h, --help            show this help message and exit
@@ -18,6 +19,8 @@
     --slow                also run tasks that take minutes (a file larger than
                           the context)
     --variant VARIANT     extra setting: NAME=JSON
+    --even-if-busy        run although a local agent run is using the model
+                          server
     --tasks-file TASKS_FILE
                           run the tasks of this TOML file on your own folder
     --workdir WORKDIR     folder for --tasks-file

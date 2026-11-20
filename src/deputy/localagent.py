@@ -284,6 +284,27 @@ def result_file(run_id: str) -> Path:
     return state_dir() / "agents" / f"{run_id}.result.json"
 
 
+def _running_file(run_id: str) -> Path:
+    return state_dir() / "agents" / f"{run_id}.running"
+
+
+def active_runs() -> list[str]:
+    """The local agent runs going on now, in any process of this user. A run reads a long
+    conversation that the model server keeps in memory: another client of the same server
+    (a benchmark) throws it out, and the run then reads it all again at every turn."""
+    alive: list[str] = []
+    for marker in sorted((state_dir() / "agents").glob("*.running")):
+        try:
+            os.kill(int(marker.read_text(encoding="utf-8")), 0)
+        except (ValueError, ProcessLookupError):
+            marker.unlink(missing_ok=True)  # left by a process that is gone
+        except OSError:
+            alive.append(marker.stem)  # it exists, under another user
+        else:
+            alive.append(marker.stem)
+    return alive
+
+
 def _report(result: Result) -> Result:
     """Leave the result where `deputy wait` finds it, written whole or not at all."""
     target = result_file(result.run_id)
@@ -641,6 +662,9 @@ async def run(  # noqa: PLR0913, PLR0917
     undone and named, without losing the others. When the work fails the checks, the agent gets
     the failures and tries again, up to REPAIR_ROUNDS times, so that the frontier receives work
     that passes or a real problem."""
+    marker = _running_file(run_id)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(str(os.getpid()), encoding="utf-8")
     try:
         return _report(await _run(task, workdir, backend, checks, policy, run_id, steps or []))
     except BaseException as exc:  # `deputy wait` must hear about a run that ends in any way
@@ -649,6 +673,8 @@ async def run(  # noqa: PLR0913, PLR0917
         status = "cancelled" if cancelled else "error"
         _report(Result.model_validate({"run_id": run_id, "status": status, "answer": note}))
         raise
+    finally:
+        marker.unlink(missing_ok=True)
 
 
 async def _run(  # noqa: PLR0913, PLR0917

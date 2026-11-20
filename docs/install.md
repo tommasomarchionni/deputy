@@ -44,6 +44,12 @@ Details and examples for each kind of server: [configuration](configuration.md).
 
 For the local agent (`delegate` with `agent=true`), the server needs a context of at least 110,000
 tokens: with llama.cpp, start it with `--ctx-size 131072`. The `claude` command must be installed.
+Give the server room to keep a long conversation aside (llama.cpp: `--cache-ram`, in MiB): with
+one slot, any other request to the same server throws the agent's conversation out of memory, and
+without that room the agent reads it all again at its next turn. Measured on a 27B model with
+`--cache-ram 2048`, at 47,000 tokens of conversation: 10 minutes a turn instead of seconds, while
+a benchmark was running on the same server. `deputy bench` therefore does not start while an
+agent run is going (exit code 75).
 
 ## 3. Connect your agent
 
