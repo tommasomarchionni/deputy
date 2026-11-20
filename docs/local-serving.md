@@ -29,4 +29,15 @@ translation, larger for code. Setting it per kind of task is planned; today it i
 Quality at each setting
 must be measured by the benchmark before it becomes a default; speed alone is not a reason.
 
-Regressions in a model's behaviour are invisible to ordinary CI, which has no model. Run `deputy bench` by hand when the served model, its server options or deputy's version change, because the measured profile records which model it was measured on.
+## When to run the benchmark
+
+Regressions in a model's behaviour are invisible to ordinary CI, which has no model. Run
+`deputy bench` by hand when the served model, its server options or deputy's version change: the
+measured profile records which model it was measured on, and a profile measured on another model
+or while the server was busy gives wrong turn limits.
+
+Keep the report (`deputy bench --json > report.json`) and compare two of them with
+`deputy bench --compare BEFORE.json AFTER.json`: it prints the pass rate, time per task and
+estimated saving of both, names the tasks that failed more or less, and says if the served model
+changed. It exits 0 unless you add `--fail-on-regression`; only a pass rate that fell by more than
+5 points counts as a regression (one extra failure among three repetitions is noise).

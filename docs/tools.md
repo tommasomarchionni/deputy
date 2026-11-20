@@ -1,8 +1,8 @@
 # Tools
 
 Five tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
-tool list is about 1143 770 tokens (bytes / 4, compact JSON); the part a model sees (names, descriptions,
-arguments) about . A test keeps the list under 5,000 characters, about 1,250 tokens.
+tool list is about 1,160 tokens (bytes / 4); the part a model sees (names, descriptions,
+arguments) about 780. A test keeps the list under 5,000 characters, about 1,250 tokens.
 
 ## `digest`
 
