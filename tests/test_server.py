@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from deputy import cli, confinement, localagent, model_profiles, server, tokens
+from deputy import cli, confinement, localagent, model_profiles, server, tokens, version
 from deputy.agent import Result
 from deputy.backends import Probe
 from deputy.bench import Summary
@@ -88,6 +88,22 @@ def test_delegate_runs_end_to_end_with_a_scripted_model(
 def test_status_tool() -> None:
     status = asyncio.run(build_server().call_tool("status", {}))
     assert "deputy init" in structured(status)["error"]
+
+
+def test_status_says_when_a_newer_deputy_was_installed_after_the_server_started(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # a session lives for days and keeps the server it started with: found on 2026-11-20, when
+    # two sessions still ran a server two days old that lacked the tools their hints advertised
+    installed = "1.0.0"
+    monkeypatch.setattr(version, "current_version", lambda: installed)
+    app = build_server()
+    assert "update" not in structured(asyncio.run(app.call_tool("status", {})))
+    installed = "1.1.0"
+    assert structured(asyncio.run(app.call_tool("status", {})))["update"] == (
+        "deputy 1.1.0 is installed, this session still runs 1.0.0: reconnect the server to use "
+        "it (Claude Code: /mcp)"
+    )
 
 
 def test_an_invalid_check_is_reported_before_any_work_starts(tmp_path: Path) -> None:
