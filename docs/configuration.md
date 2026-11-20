@@ -57,9 +57,6 @@ argument of `delegate` (default `helper`).
   copy the template
   [`examples/project-dev.md`](https://github.com/tommasomarchionni/deputy/blob/main/examples/project-dev.md)
   and fill it in.
-- **What else reaches the worker.** On top of the profile, deputy adds the lessons learned from use
-  (`deputy learn`) and the project memory (`deputy memory`), which points to your repository's own
-  rule files instead of copying them.
 - **Build on a profile instead of copying it.** With `extends: helper` in the front matter, your
   profile gets the current text of `helper` followed by your own lines, so deputy's later
   improvements to its tools and rules reach you. Your `description`, `max_turns` and `max_retries`
@@ -68,8 +65,8 @@ argument of `delegate` (default `helper`).
   loop, is ignored and `deputy doctor` says which profile and why.
 - **Copies fall behind.** A copy of `helper` without `extends` (yours, or a project's) replaces the
   bundled one, so deputy's later improvements do not reach you. `deputy doctor` says when that
-  happens. Prefer `helper` plus project memory, and write your own profile only for a kind of work
-  `helper` does not cover.
+  happens. Prefer `helper`, and write your own profile only for a kind of work `helper` does not
+  cover.
 
 The front matter can set the profile's limits:
 
@@ -236,30 +233,6 @@ uses it in two ways:
   did, or `never measured: run deputy tune`, or, when the server now serves a different model than
   the one measured, a note saying so and to run `deputy tune` again.
 
-## Lessons learned from use
-
-`deputy learn` reads the trace of your **real** runs (benchmark runs never teach) and looks for a
-kind of check that keeps failing for a profile: at least 5 runs that carried it, and at least 25% of
-them failing. For each one it proposes a *lesson*: a short reminder from a fixed catalogue (for
-example, for `contains`: "list every fact the task asks for and make sure each appears"), with the
-evidence behind it.
-
-```sh
-deputy learn                 # a report: what it would learn, and why
-deputy learn --apply         # save them; from now on they go into the worker prompt
-deputy lessons               # list the active lessons and what you muted
-deputy lessons remove helper:contains   # remove one, and never learn it again
-deputy lessons check         # test each lesson against the benchmark: with it and without it
-deputy lessons check --apply # remove the ones that make the benchmark worse
-deputy bench --lessons       # measure the model with the lessons applied (default: without)
-```
-
-Rules that keep this safe: the text of a lesson comes only from the catalogue, never from a trace,
-an answer or a file; at most 3 lessons are added to a prompt, only for the profile and the kinds of
-checks the task asks for; a lesson expires after 14 days and is re-derived only while the evidence
-still holds; workers cannot write lessons. Each run's trace records which lessons were applied, so
-`deputy stats` and the benchmark can tell whether they help.
-
 ## Routing
 
 With more than one `[[backends]]`, `delegate` without a `backend` argument chooses one. Rules, in
@@ -286,50 +259,8 @@ hosted one takes seconds, so this trades time for tokens.
 
 `code_changes = "frontier"` leaves the choice to your agent: the local agent is only mentioned.
 
-## Project memory
-
-A small note per repository, so the worker knows where the rules live and what your words mean.
-Pointers, not copies: an entry says *which file* and *why*, so it cannot go stale.
-
-```bash
-deputy memory scan --apply       # find AGENTS.md, CLAUDE.md, .github/instructions/*.md ...
-deputy memory pointer docs/design.md "how stages are leased"
-deputy memory term Lease "a hold on one worker stage"
-deputy memory                    # show; `export` prints the same markdown to review in a PR
-deputy memory remove Lease
-```
-
-- `--repo DIR` picks the repository (default: the current folder; a folder inside a repository is
-  that repository).
-- The note lives in the state directory, keyed by the repository, never in the repository, and a
-  worker cannot reach it.
-- It is added to the worker's prompt only for tasks in that repository, capped at 1,500
-  characters (up to 12 pointers and 20 terms).
-- A pointer must be a real file inside the repository and not a secret file.
-
 ## Confinement of command checks
 
 `[policy] command_wrapper` is an argv prefix that runs every `command` check inside an OS sandbox;
 `deputy init --confine` writes one for your platform and `deputy doctor` reports whether commands
 are confined. Details and what each platform allows: [security](security.md#confining-command-checks).
-
-### Does a lesson help? `deputy lessons check`
-
-A lesson is a bet, so it is tested. For each active lesson, deputy takes the benchmark tasks that
-carry a check of the lesson's kind (a `max_chars` lesson: the tasks with a length limit), runs them
-**without** the lesson and then with **only** that lesson (same model, same settings, `--runs N`
-repetitions on both sides), and compares:
-
-| Verdict | Meaning | What happens |
-| --- | --- | --- |
-| helps | passes more or cites better with it | kept |
-| neutral | no difference the benchmark can see (the suite may simply be too easy for it) | kept |
-| hurts | passes less or cites worse with it (a loss on either counts) | listed; `--apply` removes it and mutes it |
-| untestable | no benchmark task carries that kind of check | kept |
-
-A real run on the local Qwen3.8 27B, a `max_chars` lesson, two repetitions:
-`pass 100% -> 100%, cites 100% -> 100%, tokens out 342 -> 209`. The verdict is neutral (accuracy did
-not change) and the report shows what it did change: 39% fewer output tokens. The report is the
-point: you decide with the numbers in front of you. Use `--runs 3` or more before trusting a close
-call; the benchmark covers the kinds of check of its own tasks, so a lesson tested here is judged on
-those, not on your real work.

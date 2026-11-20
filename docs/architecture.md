@@ -24,8 +24,7 @@ tokens per session. Details of each field, check and flag: [tools](tools.md).
 
 ## What happens in one delegation
 
-1. **Prepare:** load the profile, validate the checks, choose a backend (see Routing), and add the
-   project memory and any lessons that apply to this kind of task.
+1. **Prepare:** load the profile, validate the checks, and choose a backend (see Routing).
 2. **Run the worker** with its tools, all confined to `workdir`: `read_file`, `write_file`, `grep`,
    `list_files`, read-only `git`, `summarise_log` and `scan_file`. The turn limit comes from the measured model
    profile unless the call or the profile sets one.
@@ -49,8 +48,7 @@ written to the trace (`route`).
 ## Where state lives
 
 All on your machine, in the state directory (`~/.local/state/deputy`): the trace (`runs.jsonl`),
-measured model profiles, lessons, project memory (keyed by repository, outside the repository),
-as JSON files. Configuration is in
+measured model profiles, as JSON files. Configuration is in
 `~/.config/deputy/config.toml`; API keys come from a mode-600 file or an environment variable,
 never from the configuration file or the command line.
 

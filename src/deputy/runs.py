@@ -10,7 +10,7 @@ from typing import Any
 
 from deputy.config import state_dir
 
-BENCH_SOURCE = "bench"  # marks benchmark runs, so usage statistics and lessons skip them
+BENCH_SOURCE = "bench"  # marks benchmark runs, so usage statistics skip them
 
 
 def new_run_id() -> str:

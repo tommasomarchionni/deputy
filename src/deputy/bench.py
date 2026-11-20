@@ -13,7 +13,6 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from deputy import lessons
 from deputy.agent import Result, run_task
 from deputy.backends import ChatClient
 from deputy.checks import (
@@ -420,26 +419,9 @@ def choose_best(baseline: Summary, candidates: list[Summary]) -> Summary | None:
     return best
 
 
-def _lessons_for(
-    task: BenchTask, profile: str, use_lessons: bool, book: lessons.LessonBook | None
-) -> list[lessons.Lesson]:
-    """The lessons a benchmark run applies: those of `book` if given (an ablation tests exactly
-    the lessons it names), else the saved ones when asked, else none (the raw model)."""
-    if book is not None:
-        return lessons.applicable(profile, task.checks, book=book)
-    return lessons.applicable(profile, task.checks) if use_lessons else []
-
-
 def runnable(*, run_code: bool = False, slow: bool = False) -> list[BenchTask]:
     """The tasks that run by default, plus the opt-in ones that were asked for."""
     return [t for t in tasks() if (run_code or not t.executes_code) and (slow or not t.slow)]
-
-
-def tasks_with_kind(kind: str, *, run_code: bool = False) -> list[str]:
-    """The benchmark tasks with a check of this kind: those a lesson about it can affect."""
-    return [
-        t.name for t in runnable(run_code=run_code) if any(check.type == kind for check in t.checks)
-    ]
 
 
 ClientFactory = Callable[[Backend], ChatClient]
@@ -467,8 +449,6 @@ async def run_suite(  # noqa: PLR0913
     only: list[str] | None = None,
     run_code: bool = False,
     slow: bool = False,
-    use_lessons: bool = False,
-    lesson_book: lessons.LessonBook | None = None,
     policy: Policy | None = None,
     client_factory: ClientFactory = ChatClient,
     profile: Profile | None = None,
@@ -498,7 +478,6 @@ async def run_suite(  # noqa: PLR0913
                         max_turns=variant.max_turns,
                         max_retries=0,
                         source=BENCH_SOURCE,
-                        lessons=_lessons_for(task, chosen.name, use_lessons, lesson_book),
                     )
                 finally:
                     await client.aclose()

@@ -2,18 +2,15 @@
 # name: test_each_command_help_is_stable[bench]
   '''
   usage: deputy bench [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                      [--lessons] [--run-code] [--slow] [--variant VARIANT]
-                      [--even-if-busy] [--tasks-file TASKS_FILE]
-                      [--workdir WORKDIR] [--compare BEFORE AFTER]
-                      [--fail-on-regression] [--json]
+                      [--run-code] [--slow] [--variant VARIANT] [--even-if-busy]
+                      [--tasks-file TASKS_FILE] [--workdir WORKDIR]
+                      [--compare BEFORE AFTER] [--fail-on-regression] [--json]
   
   options:
     -h, --help            show this help message and exit
     --backend BACKEND     backend name (default: the default backend)
     --runs RUNS           repetitions of the suite
     --tasks TASKS         comma-separated task names
-    --lessons             apply the learned lessons (by default the benchmark
-                          measures the raw model)
     --run-code            also run tasks whose grader executes model-written
                           code (in a temp directory)
     --slow                also run tasks that take minutes (a file larger than
@@ -124,57 +121,12 @@
   
   '''
 # ---
-# name: test_each_command_help_is_stable[learn]
-  '''
-  usage: deputy learn [-h] [--days DAYS] [--apply]
-  
-  options:
-    -h, --help   show this help message and exit
-    --days DAYS  how far back to look
-    --apply      save the lessons
-  
-  '''
-# ---
-# name: test_each_command_help_is_stable[lessons]
-  '''
-  usage: deputy lessons [-h] [--backend BACKEND] [--runs RUNS] [--apply]
-                        [{list,remove,check}] [id]
-  
-  positional arguments:
-    {list,remove,check}
-    id                   the lesson to remove (profile:check)
-  
-  options:
-    -h, --help           show this help message and exit
-    --backend BACKEND    check: the backend to test on
-    --runs RUNS          check: repetitions per side
-    --apply              check: remove the lessons that hurt
-  
-  '''
-# ---
 # name: test_each_command_help_is_stable[mcp]
   '''
   usage: deputy mcp [-h]
   
   options:
     -h, --help  show this help message and exit
-  
-  '''
-# ---
-# name: test_each_command_help_is_stable[memory]
-  '''
-  usage: deputy memory [-h] [--repo REPO] [--apply]
-                       [{show,export,scan,pointer,term,remove}] [key] [text]
-  
-  positional arguments:
-    {show,export,scan,pointer,term,remove}
-    key                   pointer: a file; term: the word; remove: either
-    text                  pointer: why it matters; term: what it means
-  
-  options:
-    -h, --help            show this help message and exit
-    --repo REPO           a folder inside the repository (default: here)
-    --apply               scan: remember what it finds
   
   '''
 # ---
@@ -193,15 +145,13 @@
 # name: test_each_command_help_is_stable[tune]
   '''
   usage: deputy tune [-h] [--backend BACKEND] [--runs RUNS] [--tasks TASKS]
-                     [--lessons] [--run-code] [--apply] [--revert]
+                     [--run-code] [--apply] [--revert]
   
   options:
     -h, --help         show this help message and exit
     --backend BACKEND  backend name (default: the default backend)
     --runs RUNS        repetitions of the suite
     --tasks TASKS      comma-separated task names
-    --lessons          apply the learned lessons (by default the benchmark
-                       measures the raw model)
     --run-code         also run tasks whose grader executes model-written code
                        (in a temp directory)
     --apply            write the winner
@@ -251,10 +201,7 @@
     'init',
     'install',
     'instructions',
-    'learn',
-    'lessons',
     'mcp',
-    'memory',
     'stats',
     'tune',
     'update',

@@ -13,10 +13,8 @@ from pydantic import ValidationError
 
 from deputy import (
     confinement,
-    lessons,
     localagent,
     model_profiles,
-    project_memory,
     router,
     runs,
     small_input,
@@ -80,7 +78,6 @@ class _Delegation:
     sandbox: Sandbox
     routes: list[router.Candidate]  # the backends to try, best first
     checks: list[Check]
-    notes: str
 
 
 def _prepare(
@@ -102,9 +99,6 @@ def _prepare(
         sandbox=Sandbox(Path(workdir)),
         routes=_routes(config, backend),
         checks=[*(ready_checks or []), *(to_check(c) for c in checks or [])],
-        notes=project_memory.prompt_notes(
-            project_memory.load(project_memory.repo_root(Path(workdir)))
-        ),
     )
 
 
@@ -172,9 +166,7 @@ async def _run_on(
             max_retries=DEFAULT_RETRIES
             if prepared.profile.max_retries is None
             else prepared.profile.max_retries,
-            lessons=lessons.applicable(prepared.profile.name, prepared.checks),
             request_tokens=args.request_tokens,
-            notes=prepared.notes,
             run_id=args.run_id,
             route=route,
         )

@@ -7,9 +7,8 @@ not do yet, and how to watch it work.
 
 **Does it improve by itself as it runs?** Partly, and only where a measurement says so. While it
 runs, every delegation gets one correction round, and each run is recorded in a trace with your
-`feedback`. From that trace, deputy flags kinds of task that do not pay (`not_worth_delegating`) and
-`deputy learn` turns repeated failures into short lessons for the worker. `deputy tune` changes
-request settings only if they win. You run `learn` and `tune`.
+`feedback`. From that trace, deputy flags kinds of task that do not pay (`not_worth_delegating`).
+`deputy tune` changes request settings only if they win. You run `tune`.
 
 **Does it improve its own code?** No, and it will never do so unattended. Code changes are made by
 people (or by an agent working through the normal issue and pull-request process), and the benchmark
@@ -28,10 +27,8 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | Benchmark of your model on a built-in suite (`deputy bench`, `--json`) | **today** |
 | Tuning of request settings, recommended or applied (`deputy tune`, `auto_tune`, `--revert`) | **today** |
 | Measured model profile written after every benchmark, and read back: the turn limit follows it, and `status` says how old it is and whether the model changed | **today** |
-| Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (read by `stats`, the advice flags and `deputy learn`) |
+| Trace of every run and your feedback, and a report from it (`deputy stats`) | **today** (read by `stats` and the advice flags) |
 | Advice that a kind of task does not pay off (`not_worth_delegating`), from the trace | **today** (a flag and a line in `status`; the orchestrator decides) |
-| Lessons learned from real use (`deputy learn`): short reminders in the worker prompt where a kind of check keeps failing, with evidence and expiry | **today** (derived from the trace) |
-| Each lesson tested against the benchmark, with and without it, and removed if it hurts (`deputy lessons check`) | **today** |
 | Measured profiles read by routing: the backend is chosen per task by pass rate and speed | **today** ([configuration](configuration.md#routing)); per task class is planned |
 | Benchmark on your own folder with your own tasks, from a TOML file (`deputy bench --tasks-file`), writes rolled back | **today** |
 
@@ -65,7 +62,7 @@ the orchestrator does the task. Bounded retries, bounded turns.
 
   `write-passing-test` runs the model's code on your machine (in a temporary directory, with a
   minimal environment and a 30 second limit), so it only runs with `--run-code`. `count-in-huge-file` takes minutes on a local model, so it only
-  runs with `deputy bench --slow` (never in `tune` or in lesson checks).
+  runs with `deputy bench --slow` (never in `tune`).
   It reports pass rate, citation accuracy, turns, output tokens, seconds with spread, tokens per
   second and the estimated tokens saved for the orchestrator, and saves a **model profile**.
 - `deputy tune` runs the suite for your settings and for candidates (thinking off, shorter output,

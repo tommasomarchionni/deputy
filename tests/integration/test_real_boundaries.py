@@ -14,13 +14,12 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import TextContent
 
-from deputy import lessons, runs
+from deputy import runs
 from deputy.agent import run_task
 from deputy.backends import ChatClient
 from deputy.bench import Summary
 from deputy.checks import CitesLines, Contains
 from deputy.config import Backend, Policy, load_config, state_dir
-from deputy.lessons import Evidence, Lesson, LessonBook
 from deputy.profiles import load_profiles
 from deputy.sandbox import Sandbox
 from deputy.tune import save_model_profile
@@ -264,45 +263,3 @@ def test_the_status_tool_says_whether_the_model_was_measured_and_whether_it_chan
 
 def status_text(status: dict) -> str:
     return status["fake profile"]
-
-
-def test_a_saved_lesson_reaches_the_worker_prompt_over_the_real_protocol(
-    configured: FakeModel, tmp_path: Path
-) -> None:
-    now = time.time()
-    lessons.save_book(
-        LessonBook(
-            lessons=[
-                Lesson(
-                    id="helper:contains",
-                    profile="helper",
-                    check_kind="contains",
-                    text=lessons.CATALOGUE["contains"],
-                    evidence=Evidence(runs=8, failures=4, window_days=30),
-                    created_at=now,
-                    expires_at=now + 86_400,
-                )
-            ]
-        )
-    )
-    configured.queue(message("beta is here"))
-
-    async def go() -> dict:
-        params = StdioServerParameters(
-            command=sys.executable, args=["-m", "deputy", "mcp"], env=dict(os.environ)
-        )
-        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
-            await session.initialize()
-            reply = await session.call_tool(
-                "delegate",
-                {
-                    "task": "say beta",
-                    "workdir": str(tmp_path),
-                    "checks": [{"type": "contains", "values": ["beta"]}],
-                },
-            )
-            return reply.structured_content
-
-    assert asyncio.run(go())["status"] == "ok"
-    system_prompt = configured.requests[0]["messages"][0]["content"]
-    assert lessons.CATALOGUE["contains"] in system_prompt

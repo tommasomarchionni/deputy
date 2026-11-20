@@ -14,7 +14,6 @@ from deputy import runs, scan, tokens
 from deputy.backends import BackendError, ChatClient, Reply
 from deputy.checks import Check, CheckResult, failures_message, run_checks
 from deputy.config import Policy
-from deputy.lessons import Lesson, prompt_addendum
 from deputy.profiles import Profile
 from deputy.sandbox import Sandbox, SandboxError
 from deputy.schema import COMPACT
@@ -291,20 +290,16 @@ class AgentRun:
         max_turns: int,
         max_retries: int,
         source: str,
-        lessons: list[Lesson],
         request_tokens: int,
-        notes: str,
         run_id: str | None,
         route: str,
     ) -> None:
         self._route = route
         self._run_id = run_id or runs.new_run_id()
         self._request_tokens = request_tokens
-        self._notes = notes
         self._read_tokens = 0
         self._cost_tokens = 0
         self._source = source
-        self._lessons = lessons
         self._client = client
         self._profile = profile
         self._task = task
@@ -314,7 +309,7 @@ class AgentRun:
         self._max_turns = max_turns
         self._max_retries = max_retries
         self._messages: list[dict[str, Any]] = [
-            {"role": "system", "content": profile.body + prompt_addendum(lessons) + notes},
+            {"role": "system", "content": profile.body},
             {"role": "user", "content": task},
         ]
         self._metrics = Metrics(model=client.backend.model)
@@ -453,8 +448,6 @@ class AgentRun:
                 "run_id": result.run_id,
                 "profile": self._profile.name,
                 "source": self._source,
-                "lessons": [lesson.id for lesson in self._lessons],
-                "memory": bool(self._notes),
                 "route": self._route,
                 "task_class": task_class(self._profile.name, self._checks),
                 "status": result.status,
@@ -491,9 +484,7 @@ async def run_task(  # noqa: PLR0913
     max_turns: int = 8,
     max_retries: int = 1,
     source: str = "mcp",
-    lessons: list[Lesson] | None = None,
     request_tokens: int | None = None,
-    notes: str = "",
     run_id: str | None = None,
     route: str = "",
 ) -> Result:
@@ -511,9 +502,7 @@ async def run_task(  # noqa: PLR0913
         max_turns=max_turns,
         max_retries=max_retries,
         source=source,
-        lessons=lessons or [],
         request_tokens=tokens.estimate(task) if request_tokens is None else request_tokens,
-        notes=notes,
         run_id=run_id,
         route=route,
     ).execute()
