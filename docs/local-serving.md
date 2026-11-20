@@ -18,7 +18,8 @@ Numbers are from one machine and few runs: they show direction, not precision.
   of 0.1 GB), not enough on their own.
 - **The time is the number of output tokens.** With reasoning on, a 5-bullet summary produced 1,200
   to 3,000 tokens (once it hit the 3,000 cap). Capping reasoning is the big lever: 2-4x faster.
-- Draft length 3 and a smaller micro-batch did not help.
+- Draft length 3 and a smaller micro-batch did not help in this test, where the reasoning
+  decided the time; measured on its own, the draft length does matter (below).
 - Prefill is slow (about 60 tokens/s), so large inputs cost minutes; chunking and not re-reading
   matter more than any flag.
 
@@ -28,6 +29,33 @@ Reasoning is a **per-task-class parameter**, not a global one: off or small for 
 translation, larger for code. Setting it per kind of task is planned; today it is one server flag.
 Quality at each setting
 must be measured by the benchmark before it becomes a default; speed alone is not a reason.
+
+## Speculative decoding
+
+Measured on 2026-11-20 on the same machine and model, with reasoning off and greedy decoding, so
+that every setting writes the same text: three requests (a function rewritten inside 11,000
+tokens of context, new code, a file written again with one change), 400 tokens each.
+
+| `--spec-type`, `--spec-draft-n-max` | Long context | New code | File written again |
+| --- | ---: | ---: | ---: |
+| `none` | 12.2 tok/s | 12.8 | 12.7 |
+| `draft-mtp`, 2 | 19.1 | 19.9 | 20.9 |
+| `draft-mtp`, 4 | 25.1 | 26.6 | 31.0 |
+| `draft-mtp`, 6 | 27.5 | 29.4 | 38.4 |
+| `draft-mtp,ngram-mod`, 4 | 27.8 | 25.9 | 43.0 |
+| `draft-mtp,ngram-mod`, 6 | 29.9 | 28.2 | 50.6 |
+
+- **The text is the same to the character** in all six: speculation changes the speed, not the
+  answer. With sampling, 8 and 12 were slower than 6: more drafts are thrown away.
+- **Real work gains less than the test.** In the local agent's own conversations, by context
+  size, `draft-mtp,ngram-mod` with 6 against `draft-mtp` with 2: 21.4 against 17.9 tok/s under
+  5,000 tokens, 22.8 against 17.5 up to 20,000, 20.8 against 15.6 up to 40,000, and 14.3 against
+  13.3 above (few requests). An agent writes short tool calls at temperature 1.0, where about
+  half of the drafted tokens are accepted.
+- **Quality on the benchmark did not move:** 34 of 36 against 35 of 36 before, the same two
+  tasks that fail now and then in every report, the same citation rate.
+- This is one model with its own draft head (MTP). Measure yours: start a second server on
+  another port with each setting and send it the same requests.
 
 ## When to run the benchmark
 

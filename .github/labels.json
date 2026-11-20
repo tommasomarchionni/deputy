@@ -12,7 +12,7 @@
   {"name": "area: bench", "color": "c5def5", "description": "Benchmark, tuning and model profiles"},
   {"name": "area: cli", "color": "c5def5", "description": "The deputy command, install, update"},
   {"name": "area: installer", "color": "c5def5", "description": "install.sh and packaging"},
-  {"name": "area: memory", "color": "c5def5", "description": "Model profiles, lessons, project memory"},
+  {"name": "area: memory", "color": "c5def5", "description": "Measured model profiles and the trace"},
   {"name": "area: router", "color": "c5def5", "description": "Choosing the model and the settings per task"},
   {"name": "area: docs", "color": "c5def5", "description": "Documentation site and README"},
   {"name": "area: ci", "color": "c5def5", "description": "Workflows, release, repository automation"},

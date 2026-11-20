@@ -20,7 +20,7 @@ How:
 3. `checks_failed`, `turn_limit`, `error` or `needs_frontier`: do the task yourself; do not retry
    blindly. `not_worth_delegating`: this kind of task has not saved tokens, stop delegating it. `small_input`: the files were short, read such files yourself.
 4. Code changes that tests can check: `delegate` with `agent=true` before you read the code, then
-   review and apply its patch. One change per item of `steps`; tests and linters in `checks`.
+   review and apply its patch. One small change per item of `steps`; tests and linters in `checks`.
    Flag `partial`: apply the patch, then do only the steps the answer names.
 5. After using a result, call `feedback` with its `run_id`: `accepted` or `rejected`, and why.
 

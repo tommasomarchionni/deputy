@@ -70,7 +70,10 @@ Claude Code subagent, but no request reaches a hosted model.
 - **Give it steps.** Put each separate change in `steps` (up to 20) and what they share in
   `task`: every step gets a conversation of its own in the same copy. A local model reads a short
   conversation fast and handles it well; one long conversation for eight changes made a 27B model
-  spend a third of its time reading its own history again. A step the agent cannot do is undone,
+  spend a third of its time reading its own history again. Keep a step to one kind of change:
+  removing a feature from five modules, their tests and four pages of documentation as one step
+  did not finish in 35 minutes; as four steps (the commands, the two groups of callers, the
+  documentation) it took 15, 12, 25 and 13 minutes. A step the agent cannot do is undone,
   so it leaves no half-made change, and the answer names it: `Left for you: step 6`. What that
   step had changed is kept apart as a draft, not checked and not in the patch, and the answer
   gives its path: start from it if it helps. A step has 30 minutes; when they are up the agent is

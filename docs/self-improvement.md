@@ -24,6 +24,7 @@ about a quarter of an hour with a slow local one). See [Watch it work](#watch-it
 | What | Status |
 | --- | --- |
 | Self-correction inside a run: checks, one retry with the exact failure, hand back (`needs_frontier`) | **today** |
+| Self-correction of a code change by the local agent: the project's tests and linters, up to three repair rounds, a step it cannot do undone and named | **today** ([tools](tools.md#a-local-agent-for-a-code-change-agenttrue)) |
 | Benchmark of your model on a built-in suite (`deputy bench`, `--json`) | **today** |
 | Tuning of request settings, recommended or applied (`deputy tune`, `auto_tune`, `--revert`) | **today** |
 | Measured model profile written after every benchmark, and read back: the turn limit follows it, and `status` says how old it is and whether the model changed | **today** |
