@@ -7,11 +7,11 @@ from typing import Any, cast
 
 import pytest
 
-from deputy import cli, confinement, localagent, model_profiles, server
+from deputy import cli, confinement, localagent, model_profiles, server, tokens
 from deputy.agent import Result
 from deputy.backends import Probe
 from deputy.bench import Summary
-from deputy.config import Backend, ConfigError, state_dir
+from deputy.config import Backend, ConfigError, config_path, state_dir
 from deputy.server import build_server
 from deputy.tune import save_model_profile
 from helpers import message, tool_call
@@ -474,3 +474,20 @@ def test_with_a_sandbox_tool_the_checks_of_a_local_agent_need_no_allow_list(
     data = structured(asyncio.run(build_server().call_tool("delegate", arguments)))
     assert data["status"] == "running"
     assert "deputy wait" in data["answer"]
+
+
+def test_with_a_local_backend_every_session_is_told_to_hand_code_changes_to_the_agent() -> None:
+    assert server.instructions() == server.INSTRUCTIONS  # no configuration yet
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    told = server.instructions()
+    assert told.startswith(server.INSTRUCTIONS)
+    for rule in ("agent=true", "do not read or edit the code first", "`steps`", "deputy wait"):
+        assert rule in told
+    assert tokens.estimate(told) <= 400  # every session carries it
+
+
+def test_the_user_can_keep_code_changes_for_the_frontier_model() -> None:
+    cli.main(["init", "--yes", "--url", "http://x", "--model", "m"])
+    path = config_path()
+    path.write_text('code_changes = "frontier"\n' + path.read_text())
+    assert server.instructions() == server.INSTRUCTIONS

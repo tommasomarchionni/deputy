@@ -24,6 +24,7 @@ default_backend = "{name}"
 # auto_tune = "propose"      # off | propose | apply (see docs/configuration.md)
 # auto_update = "apply"      # apply (verified, compatible releases) | notify | off
 # routing = "auto"           # off | auto: choose among backends (see docs/configuration.md)
+# code_changes = "local"     # local: your agent hands code changes to the local agent | frontier
 
 [[backends]]
 name = "{name}"

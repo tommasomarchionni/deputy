@@ -49,6 +49,26 @@ INSTRUCTIONS = (
     "answers. For other work with your own checks, use `delegate`; for a well-defined code "
     "change with tests, `delegate` with agent=true does it on the local model and returns a patch."
 )
+AGENT_RULE = (
+    " Code changes: the user wants the local agent to make them, to save your tokens. When "
+    "asked for changes that tests or linters can check, do not read or edit the code first: "
+    "call `delegate` with agent=true, the rules the changes share in `task`, one self-contained "
+    "change per item of `steps`, and the project's test and lint commands as `command` checks. "
+    "Then run `deputy wait <run_id>` in a background shell and go on with other work, or end "
+    "your turn. When it ends, read the patch, apply it and do only what is left. Make a change "
+    "yourself only when it is a few lines the user is waiting for, or when the user says so."
+)
+
+
+def instructions() -> str:
+    """What every session is told. With a local default backend and `code_changes = "local"`
+    (the default), code changes go to the local agent without the user asking each time."""
+    try:
+        config = load_config()
+        local = config.code_changes == "local" and config.backend().kind == "local"
+    except ConfigError:
+        local = False
+    return INSTRUCTIONS + AGENT_RULE if local else INSTRUCTIONS
 
 
 @dataclass(frozen=True)
@@ -251,7 +271,7 @@ def _agent_problem(backend: Backend, steps: list[str], *, has_room: bool) -> str
 
 
 def build_server() -> MCPServer:
-    server = MCPServer("deputy", instructions=INSTRUCTIONS)
+    server = MCPServer("deputy", instructions=instructions())
     pending = background.Jobs()
 
     async def launch(prepared: _Delegation, request: _Request, wait: bool) -> Outcome:

@@ -10,6 +10,7 @@ default_backend = "local"
 auto_tune = "propose"                # off | propose | apply, see "Tuning" below
 auto_update = "apply"                # apply | notify | off, see "Updates" below
 routing = "auto"                     # off | auto, see "Routing" below
+code_changes = "local"               # local | frontier, see "Code changes" below
 
 [[backends]]
 name = "local"
@@ -288,6 +289,18 @@ backend error moves on to the next. The choice and the reason are written to the
 
 `routing = "off"` always uses `default_backend`, with no fallback; naming a `backend` in the call
 does the same for that call. With one backend nothing is probed and nothing changes.
+
+## Code changes
+
+`code_changes = "local"` (the default) applies when the default backend is local: every session
+is told, in the server's instructions, that code changes which tests or linters can check go to
+the local agent (`delegate` with `agent=true`) before the code is read, one change per step, with
+the project's tests and linters as checks. Your agent then waits with `deputy wait`, reviews the
+patch and applies it. You do not have to ask for it each time. It keeps a change for itself when
+it is a few lines you are waiting for, or when you say so: a local model takes minutes where a
+hosted one takes seconds, so this trades time for tokens.
+
+`code_changes = "frontier"` leaves the choice to your agent: the local agent is only mentioned.
 
 ## Project memory
 
