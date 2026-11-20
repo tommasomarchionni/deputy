@@ -204,5 +204,23 @@ The last lines measure **adoption**, the number to watch over time:
 An edit made by a script (rather than an edit tool or `sed -i`) is not seen, so these numbers are
 estimates.
 
+The closing table, **where the tokens went**, puts those reads next to what the sessions spent. It
+comes from the usage Claude Code records for every request, in weighted tokens (input 1, cache
+write 1.25, cache read 0.1, output 5: the price ratios of the Claude API, to compare shares, not an
+invoice). It splits the spend between the main sessions, the subagents that changed files and
+those that only read, and says how much of each was the context read again on every request. Three
+lines follow:
+
+- the context of the main sessions per request (median, and the size 9 requests in 10 stay
+  under) and the size at which they were compacted;
+- the share of everything that went into reading again the context above 200,000 tokens. Only a
+  smaller context cuts that share: in Claude Code, a lower `autoCompactWindow`, or work moved to
+  subagents, which start empty;
+- the most the large reads a delegation could have taken were worth, each counted as written once
+  and replayed by every later tool call until a compaction.
+
+Read them before deciding what to work on: a delegation cannot save more than the third line, and
+the local agent works on the "subagents that edit" row.
+
 Measured on 11 sessions and 250 subagents of one real repository: large reads were 50 % of everything
 the agents read, command output 13 %.

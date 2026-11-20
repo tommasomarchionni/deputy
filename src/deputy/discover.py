@@ -4,6 +4,7 @@ have taken. Reads Claude Code session transcripts on this machine; nothing is se
 Volumes are estimates (bytes / 4) of the text in tool results; images are ignored. Volume is not
 cost: prompt caching makes a re-read cheaper, and a result is replayed on every later turn. The
 numbers are an upper bound on what delegation could save, and a measure of where reading goes.
+What the sessions spent, and what share of it those reads were, comes from `spend`.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from deputy import shellreads, tokens
+from deputy import shellreads, spend, tokens
 
 # A result larger than this is one a delegation can pay for (see `small_input`: about 1,000 tokens).
 LARGE_CHARS = 4_000
@@ -53,6 +54,7 @@ class Adoption:
     file_tokens: int = 0
     delegable_reads: int = 0  # not followed by an edit of the same file
     delegable_tokens: int = 0
+    delegable_weighted: float = 0.0  # those tokens, written once and replayed until a compaction
     again_tokens: int = 0  # a file already read, unchanged since
     same_part_tokens: int = 0  # of those, the very same part of the file
 
@@ -71,6 +73,7 @@ class Report:
     agent_changes: int = 0  # the code changes in them: one per step
     own_edits: int = 0  # edits the sessions made themselves
     subagent_adoption: Adoption = field(default_factory=Adoption)  # the part of `adoption` in them
+    spend: spend.SpendReport = field(default_factory=spend.SpendReport)
 
     @property
     def adoption_rate(self) -> float:
@@ -216,7 +219,9 @@ def _steps(lines: Iterable[str]) -> list[_Step]:
     return steps
 
 
-def _count_large_read(into: Adoption, steps: list[_Step], index: int, seen: set[Any]) -> None:
+def _count_large_read(
+    into: Adoption, steps: list[_Step], index: int, seen: set[Any], replays: int
+) -> None:
     step = steps[index]
     size = tokens.from_chars(step.chars)
     files = {path for path, _ in step.reads}
@@ -226,6 +231,7 @@ def _count_large_read(into: Adoption, steps: list[_Step], index: int, seen: set[
     if not any(files.intersection(s.edits) for s in later):
         into.delegable_reads += 1
         into.delegable_tokens += size
+        into.delegable_weighted += size * (spend.CACHE_WRITE + spend.CACHE_READ * replays)
     if files & seen:
         into.again_tokens += size
         if all(read in seen for read in step.reads):
@@ -244,15 +250,25 @@ def _merge(into: Adoption, part: Adoption) -> None:
         setattr(into, name, getattr(into, name) + value)
 
 
+def _replays(steps: list[_Step]) -> list[int]:
+    """For each step, the later steps that carry its result: up to the next compaction."""
+    left, counts = 0, [0] * len(steps)
+    for index in range(len(steps) - 1, -1, -1):
+        left = 0 if steps[index].compaction else left + 1
+        counts[index] = max(left - 1, 0)
+    return counts
+
+
 def _measure_adoption(into: Adoption, steps: list[_Step]) -> None:
     seen: set[Any] = set()  # files, and (file, part) pairs, read and unchanged since
+    replays = _replays(steps)
     for index, step in enumerate(steps):
         if step.compaction:
             seen.clear()
         for path in step.edits:
             seen = {s for s in seen if s != path and not (isinstance(s, tuple) and s[0] == path)}
         if step.reads and step.chars > LARGE_CHARS:
-            _count_large_read(into, steps, index, seen)
+            _count_large_read(into, steps, index, seen, replays[index])
         for read in step.reads:
             seen |= {read[0], read}
 
@@ -271,6 +287,7 @@ def build_report(folder: Path, *, days: float, now: float | None = None) -> Repo
     files, subagents = _transcripts(folder, since)
     report = Report(days=days, sessions=len(files) - len(subagents), subagents=len(subagents))
     report.by_category = {name: Bucket() for name in CATEGORIES}
+    spent = spend.Collector()
     for path in files:
         with path.open(encoding="utf-8", errors="replace") as handle:
             for source, chars in _results(handle):
@@ -287,6 +304,13 @@ def build_report(folder: Path, *, days: float, now: float | None = None) -> Repo
             _merge(report.adoption, part)
             if path in subagents:
                 _merge(report.subagent_adoption, part)
+            handle.seek(0)
+            spent.add(
+                spend.measure(handle),
+                subagent=path in subagents,
+                edits=any(step.edits for step in steps),
+            )
+    report.spend = spent.finish()
     report.delegations = sum(
         b.results for name, b in report.by_source.items() if is_delegation(name)
     )
@@ -352,7 +376,8 @@ def format_report(report: Report, *, top: int = 8) -> str:
         "",
         *_adoption_lines(report),
     ]
-    return "\n".join(lines)
+    spent = spend.format_lines(report.spend, report.adoption.delegable_weighted)
+    return "\n".join([*lines, "", *spent] if spent else lines)
 
 
 def report_as_json(report: Report) -> str:
