@@ -235,9 +235,10 @@ async def _backend_status(config: Config) -> dict[str, str]:
 
 def _agent_started(run_id: str) -> str:
     return (
-        "started; it can take an hour. Do not poll: run `deputy wait "
-        f"{run_id}` in a background shell, go on with other work, and read the result it prints "
-        "when the run ends (or call collect then)."
+        "started; it can take an hour or more. Do not poll: run `deputy wait "
+        f"{run_id}` in a background shell, with the longest timeout your shell tool takes, go "
+        "on with other work, and read the result it prints when the run ends (or call collect "
+        "then)."
     )
 
 
