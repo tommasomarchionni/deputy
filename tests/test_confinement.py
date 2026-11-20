@@ -150,6 +150,34 @@ def test_doctor_says_plainly_whether_commands_are_confined(
     assert expected in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("works", "lines", "expected"),
+    [
+        (True, "", "its checks run in deputy's sandbox and need no allow-list"),
+        (False, "", "its checks need policy.allowed_commands"),
+        (True, f'command_wrapper = ["{sys.executable}"]\n', "its checks use your command_wrapper"),
+    ],
+)
+def test_doctor_says_what_holds_for_the_local_agent(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    works: bool,
+    lines: str,
+    expected: str,
+) -> None:
+    async def healthy(self):  # type: ignore[no-untyped-def]
+        return Probe(True, "ok")
+
+    monkeypatch.setattr("deputy.backends.ChatClient.probe", healthy)
+    monkeypatch.setattr(confinement, "agent_sandbox_works", lambda: works)
+    _configure(lines)
+    cli.main(["doctor"])
+    out = capsys.readouterr().out
+    assert "local agent: your agent is told to hand code changes to it" in out
+    assert "the hint with each request is" in out
+    assert expected in out
+
+
 @pytest.mark.skipif(
     sys.platform != "darwin" or shutil.which("sandbox-exec") is None,
     reason="needs macOS sandbox-exec",

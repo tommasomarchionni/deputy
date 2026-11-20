@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from deputy import confinement, updates
+from deputy import confinement, hook, updates
 from deputy.backends import ChatClient
 from deputy.cli import tuning
 from deputy.cli._common import Subparsers
@@ -157,6 +157,25 @@ def _confinement_line(policy: Policy) -> tuple[str, bool]:
     )
 
 
+def _agent_line(config: Config) -> str | None:
+    """What holds for the local agent on this machine, or nothing without a local backend."""
+    if config.backend().kind != "local":
+        return None
+    who = (
+        "your agent is told to hand code changes to it"
+        if config.code_changes == "local"
+        else 'offered only (code_changes = "frontier")'
+    )
+    hint = "on" if hook.is_enabled() else "off (`deputy hook on`)"
+    if config.policy.command_wrapper:
+        checks = "its checks use your command_wrapper and allowed_commands"
+    elif confinement.agent_sandbox_works():
+        checks = "its checks run in deputy's sandbox and need no allow-list"
+    else:
+        checks = "no sandbox starts here, so its checks need policy.allowed_commands"
+    return f"local agent: {who}; the hint with each request is {hint}; {checks}"
+
+
 def doctor(_: argparse.Namespace) -> int:
     print(f"deputy {current_version()}  python {sys.version.split()[0]}")
     try:
@@ -179,6 +198,9 @@ def doctor(_: argparse.Namespace) -> int:
     line, broken = _confinement_line(load_config().policy)
     print(line)
     failed += broken
+    agent = _agent_line(load_config())
+    if agent:
+        print(agent)
     _model_changes(load_config(), served)
     _print_update_notice()
     return 1 if failed else 0
