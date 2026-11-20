@@ -1,8 +1,8 @@
 # Tools
 
-Six tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
-tool list is about 1143 770 tokens (bytes / 4, compact JSON); the part a model sees (names, descriptions,
-arguments) about . A test keeps the list under 5,000 characters, about 1,250 tokens.
+Five tools, short on purpose: the orchestrator pays for their schemas once per session. The whole
+tool list is about 1,160 tokens (bytes / 4); the part a model sees (names, descriptions,
+arguments) about 780. A test keeps the list under 5,000 characters, about 1,250 tokens.
 
 ## `digest`
 
@@ -36,7 +36,7 @@ other than answering a question about files.
 | --- | --- |
 | `task` | What to do. Name files, do not paste them. |
 | `workdir` | Absolute path the worker is confined to. |
-| `profile` | `helper` by default; see `profiles`. |
+| `profile` | `helper` by default; see [profiles](configuration.md#profiles). |
 | `checks` | Proofs the server runs on the answer (below). |
 | `backend` | A configured backend; default is `default_backend`. |
 | `max_turns` | Safety limit on the worker's tool turns (default 8). |
@@ -70,7 +70,10 @@ Claude Code subagent, but no request reaches a hosted model.
 - **Give it steps.** Put each separate change in `steps` (up to 20) and what they share in
   `task`: every step gets a conversation of its own in the same copy. A local model reads a short
   conversation fast and handles it well; one long conversation for eight changes made a 27B model
-  spend a third of its time reading its own history again. A step the agent cannot do is undone,
+  spend a third of its time reading its own history again. Keep a step to one kind of change:
+  removing a feature from five modules, their tests and four pages of documentation as one step
+  did not finish in 35 minutes; as four steps (the commands, the two groups of callers, the
+  documentation) it took 15, 12, 25 and 13 minutes. A step the agent cannot do is undone,
   so it leaves no half-made change, and the answer names it: `Left for you: step 6`. What that
   step had changed is kept apart as a draft, not checked and not in the patch, and the answer
   gives its path: start from it if it helps. A step has 30 minutes; when they are up the agent is
@@ -105,7 +108,7 @@ The result of a `wait=False` delegation, by its `run_id` (the same id the result
 It waits up to 20 seconds, so polling costs few tokens: if the job is still going you get
 `status: running` and call it again. `cancel=true` stops the worker (the request to the model
 server is dropped and a running command check is killed) and puts back every file the worker
-wrote, so the workspace is as it was. A result can be collected once. At most 3 jobs run at once.
+wrote, so the working directory is as it was. A result can be collected once. At most 3 jobs run at once.
 
 Jobs live in the memory of the running server: if the server exits, they are gone.
 
@@ -131,10 +134,6 @@ wrong answer; the failing `checks` keep their full detail.
 ## `status`
 
 Configured backends and whether they answer.
-
-## `profiles`
-
-Available profiles, name and description.
 
 ## `feedback`
 

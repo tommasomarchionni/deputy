@@ -6,7 +6,6 @@ from __future__ import annotations
 # (path prefix, area). The first matching prefix wins; a file can match only one area.
 PATH_AREAS: tuple[tuple[str, str], ...] = (
     ("src/deputy/sandbox.py", "sandbox"),
-    ("src/deputy/workspace.py", "sandbox"),
     ("src/deputy/checks.py", "checks"),
     ("src/deputy/bench.py", "bench"),
     ("src/deputy/tune.py", "bench"),

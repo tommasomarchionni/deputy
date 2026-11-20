@@ -25,7 +25,6 @@ from deputy.bench import (
     selection_names,
     service_source,
     tasks,
-    tasks_with_kind,
 )
 from deputy.checks import CheckContext, run_checks
 from deputy.config import Backend, Policy
@@ -165,7 +164,6 @@ def test_slow_tasks_run_only_when_asked_and_never_in_tuning() -> None:
     assert "count-in-huge-file" not in [t.name for t in runnable()]
     assert "count-in-huge-file" in [t.name for t in runnable(slow=True)]
     assert "count-in-huge-file" not in selection_names()
-    assert "count-in-huge-file" not in tasks_with_kind("contains")
 
 
 def test_the_ci_log_hides_one_failure_among_noise_and_the_task_grades_it() -> None:

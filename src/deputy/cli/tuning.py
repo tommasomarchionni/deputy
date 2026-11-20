@@ -102,7 +102,6 @@ async def _measure(
                 only=only,
                 run_code=args.run_code,
                 slow=getattr(args, "slow", False),
-                use_lessons=args.lessons,
                 policy=config.policy,
                 on_result=_progress,
             )
@@ -202,7 +201,6 @@ async def _confirm(
                 runs=args.runs,
                 only=holdout,
                 run_code=args.run_code,
-                use_lessons=args.lessons,
                 policy=config.policy,
                 on_result=_progress,
             )
@@ -271,7 +269,6 @@ def retune(backend: str) -> int:
         backend=backend,
         runs=1,
         tasks=",".join(QUICK_TASKS),
-        lessons=False,
         run_code=False,
         apply=True,
         revert=False,
@@ -288,11 +285,6 @@ def register(sub: Subparsers) -> None:
         parser.add_argument("--backend", help="backend name (default: the default backend)")
         parser.add_argument("--runs", type=int, default=1, help="repetitions of the suite")
         parser.add_argument("--tasks", help="comma-separated task names")
-        parser.add_argument(
-            "--lessons",
-            action="store_true",
-            help="apply the learned lessons (by default the benchmark measures the raw model)",
-        )
         parser.add_argument(
             "--run-code",
             action="store_true",

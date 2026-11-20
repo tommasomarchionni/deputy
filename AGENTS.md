@@ -31,7 +31,7 @@ Do not run what is not needed: a focused test while editing, the full suite once
 
 - `src/deputy/` the product: `server.py` (five MCP tools), `agent.py` (the loop), `sandbox.py`,
   `checks.py`, `backends.py`, `config.py`, `bench.py` and `tune.py`, `updates.py`, `install.py`,
-  `workspace.py`, `cli/` (one module per command group), `profiles/` (bundled worker profiles).
+  `cli/` (one module per command group), `profiles/` (bundled worker profiles).
 - `tests/` unit, property, snapshot (`test_public_surface.py`), `integration/`, `ci/` (automation
   rules), `live/` (real model, skipped by default).
 - `tools/ci/` scripts the workflows run (PR title, labels, release planner); `docs/` the site.

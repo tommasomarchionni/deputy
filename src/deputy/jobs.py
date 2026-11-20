@@ -2,7 +2,7 @@
 
 The jobs live in the memory of the running server. Cancelling stops the worker (the request to the
 model server is dropped, a running command check is killed) and puts back every file the worker
-wrote, so the workspace is as it was before the job.
+wrote, so the working directory is as it was before the job.
 """
 
 from __future__ import annotations

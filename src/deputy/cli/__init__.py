@@ -8,17 +8,13 @@ from deputy.cli import (
     connect,
     discover,
     hook,
-    memory,
-    optimise,
     serve,
     setup,
     stats,
     tuning,
     update,
     wait,
-    workspace,
 )
-from deputy.cli import lessons as lessons_cli
 from deputy.version import current_version
 
 _COMMAND_MODULES = (
@@ -28,10 +24,6 @@ _COMMAND_MODULES = (
     stats,
     discover,
     hook,
-    lessons_cli,
-    memory,
-    optimise,
-    workspace,
     wait,
     update,
     serve,

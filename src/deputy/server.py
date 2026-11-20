@@ -1,4 +1,4 @@
-"""The MCP server: six small tools. Schemas are paid by the orchestrator on every turn, so they
+"""The MCP server: five small tools. Schemas are paid by the orchestrator on every turn, so they
 are kept short on purpose."""
 
 from __future__ import annotations
@@ -13,10 +13,8 @@ from pydantic import ValidationError
 
 from deputy import (
     confinement,
-    lessons,
     localagent,
     model_profiles,
-    project_memory,
     router,
     runs,
     small_input,
@@ -80,7 +78,6 @@ class _Delegation:
     sandbox: Sandbox
     routes: list[router.Candidate]  # the backends to try, best first
     checks: list[Check]
-    notes: str
 
 
 def _prepare(
@@ -102,9 +99,6 @@ def _prepare(
         sandbox=Sandbox(Path(workdir)),
         routes=_routes(config, backend),
         checks=[*(ready_checks or []), *(to_check(c) for c in checks or [])],
-        notes=project_memory.prompt_notes(
-            project_memory.load(project_memory.repo_root(Path(workdir)))
-        ),
     )
 
 
@@ -172,9 +166,7 @@ async def _run_on(
             max_retries=DEFAULT_RETRIES
             if prepared.profile.max_retries is None
             else prepared.profile.max_retries,
-            lessons=lessons.applicable(prepared.profile.name, prepared.checks),
             request_tokens=args.request_tokens,
-            notes=prepared.notes,
             run_id=args.run_id,
             route=route,
         )
@@ -371,12 +363,6 @@ def build_server() -> MCPServer:
             return await _backend_status(load_config())
         except ConfigError as exc:
             return {"error": str(exc)}
-
-    @server.tool(structured_output=False)
-    def profiles(workdir: str | None = None) -> dict[str, str]:
-        """Available profiles."""
-        found = load_profiles(Path(workdir) if workdir else None)
-        return {name: p.description for name, p in found.items()}
 
     @server.tool(structured_output=False)
     def feedback(run_id: str, verdict: Literal["accepted", "rejected"], reason: str = "") -> str:

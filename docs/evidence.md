@@ -134,6 +134,14 @@ read 0.1, output 5).
   45 minutes with one repair round, but updated the documentation in one place of four and left
   two tests that did not test their change.
 
+- **It removed six unused features of this repository, when the steps were small.** The nightly
+  benchmark, `deputy workspace`, the `profiles` tool, the optimiser, lessons and project memory:
+  about 2,650 lines in 39 files, with the tests, the linter, the formatter, the type checker and
+  the documentation build as checks. Given as six steps, one per feature, four were done in 120
+  minutes and the two largest ran out of time and were undone. Those two, given again as six
+  smaller steps, were all done in 90 minutes with every check passing. The review by the
+  frontier model found three things to fix by hand, all in the documentation.
+
 - **On a real issue of a JavaScript monorepo it did the mechanical part and not the hard one.**
   The issue had been closed by a frontier subagent (Sonnet 5.5, together with a second small
   issue: 96 requests, 1.94 million weighted tokens, 24 minutes for the two). Qwen3.8 27B started
@@ -209,5 +217,4 @@ agent is for) the second. In four days of that week the hint to delegate a read 
 times, 225 of them to subagents, and the sessions made 16 delegations, 1 of them from a subagent:
 a hint is not enough to change what an agent does.
 
-A nightly benchmark runs on the maintainer's machine ([local serving](local-serving.md#nightly-benchmark-macos));
-`deputy bench --compare` shows what changed between two nights.
+`deputy bench --compare` shows what changed between two runs.
