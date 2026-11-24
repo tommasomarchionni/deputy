@@ -18,8 +18,8 @@ classifiers = [
 dependencies = [
   "mcp>=2.3,<3",
   "httpx>=0.28,<1",
-  "pydantic>=2.11,<3",
-  "regex>=2026.11.15",
+  "pydantic>=2.14.4,<3",
+  "regex>=2026.11.19",
   "jsonschema>=4.26.0",
   "starlette>=1.0,<2",
   "uvicorn>=0.34,<1",
@@ -37,17 +37,17 @@ deputy-hook = "deputy.hook:main"  # the read hint; imports almost nothing, it ru
 dev = [
     "pytest>=9",
     "pytest-cov>=6",
-    "ruff>=0.17",
+    "ruff>=0.17.6",
     "pyright>=1.1.400",
-    "hypothesis>=6.170.15",
+    "hypothesis>=6.170.17",
     "pytest-randomly>=5.1.0",
     "pytest-socket>=0.8.1",
     "pytest-timeout>=2.4.0",
-    "syrupy>=7.0.2",
+    "syrupy>=7.0.3",
 ]
 docs = [
     "mkdocs>=1.6.1,<2",
-    "mkdocs-material>=9.8.1",
+    "mkdocs-material>=9.8.2",
 ]
 
 [build-system]
